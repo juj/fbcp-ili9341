@@ -22,7 +22,7 @@
 // times when there is no work to do, rather than sleeping to reduce power usage. The only expected
 // effect of this is that CPU usage shoots to 200%, while display update FPS is the same. Present
 // here to allow toggling to debug this assumption.
-//#define NO_THROTTLING
+// #define NO_THROTTLING
 
 #define FATAL_ERROR(msg) do { fprintf(stderr, "%s\n", msg); syslog(LOG_ERR, msg); exit(1); } while(0)
 
@@ -95,17 +95,28 @@ void RunSPITask(SPITask *task)
   __sync_synchronize();
 
   // Write the data bytes
-  int bytesToRead = task->bytes;
-  for(uint8_t *tStart = task->data, *tEnd = task->data + task->bytes; tStart < tEnd;)
+  if (task->bytes == 2) // Special case for 2 byte transfers, such as X or Y coordinate sets, or single pixel fills
   {
-    uint32_t v = spi->cs;
-    if ((v & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
-    if ((v & BCM2835_SPI0_CS_RXD)) (void)spi->fifo, --bytesToRead;
+    spi->fifo = task->data[0];
+    spi->fifo = task->data[1];
+    while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
+    (void)spi->fifo;
+    (void)spi->fifo;
   }
-  // Flush the remaining read bytes to finish the transfer
-  while(bytesToRead > 0)
-    if (spi->cs & BCM2835_SPI0_CS_RXD)
-      (void)spi->fifo, --bytesToRead;
+  else
+  {
+    int bytesToRead = task->bytes;
+    for(uint8_t *tStart = task->data, *tEnd = task->data + task->bytes; tStart < tEnd;)
+    {
+      uint32_t v = spi->cs;
+      if ((v & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+      if ((v & BCM2835_SPI0_CS_RXD)) (void)spi->fifo, --bytesToRead;
+    }
+    // Flush the remaining read bytes to finish the transfer
+    while(bytesToRead > 0)
+      if (spi->cs & BCM2835_SPI0_CS_RXD)
+        (void)spi->fifo, --bytesToRead;
+  }
 }
 
 // A convenience for defining and dispatching SPI task bytes inline
@@ -127,7 +138,7 @@ void RunSPITask(SPITask *task)
     task->data[0] = pos >> 8; \
     task->data[1] = pos & 0xFF; \
     task->bytes = 2; \
-    bytesTransferred += 2; \
+    bytesTransferred += 3; \
     CommitTask(); \
   } while(0)
 
@@ -139,6 +150,10 @@ volatile int spiBytesQueued = 0;
 
 #ifdef NO_THROTTLING
 #define usleep(x) ((void)0)
+#endif
+
+#ifdef STATISTICS
+volatile uint64_t spiThreadStarvedUsecs = 0;
 #endif
 
 SPITask *AllocTask() // Returns a pointer to a new SPI task block, called on main thread
@@ -185,7 +200,12 @@ void *spi_thread(void*)
       END_SPI_COMMUNICATION();
     }
     else
+    {
+#ifdef STATISTICS
+      __sync_fetch_and_add(&spiThreadStarvedUsecs, 500);
+#endif
       usleep(500); // Throttle not to run too fast (this is practically never reached if game renders faster than 25-30fps) TODO: Use a signal/condvar here
+    }
   }
 }
 
@@ -297,6 +317,8 @@ int main()
   uint64_t statsProgressiveFramesRendered = 0;
   uint64_t statsInterlacedFramesRendered = 0;
   uint64_t statsFramesPassed = 0;
+  uint64_t statsMainThreadWaitedForSPIUsecs = 0;
+  uint64_t statsMainThreadSleptOnNoActivityUsecs = 0;
 #endif
 
   // GPU is assumed to be producing frames at this rate. TODO: Figure out how this variable could just be removed, perhaps
@@ -310,7 +332,13 @@ int main()
   {
     // Peek at the SPI thread's workload and throttle a bit if it has got a lot of work still to do.
     double usecsUntilSpiQueueEmpty = spiBytesQueued*usecsPerByte;
-    if (usecsUntilSpiQueueEmpty > 2000) usleep((int)(usecsUntilSpiQueueEmpty * 0.75));
+    if (usecsUntilSpiQueueEmpty > 2000)
+    {
+#ifdef STATISTICS
+      statsMainThreadWaitedForSPIUsecs += (int)(usecsUntilSpiQueueEmpty * 0.5);
+#endif
+      usleep((int)(usecsUntilSpiQueueEmpty * 0.5));
+    }
 
     uint64_t tFrameStart = tick();
 
@@ -383,7 +411,7 @@ int main()
           SPITask *task = AllocTask();
           task->cmd = 0x2C;
           task->bytes = (xEnd-x)*DISPLAY_BYTESPERPIXEL;
-          bytesTransferred += task->bytes;
+          bytesTransferred += task->bytes+1;
           for(int i = 0; i < xEnd-x; ++i)
             ((uint16_t*)task->data)[i] = (scanline[x+i] >> 8) | (scanline[x+i] << 8); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
           memcpy(prevScanline+x, scanline+x, task->bytes);
@@ -402,7 +430,13 @@ int main()
     // from VideoCore GPU at low latency as they come available. Effective this means we poll snapshots of new frames at these intervals since I'm not aware
     // of an API that would give event-based delivery of new frames. Since we are polling to shoot for low latency on all possible refresh rates, the least
     // common multiple of all of {60, 50, 30, 25, 20, 15, 10} is 300 Hz, so poll at that frequency (~3.333ms intervals)
-    if (changedPixels == 0) usleep(1000000/300);
+    if (changedPixels == 0)
+    {
+#ifdef STATISTICS
+      statsMainThreadSleptOnNoActivityUsecs += 1000000/300;
+#endif
+      usleep(1000000/300);
+    }
 
 #ifdef STATISTICS
     if (bytesTransferred > 0)
@@ -417,14 +451,18 @@ int main()
     if (elapsed > 1000000)
     {
       statsLastPrint = tick();
-      printf("Frame poll rate: %.3f, frames transferred: %.3f (of which %.2f%% progressive), SPI bus speed: %.2f bits/sec, bytes transferred: %lld (%.2f%% of total frame data)\n", 
+      uint64_t spiThreadStarvedFor = __atomic_load_n(&spiThreadStarvedUsecs, __ATOMIC_RELAXED);
+      __sync_fetch_and_sub(&spiThreadStarvedUsecs, spiThreadStarvedFor);
+
+      printf("Frame poll rate: %.3f, frames transferred: %.3f (of which %.2f%% progressive), SPI bus speed: %.2f bits/sec, bytes transferred: %lld (%.2f%% of total frame data), SPI thread starved: %lld us, main thread: wait for SPI: %lld us, no activity: %lld us\n",
         statsFramesPassed * 1000.0 / (elapsed / 1000.0),
         (statsProgressiveFramesRendered + statsInterlacedFramesRendered) * 1000.0 / (elapsed / 1000.0),
         statsProgressiveFramesRendered * 100.0 / (statsProgressiveFramesRendered + statsInterlacedFramesRendered),
         (double)8.0 * statsBytesTransferred * 1000.0 / (elapsed / 1000.0),
         statsBytesTransferred, 
-        statsBytesTransferred*100.0/((statsProgressiveFramesRendered + statsInterlacedFramesRendered)*FRAMEBUFFER_SIZE));
-      statsBytesTransferred = statsProgressiveFramesRendered = statsInterlacedFramesRendered = statsFramesPassed = 0;
+        statsBytesTransferred*100.0/((statsProgressiveFramesRendered + statsInterlacedFramesRendered)*FRAMEBUFFER_SIZE),
+        spiThreadStarvedFor, statsMainThreadWaitedForSPIUsecs, statsMainThreadSleptOnNoActivityUsecs);
+      statsBytesTransferred = statsProgressiveFramesRendered = statsInterlacedFramesRendered = statsFramesPassed = statsMainThreadWaitedForSPIUsecs = statsMainThreadSleptOnNoActivityUsecs = 0;
     }
 #endif
   }
