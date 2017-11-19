@@ -26,6 +26,17 @@
 // here to allow toggling to debug this assumption.
 // #define NO_THROTTLING
 
+// If defined, display updates are synced to the vsync signal provided by the VideoCore GPU. That seems
+// to occur quite precisely at 60 Hz. Testing on PAL NES games that run at 50Hz, this will not work well,
+// since they produce new frames at every 20msecs, and the VideoCore functions for snapshotting also will
+// output new frames at this vsync-detached interval, so there's a 50 Hz vs 60 Hz mismatch that results
+// in visible microstuttering. Still, providing this as an option, this might be good for content that
+// is known to run at native 60Hz.
+// #define USE_GPU_VSYNC
+
+// Configures the desired display update rate.
+#define TARGET_FRAME_RATE 60
+
 #define FATAL_ERROR(msg) do { fprintf(stderr, "%s\n", msg); syslog(LOG_ERR, msg); exit(1); } while(0)
 
 #define DISPLAY_WIDTH 320
@@ -155,7 +166,7 @@ volatile int spiBytesQueued = 0;
 #endif
 
 #ifdef STATISTICS
-volatile uint64_t spiThreadStarvedUsecs = 0;
+volatile uint64_t spiThreadIdleUsecs = 0;
 #endif
 
 SPITask *AllocTask() // Returns a pointer to a new SPI task block, called on main thread
@@ -218,11 +229,98 @@ void *spi_thread(void*)
       syscall(SYS_futex, &queueTail, FUTEX_WAIT, queueHead, 0, 0, 0); // Start sleeping until we get new tasks
 #ifdef STATISTICS
       uint64_t t1 = tick();
-      __sync_fetch_and_add(&spiThreadStarvedUsecs, t1-t0);
+      __sync_fetch_and_add(&spiThreadIdleUsecs, t1-t0);
 #endif
     }
   }
 }
+
+#ifdef USE_GPU_VSYNC
+volatile /*bool*/uint32_t gpuFrameAvailable = 0;
+
+void VsyncCallback(DISPMANX_UPDATE_HANDLE_T u, void *arg)
+{
+  __atomic_store_n(&gpuFrameAvailable, 1, __ATOMIC_SEQ_CST);
+  syscall(SYS_futex, &gpuFrameAvailable, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread to process a new frame
+}
+
+uint64_t EstimateFrameRateInterval()
+{
+  return 1000000/60;
+}
+
+#else // !USE_GPU_VSYNC
+
+// Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
+// The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
+// main menu <-> ingame transitions
+#define HISTOGRAM_SIZE 20
+uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
+uint64_t frameArrivalTimesTail = 0;
+uint64_t lastFramePollTime = 0;
+int histogramSize = 0;
+
+// Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
+#define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
+
+void AddHistogramSample()
+{
+  frameArrivalTimes[frameArrivalTimesTail] = tick();
+  frameArrivalTimesTail = (frameArrivalTimesTail + 1) % HISTOGRAM_SIZE;
+  if (histogramSize < HISTOGRAM_SIZE) ++histogramSize;
+}
+
+int cmp(const void *e1, const void *e2) { return *(uint64_t*)e1 > *(uint64_t*)e2; }
+
+uint64_t EstimateFrameRateInterval()
+{
+  if (histogramSize == 0) return 1000000/TARGET_FRAME_RATE;
+  uint64_t mostRecentFrame = GET_HISTOGRAM(0);
+
+  // High sleep mode hacks to save battery when ~idle: (These could be removed with an event based VideoCore display refresh API)
+  uint64_t timeNow = tick();
+  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return 500000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
+  if (timeNow - mostRecentFrame > 100000) return 100000; // if it's been more than 100ms since last seen update, assume interval of 100ms.
+
+  if (histogramSize <= 1) return 1000000/TARGET_FRAME_RATE;
+
+  // Look at the intervals of all previous arrived frames, and take their 40% percentile as our expected current frame rate
+  uint64_t intervals[HISTOGRAM_SIZE-1];
+  for(int i = 0; i < histogramSize-1; ++i)
+    intervals[i] = GET_HISTOGRAM(i) - GET_HISTOGRAM(i+1);
+  qsort(intervals, histogramSize-1, sizeof(uint64_t), cmp);
+  uint64_t interval = intervals[(histogramSize-1)*2/5];
+
+  // With bad luck, we may actually have synchronized to observing every second update, so halve the computed interval if it looks like a long period of time
+  if (interval >= 2000000/TARGET_FRAME_RATE) interval /= 2;
+  if (interval > 100000) interval = 100000;
+  return interval >= 1000000/TARGET_FRAME_RATE ? interval : 1000000/TARGET_FRAME_RATE;
+}
+
+uint64_t PredictNextFrameArrivalTime()
+{
+  uint64_t mostRecentFrame = histogramSize > 0 ? GET_HISTOGRAM(0) : tick();
+
+  // High sleep mode hacks to save battery when ~idle: (These could be removed with an event based VideoCore display refresh API)
+  uint64_t timeNow = tick();
+  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
+  if (timeNow - mostRecentFrame > 100000) return lastFramePollTime + 100000; // if it's been more than 100ms since last seen update, assume interval of 100ms.
+
+  uint64_t interval = EstimateFrameRateInterval();
+  // Assume that frames are arriving at times mostRecentFrame + k * interval.
+  // Find integer k such that mostRecentFrame + k * interval >= timeNow
+  // i.e. k = ceil((timeNow - mostRecentFrame) / interval)
+  uint64_t k = (timeNow - mostRecentFrame + interval - 1) / interval;
+  uint64_t nextFrameArrivalTime = mostRecentFrame + k * interval;
+  uint64_t timeOfPreviousMissedFrame = nextFrameArrivalTime - interval;
+
+  // If there should have been a frame just 1/3rd of our interval window ago, assume it was just missed and report back "the next frame is right now"
+  if (timeNow - timeOfPreviousMissedFrame < interval/3 && timeOfPreviousMissedFrame > mostRecentFrame) return timeNow;
+
+  return nextFrameArrivalTime;
+}
+
+#endif // ~USE_GPU_VSYNC
 
 int main()
 {
@@ -292,6 +390,9 @@ int main()
   memset(framebuffer[0], 0, FRAMEBUFFER_SIZE); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, FRAMEBUFFER_SIZE); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
 
+  uint16_t *gpuFramebuffer = (uint16_t *)malloc(FRAMEBUFFER_SIZE);
+  memset(gpuFramebuffer, 0, FRAMEBUFFER_SIZE); // third buffer contains last seen GPU memory contents, used to compare polled frames to whether they actually have changed.
+
   // Create a dedicated thread to feed the SPI bus. While this is fast, it consumes a lot of CPU. It would be best to replace
   // this thread with a kernel module that processes the created SPI task queue using interrupts. (while juggling the GPIO D/C line as well)
   pthread_t thread;
@@ -319,6 +420,12 @@ int main()
   VC_RECT_T rect;
   vc_dispmanx_rect_set(&rect, 0, 0, vinfo.xres, vinfo.yres);
 
+#ifdef USE_GPU_VSYNC
+  // Register to receive vsync notifications. This is a heuristic, since the application might not be locked at vsync, and even
+  // if it was, this signal is not a guaranteed edge trigger for availability of new frames.
+  vc_dispmanx_vsync_callback(display, VsyncCallback, 0);
+#endif
+
 #ifdef STATISTICS
   uint64_t statsBytesTransferred = 0;
   uint64_t statsLastPrint = tick();
@@ -329,15 +436,43 @@ int main()
   uint64_t statsMainThreadSleptOnNoActivityUsecs = 0;
 #endif
 
-  // GPU is assumed to be producing frames at this rate. TODO: Figure out how this variable could just be removed, perhaps
-  // either query GPU vsync rate, or statistically measure it from vsync_callback() interarrival times? For now hardcoded to 60
-  // since that seems to be what VideoCore GPU always does(?)
-  const int targetFrameRate = 60;
-
+  bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   uint64_t tFieldStart = tick();
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
   for(;;)
   {
+
+#ifdef USE_GPU_VSYNC
+    // Synchronously block to wait until GPU vsync occurs and we should have a new frame to present.
+    if (!gpuFrameAvailable)
+    {
+#ifdef STATISTICS
+      uint64_t t0 = tick();
+#endif
+      syscall(SYS_futex, &gpuFrameAvailable, FUTEX_WAIT, queueHead, 0, 0, 0);
+#ifdef STATISTICS
+      statsMainThreadSleptOnNoActivityUsecs += tick() - t0;
+#endif
+    }
+    if (!gpuFrameAvailable) continue;
+
+#else // ~USE_GPU_VSYNC
+
+    uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
+    int64_t timeToSleep = nextFrameArrivalTime - tick();
+    const int64_t minimumSleepTime = 2500; // Don't sleep if the next frame is due to arrive in less than this much time
+    if (timeToSleep > minimumSleepTime && !interlacedUpdate)
+    {
+#ifdef STATISTICS
+      uint64_t t0 = tick();
+#endif
+      usleep(timeToSleep - minimumSleepTime);
+#ifdef STATISTICS
+      statsMainThreadSleptOnNoActivityUsecs += tick() - t0;
+#endif
+    }
+#endif // ~USE_GPU_VSYNC
+
     // Peek at the SPI thread's workload and throttle a bit if it has got a lot of work still to do.
     double usecsUntilSpiQueueEmpty = spiBytesQueued*usecsPerByte;
     if (usecsUntilSpiQueueEmpty > 2000)
@@ -358,6 +493,23 @@ int main()
     // Profiling, the following two lines take around ~1msec of time.
     vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
     vc_dispmanx_resource_read_data(screen_resource, &rect, framebuffer[0], vinfo.xres * vinfo.bits_per_pixel / 8);
+    lastFramePollTime = tFrameStart;
+
+    bool gotNewFramebuffer = false;
+    for(uint32_t *newfb = (uint32_t*)framebuffer[0], *oldfb = (uint32_t*)gpuFramebuffer, *endfb = (uint32_t*)gpuFramebuffer + FRAMEBUFFER_SIZE/4; oldfb < endfb;)
+      if (*newfb++ != *oldfb++)
+      {
+        gotNewFramebuffer = true;
+        break;
+      }
+
+#ifndef USE_GPU_VSYNC
+    if (gotNewFramebuffer)
+    {
+      AddHistogramSample();
+      memcpy(gpuFramebuffer, framebuffer[0], FRAMEBUFFER_SIZE);
+    }
+#endif
 
     // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
     uint16_t *scanline = framebuffer[0];
@@ -368,9 +520,12 @@ int main()
         ++changedPixels;
 
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
-    const double tooMuchToUpdateUsecs = 1000000 / targetFrameRate * 2 / 3; // Use a rather arbitrary 2/3rds heuristic as an estimate of too much workload.
-    const bool interlacedUpdate = (changedPixels * 2 * usecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
+    const double tooMuchToUpdateUsecs = 1000000 / TARGET_FRAME_RATE * 2 / 3; // Use a rather arbitrary 2/3rds heuristic as an estimate of too much workload.
+    interlacedUpdate = (changedPixels * 2 * usecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
+#ifdef USE_GPU_VSYNC
+    else __atomic_store_n(&gpuFrameAvailable, 0, __ATOMIC_RELAXED); // Doing a progressive update, so mark the latest GPU frame fully processed (in interlaced update, we'll come right back to this at next cycle)
+#endif
     int y = interlacedUpdate ? frameParity : 0;
     scanline = framebuffer[0] + y*DISPLAY_WIDTH;
     prevScanline = framebuffer[1] + y*DISPLAY_WIDTH;
@@ -434,18 +589,6 @@ int main()
       if (interlacedUpdate) ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH;
     }
 
-    // If we did not do any work, throttle the main loop in short slices, so that we observe updated frames
-    // from VideoCore GPU at low latency as they come available. Effective this means we poll snapshots of new frames at these intervals since I'm not aware
-    // of an API that would give event-based delivery of new frames. Since we are polling to shoot for low latency on all possible refresh rates, the least
-    // common multiple of all of {60, 50, 30, 25, 20, 15, 10} is 300 Hz, so poll at that frequency (~3.333ms intervals)
-    if (changedPixels == 0)
-    {
-#ifdef STATISTICS
-      statsMainThreadSleptOnNoActivityUsecs += 1000000/300;
-#endif
-      usleep(1000000/300);
-    }
-
 #ifdef STATISTICS
     if (bytesTransferred > 0)
     {
@@ -459,17 +602,18 @@ int main()
     if (elapsed > 1000000)
     {
       statsLastPrint = tick();
-      uint64_t spiThreadStarvedFor = __atomic_load_n(&spiThreadStarvedUsecs, __ATOMIC_RELAXED);
-      __sync_fetch_and_sub(&spiThreadStarvedUsecs, spiThreadStarvedFor);
+      uint64_t spiThreadIdleFor = __atomic_load_n(&spiThreadIdleUsecs, __ATOMIC_RELAXED);
+      __sync_fetch_and_sub(&spiThreadIdleUsecs, spiThreadIdleFor);
 
-      printf("Frame poll rate: %.3f, frames transferred: %.3f (of which %.2f%% progressive), SPI bus speed: %.2f bits/sec, bytes transferred: %lld (%.2f%% of total frame data), SPI thread starved: %lld us, main thread: wait for SPI: %lld us, no activity: %lld us\n",
+      printf("Frame poll rate: %.3f, estimated frame interval: %.3fms, frames transferred: %.3f (of which %.2f%% progressive), SPI bus speed: %.2f bits/sec, bytes transferred: %lld (%.2f%% of total frame data), SPI thread idle: %lld us, main thread: wait for SPI: %lld us, no activity: %lld us\n",
         statsFramesPassed * 1000.0 / (elapsed / 1000.0),
+        EstimateFrameRateInterval() / 1000.0,
         (statsProgressiveFramesRendered + statsInterlacedFramesRendered) * 1000.0 / (elapsed / 1000.0),
         statsProgressiveFramesRendered * 100.0 / (statsProgressiveFramesRendered + statsInterlacedFramesRendered),
         (double)8.0 * statsBytesTransferred * 1000.0 / (elapsed / 1000.0),
         statsBytesTransferred, 
         statsBytesTransferred*100.0/((statsProgressiveFramesRendered + statsInterlacedFramesRendered)*FRAMEBUFFER_SIZE),
-        spiThreadStarvedFor, statsMainThreadWaitedForSPIUsecs, statsMainThreadSleptOnNoActivityUsecs);
+        spiThreadIdleFor, statsMainThreadWaitedForSPIUsecs, statsMainThreadSleptOnNoActivityUsecs);
       statsBytesTransferred = statsProgressiveFramesRendered = statsInterlacedFramesRendered = statsFramesPassed = statsMainThreadWaitedForSPIUsecs = statsMainThreadSleptOnNoActivityUsecs = 0;
     }
 #endif
