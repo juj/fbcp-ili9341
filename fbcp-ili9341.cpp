@@ -1,6 +1,7 @@
 #include <bcm_host.h>
 #include <fcntl.h>
 #include <linux/fb.h>
+#include <linux/futex.h>
 #include <linux/spi/spidev.h>
 #include <memory.h>
 #include <stdio.h>
@@ -8,6 +9,7 @@
 #include <endian.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/syscall.h>
 #include <syslog.h>
 #include <time.h>
 #include <unistd.h>
@@ -145,7 +147,7 @@ void RunSPITask(SPITask *task)
 // Main thread will dispatch SPI write tasks in a ring buffer to a worker thread
 #define SPI_QUEUE_LENGTH (DISPLAY_HEIGHT*3*6) // Entering a scanline costs one SPI task, setting X coordinate a second, and data span a third; have enough room for a couple of these for each scanline.
 SPITask tasks[SPI_QUEUE_LENGTH];
-volatile uint16_t queueHead = 0, queueTail = 0;
+volatile uint32_t queueHead = 0, queueTail = 0;
 volatile int spiBytesQueued = 0;
 
 #ifdef NO_THROTTLING
@@ -167,7 +169,9 @@ void CommitTask() // Advertises the given SPI task from main thread to worker, c
 {
   __sync_synchronize();
   __sync_fetch_and_add(&spiBytesQueued, tasks[queueTail].bytes);
-  queueTail = (queueTail + 1) % SPI_QUEUE_LENGTH;
+  uint32_t tail = queueTail;
+  queueTail = (tail + 1) % SPI_QUEUE_LENGTH;
+  if (queueHead == tail) syscall(SYS_futex, &queueTail, FUTEX_WAKE, 1, 0, 0, 0); // Wake the SPI thread if it was sleeping to get new tasks
 }
 
 SPITask *GetTask() // Returns the first task in the queue, called in worker thread
@@ -180,6 +184,13 @@ void DoneTask() // Frees the first SPI task from the queue, called in worker thr
   __sync_fetch_and_sub(&spiBytesQueued, tasks[queueHead].bytes);
   queueHead = (queueHead + 1) % SPI_QUEUE_LENGTH;
   __sync_synchronize();
+}
+
+uint64_t tick()
+{
+  struct timespec start;
+  clock_gettime(CLOCK_REALTIME, &start);
+  return start.tv_sec * 1000000 + start.tv_nsec / 1000;
 }
 
 // A worker thread that keeps the SPI bus filled at all times
@@ -202,18 +213,15 @@ void *spi_thread(void*)
     else
     {
 #ifdef STATISTICS
-      __sync_fetch_and_add(&spiThreadStarvedUsecs, 500);
+      uint64_t t0 = tick();
 #endif
-      usleep(500); // Throttle not to run too fast (this is practically never reached if game renders faster than 25-30fps) TODO: Use a signal/condvar here
+      syscall(SYS_futex, &queueTail, FUTEX_WAIT, queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+#ifdef STATISTICS
+      uint64_t t1 = tick();
+      __sync_fetch_and_add(&spiThreadStarvedUsecs, t1-t0);
+#endif
     }
   }
-}
-
-uint64_t tick()
-{
-  struct timespec start;
-  clock_gettime(CLOCK_REALTIME, &start);
-  return start.tv_sec * 1000000 + start.tv_nsec / 1000;
 }
 
 int main()
