@@ -49,12 +49,12 @@ While the performance of the driver is great and 60fps is just lovable, there ar
  - The codebase has been written with a hardcoded assumption of the ILI9341 controller and the ARM BCM2835 chip. Since it bypasses the generic drivers for SPI and GPIO, it will definitely not work out of the box on any other displays. It might not even work on other Pis than the Pi 3 Model B that I have. The driver also assumes it is the exclusive user of the SPI bus and the pins are hardcoded to follow the AdaFruit 2.8" PiTFT shield.
 
 ###### No rendered frame delivery via events from VideoCore IV GPU
- - The codebase reuses the approach from [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp) where the framebuffer on the screen is obtained by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not seem to exist an event-based mechanism to get new frames from the GPU as they are produced. The result is very inefficient and easily causes stuttering, since different applications produce frames at different paces. For example an emulated PAL NES game would be producing frames at fixed 50Hz, a native GLES2 game at fixed 60Hz, or perhaps at variable times depending on the GPU workload. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality might not exist in the current GPU driver stack (if it does, please let me know!). In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer at a high frequency (up to 300Hz) to minimize latency and stuttering. The downside is that this easily takes up a 50-60% of CPU overhead on a single core. You can adjust this polling rate to something more conservative in the code, by increasing the idle sleep time on the main thread. Though this is best done only if you know exactly what the target update rate of the application is that you will be running, otherwise there will be microstuttering.
+ - The codebase reuses the approach from [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp) where the framebuffer on the screen is obtained by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not seem to exist an event-based mechanism to get new frames from the GPU as they are produced. The result is very inefficient and can easily cause stuttering, since different applications produce frames at different paces. For example an emulated PAL NES game would be producing frames at fixed 50Hz, a native GLES2 game at fixed 60Hz, or perhaps at variable times depending on the GPU workload. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality might not exist in the current GPU driver stack (if it does, please let me know!). In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect.
 
 ###### A dedicated thread hand holds the SPI FIFO
  - To maximize performance and ensure that the SPI FIFO is efficiently saturated, a dedicated SPI processing pthread is used. This thread spinwaits to observe the SPI FIFO transactions, so the CPU % consumption of this thread linearly correlates to the utilization rate of the SPI bus. If the amount of activity on the screen exceeds the SPI bus bandwidth, this will mean that the SPI thread will sit at 100% utilization. To perform efficient adaptive display stream updates, there are a lot of distinct command+data message pairs that need to be sent, which possibly would prevent the use of the DMA hardware, since a DMA transaction would not be aware to toggle the Data/Control GPIO pin while it transfers data. Depending on how much overhead the DMA hardware has, it might be possible to utilize it for the more longer spans of data, while keeping short spans on the main CPU. In addition, it might be possible to optimize by migrating the display driver to run on the Linux kernel side, utilizing SPI interrupts to process the SPI task queue in a more power efficient manner.
 
-The first performance issue might be addressed in a software update from VideoCore GPU driver (or by use of a smarter Linux API, if such a thing might exist?), while the second performance issue might be fixable by rewriting the driver to run as a kernel module, while accessing the BCM2835 DMA and SPI interrupts hardware. In the absence of these, the contribution of these performance limitations is up to 150% of consumed CPU - such is the price of 60fps at the moment.
+The first performance issue might be addressed in a software update from VideoCore GPU driver (or by use of a smarter Linux API, if such a thing might exist?), while the second performance issue might be fixable by rewriting the driver to run as a kernel module, while accessing the BCM2835 DMA and SPI interrupts hardware. Without these issues resolved, expect overall CPU consumption to be at around 120% - such is the price of 60fps at the moment.
 
 ### Should I Use This?
 
@@ -62,9 +62,7 @@ As a caveat, this was written in one weekend as a hobby programming activity, so
 
 If your target application doesn't mind high CPU utilization on the background and you have the compatible hardware, then perhaps yes. If your Pi is on battery, this will eat through power pretty quick. To echo RetroManCave's observation as well, you should really use a HDMI display over an SPI-based one, since then the dedicated VideoCore GPU handles all the trouble of presenting frames, plus you will get vsync out of the box. The smallest HDMI displays for Raspberry Pis on the market seem to be [the size of 3.5" 480x320](https://www.raspberrypi.org/forums/viewtopic.php?t=175616), so if that's not too large and your project can manage the HDMI connector hump at the back, there's probably no reason to use SPI.
 
-Perhaps some day if both of the above mentioned performance limitations are optimized away, then high refresh rates on SPI based displays could become efficient.
-
-If you do want to use this, it probably will make sense to find some more conservative values for the throttling sleeps on the main thread and the SPI threads, so that battery consumption will not be excessive when the display is idle.
+Perhaps some day if both of the above mentioned performance limitations are optimized away, then high refresh rates on SPI based displays could become power efficient.
 
 ### Installation
 
@@ -77,12 +75,28 @@ mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j
-sudo ./fbcp-ili9431
+sudo ./fbcp-ili9341
 ```
 
 If you have been running existing `fbcp` driver, make sure to remove that e.g. via a `sudo pkill fbcp` first (while running in SSH prompt or connected to a HDMI display), these two cannot run at the same time.
 
 To set up the driver to launch at startup, edit the file `/etc/rc.local` in `sudo` mode, and add a line `sudo /path/to/fbcp-ili9341/build/fbcp-ili9341 &` to the end. Make note of the needed ampersand `&` at the end of that line.
+
+### Future Work
+
+There are a couple of interesting ideas that might be useful for tweaking further:
+
+###### 64 MHz SPI Bus?
+
+While developing, it was observed that using a twice as fast bus speed, 64MHz, over the safer 32MHz, would work for about 80% of the time, with some visual artifacts occurring. I was left wondering whether these artifacts would be fixable by more carefully implemented timing in some part of the SPI update code, or whether the hardware is just plain incompatible. Adding extra synchronization and sleeps in specific places in code seemed to alleviate the issues a little, but this could not be made perfect. There is a `const int busDivisor` parameter in the code that may be worth setting to `4` instead of `8` when testing and see if that works, since that could double the bus speed for double the performance.
+
+###### VideoCore VSync Callback?
+
+The codebase does implement an option to use the VideoCore GPU vertical sync signal as the method to grab new frames. This was tested and quickly rejected at least for games emulators use, since these generally do not produce frames at strict 60Hz refresh rate. Depending on the use case, it might still be preferrable to use this signal, rather than polling. The option was left in the code, under an optional `#define USE_GPU_VSYNC` that one can enable if desired.
+
+###### Vertical Merging of Scanlines?
+
+There exists a very promising research paper, [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf) which points out that a simple vertical scanline merging technique, called ***Generalized delta-method (GDM)*** in the paper, would be efficient in decomposing monochrome raster images to a minimum number of rectangles. This technique might be useful in reducing the number of overall span restarts needed to communicate with the ILI9341 display controller, resulting in fewer SPI flushes needed. This could be combined with the fact that such submitted rectangles would not need to be disjoint, but they only would need to overlap all dirty pixels on the screen. There is a change that this could help create considerably longer spans, which in turn could make the DMA hardware more suitable to be used.
 
 ### Resources
 
