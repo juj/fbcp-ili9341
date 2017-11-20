@@ -14,6 +14,9 @@
 #include <time.h>
 #include <unistd.h>
 
+#define MIN(x, y) ((x) <= (y) ? (x) : (y))
+#define MAX(x, y) ((x) >= (y) ? (x) : (y))
+
 // Build options: Uncomment any of these, or set at the command line to configure:
 
 // If defined, prints out performance logs to stdout every second
@@ -33,6 +36,10 @@
 // in visible microstuttering. Still, providing this as an option, this might be good for content that
 // is known to run at native 60Hz.
 // #define USE_GPU_VSYNC
+
+// If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's
+// too much for the display to handle)
+// #define NO_INTERLACING
 
 // Configures the desired display update rate.
 #define TARGET_FRAME_RATE 60
@@ -88,10 +95,12 @@ volatile SPIRegisterFile *spi = 0;
 #define BEGIN_SPI_COMMUNICATION() do { spi->cs |= BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA; __sync_synchronize(); } while(0)
 #define END_SPI_COMMUNICATION()  spi->cs &= ~BCM2835_SPI0_CS_TA
 
+#define MAX_SPI_TASK_SIZE SCANLINE_SIZE
+
 struct SPITask
 {
   uint8_t cmd;
-  uint8_t data[SCANLINE_SIZE];
+  uint8_t data[MAX_SPI_TASK_SIZE];
   uint16_t bytes;
 };
 
@@ -113,6 +122,18 @@ void RunSPITask(SPITask *task)
     spi->fifo = task->data[0];
     spi->fifo = task->data[1];
     while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
+    (void)spi->fifo;
+    (void)spi->fifo;
+  }
+  else if (task->bytes == 4) // Special case for 4 byte transfers, such as X [begin, end] window sets
+  {
+    spi->fifo = task->data[0];
+    spi->fifo = task->data[1];
+    spi->fifo = task->data[2];
+    spi->fifo = task->data[3];
+    while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
+    (void)spi->fifo;
+    (void)spi->fifo;
     (void)spi->fifo;
     (void)spi->fifo;
   }
@@ -147,11 +168,23 @@ void RunSPITask(SPITask *task)
 
 #define QUEUE_MOVE_CURSOR_TASK(cursor, pos) do { \
     SPITask *task = AllocTask(); \
-    task->cmd = cursor; \
-    task->data[0] = pos >> 8; \
-    task->data[1] = pos & 0xFF; \
+    task->cmd = (cursor); \
+    task->data[0] = (pos) >> 8; \
+    task->data[1] = (pos) & 0xFF; \
     task->bytes = 2; \
     bytesTransferred += 3; \
+    CommitTask(); \
+  } while(0)
+
+#define QUEUE_SET_X_WINDOW_TASK(x, endX) do { \
+    SPITask *task = AllocTask(); \
+    task->cmd = CURSOR_X; \
+    task->data[0] = (x) >> 8; \
+    task->data[1] = (x) & 0xFF; \
+    task->data[2] = (endX) >> 8; \
+    task->data[3] = (endX) & 0xFF; \
+    task->bytes = 4; \
+    bytesTransferred += 5; \
     CommitTask(); \
   } while(0)
 
@@ -294,7 +327,7 @@ uint64_t EstimateFrameRateInterval()
   // With bad luck, we may actually have synchronized to observing every second update, so halve the computed interval if it looks like a long period of time
   if (interval >= 2000000/TARGET_FRAME_RATE) interval /= 2;
   if (interval > 100000) interval = 100000;
-  return interval >= 1000000/TARGET_FRAME_RATE ? interval : 1000000/TARGET_FRAME_RATE;
+  return MAX(interval, 1000000/TARGET_FRAME_RATE);
 }
 
 uint64_t PredictNextFrameArrivalTime()
@@ -316,11 +349,18 @@ uint64_t PredictNextFrameArrivalTime()
 
   // If there should have been a frame just 1/3rd of our interval window ago, assume it was just missed and report back "the next frame is right now"
   if (timeNow - timeOfPreviousMissedFrame < interval/3 && timeOfPreviousMissedFrame > mostRecentFrame) return timeNow;
-
-  return nextFrameArrivalTime;
+  else return nextFrameArrivalTime;
 }
 
 #endif // ~USE_GPU_VSYNC
+
+// Spans track dirty rectangular areas on screen
+struct Span
+{
+  uint16_t x, endX, y, endY, lastScanEndX, size; // Specifies a box of width [x, endX[ * [y, endY[, where scanline endY-1 can be partial, and ends in lastScanEndX.
+  Span *next; // Maintain a linked skip list inside the array for fast seek to next active element when pruning
+};
+Span spans[DISPLAY_WIDTH*DISPLAY_HEIGHT/2];
 
 int main()
 {
@@ -386,6 +426,11 @@ int main()
   }
   END_SPI_COMMUNICATION();
 
+  // Track SPI display controller write X and Y cursors.
+  int spiX = 0;
+  int spiY = 0;
+  int spiEndX = DISPLAY_WIDTH;
+
   uint16_t *framebuffer[2] = { (uint16_t *)malloc(FRAMEBUFFER_SIZE), (uint16_t *)malloc(FRAMEBUFFER_SIZE) };
   memset(framebuffer[0], 0, FRAMEBUFFER_SIZE); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, FRAMEBUFFER_SIZE); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
@@ -434,6 +479,8 @@ int main()
   uint64_t statsFramesPassed = 0;
   uint64_t statsMainThreadWaitedForSPIUsecs = 0;
   uint64_t statsMainThreadSleptOnNoActivityUsecs = 0;
+  uint32_t statsNumberOfSpans = 0;
+  uint32_t statsSpanLength = 0;
 #endif
 
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
@@ -521,8 +568,13 @@ int main()
 
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     const double tooMuchToUpdateUsecs = 1000000 / TARGET_FRAME_RATE * 2 / 3; // Use a rather arbitrary 2/3rds heuristic as an estimate of too much workload.
+#ifdef NO_INTERLACING
+    interlacedUpdate = false;
+#else
     interlacedUpdate = (changedPixels * 2 * usecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
+#endif
+
 #ifdef USE_GPU_VSYNC
     else __atomic_store_n(&gpuFrameAvailable, 0, __ATOMIC_RELAXED); // Doing a progressive update, so mark the latest GPU frame fully processed (in interlaced update, we'll come right back to this at next cycle)
 #endif
@@ -531,62 +583,160 @@ int main()
     prevScanline = framebuffer[1] + y*DISPLAY_WIDTH;
 
     int bytesTransferred = 0;
+
+    // Collect all spans in this image
+    int numSpans = 0;
     for(;y < DISPLAY_HEIGHT; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
     {
-      int x = 0;
-      while(x < DISPLAY_WIDTH && scanline[x] == prevScanline[x]) ++x; // Find first changed pixel on this scanline
-      if (x < DISPLAY_WIDTH) // Need to enter this scanline?
+      for(int x = 0; x < DISPLAY_WIDTH; ++x)
       {
-        QUEUE_MOVE_CURSOR_TASK(CURSOR_Y, y);
-
-        // Upload spans of changed pixels
-        while(x < DISPLAY_WIDTH)
-        {
-          QUEUE_MOVE_CURSOR_TASK(CURSOR_X, x);
-
-          // Find where this span ends
-          int nextSpanX = DISPLAY_WIDTH;
-          int xEnd = x+1;
-          while(xEnd < DISPLAY_WIDTH)
-          {
-            if (scanline[xEnd] != prevScanline[xEnd])
-                ++xEnd;
-            else
-            {
-              // Optimization: if multiple changed pixels on the same scanline have only few unchanged pixels between them,
-              // it is faster to just keep transferring those as well, since moving the pixel cursor would mean flushing
-              // the transfer FIFO to sync the Data/Control GPIO line, so transferring a few bytes more in order to keep the FIFO
-              // warm is a perf win.
-
-              // Peek ahead to find where the next span would start; if it's close enough we'll merge these.
-              nextSpanX = xEnd+1;
-              while(nextSpanX < DISPLAY_WIDTH && scanline[nextSpanX] == prevScanline[nextSpanX]) ++nextSpanX;
-
-// BCM2835 TX FIFO is 16 bytes in size, 4 pixels = 8 bytes, which seems to be a sweet spot
-#define SPAN_MERGE_DISTANCE 4
-
-              if (nextSpanX - xEnd < SPAN_MERGE_DISTANCE) xEnd = nextSpanX;
-              else break;
-            }
-          }
-
-          // Submit the span
-          SPITask *task = AllocTask();
-          task->cmd = 0x2C;
-          task->bytes = (xEnd-x)*DISPLAY_BYTESPERPIXEL;
-          bytesTransferred += task->bytes+1;
-          for(int i = 0; i < xEnd-x; ++i)
-            ((uint16_t*)task->data)[i] = (scanline[x+i] >> 8) | (scanline[x+i] << 8); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
-          memcpy(prevScanline+x, scanline+x, task->bytes);
-          CommitTask();
-
-          // Proceed to submitting the next span on this scanline
-          x = nextSpanX;
-        }
+        if (scanline[x] == prevScanline[x]) continue;
+        int endX = x+1;
+        while(endX < DISPLAY_WIDTH && scanline[endX] != prevScanline[endX]) ++endX; // Find where this span ends
+        spans[numSpans].x = x;
+        spans[numSpans].endX = spans[numSpans].lastScanEndX = endX;
+        spans[numSpans].y = y;
+        spans[numSpans].endY = y+1;
+        spans[numSpans].size = endX - x;
+        if (numSpans > 0) spans[numSpans-1].next = &spans[numSpans];
+        spans[numSpans++].next = 0;
+        x = endX;
       }
 
       // If doing an interlaced update, skip over every second scanline.
       if (interlacedUpdate) ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH;
+    }
+
+#define SPAN_MERGE_THRESHOLD 4
+
+    // Merge spans together on the same scanline
+    for(Span *i = &spans[0]; i; i = i->next)
+    {
+      Span *prev = i;
+      for(Span *j = i->next; j; j = j->next)
+      {
+        // If the spans i and j are vertically apart, don't attempt to merge span i any further, since all spans >= j will also be farther vertically apart.
+        // (the list is nondecreasing with respect to Span::y)
+        if (j->y != i->y) break;
+        int newSize = j->endX-i->x-1;
+        int wastedPixels = newSize - i->size - j->size;
+        if (wastedPixels <= SPAN_MERGE_THRESHOLD && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE)
+        {
+          i->endX = j->endX;
+          i->lastScanEndX = j->endX;
+          i->size = newSize;
+          prev->next = j->next;
+          j = prev;
+        }
+        else // Not merging - travel to next node remembering where we came from
+          prev = j;
+      }
+    }
+
+    // Merge spans together on adjacent scanlines - works only if doing a progressive update
+    if (!interlacedUpdate)
+      for(Span *i = &spans[0]; i; i = i->next)
+      {
+        int iSize = (i->endX-i->x)*(i->endY-i->y-1) + (i->lastScanEndX - i->x);
+        Span *prev = i;
+        for(Span *j = i->next; j; j = j->next)
+        {
+          // If the spans i and j are vertically apart, don't attempt to merge span i any further, since all spans >= j will also be farther vertically apart.
+          // (the list is nondecreasing with respect to Span::y)
+          if (j->y > i->endY) break;
+
+          int jSize = (j->endX-j->x)*(j->endY-j->y-1) + (j->lastScanEndX - j->x);
+
+          // Merge the spans i and j, and figure out the wastage of doing so
+          int x = MIN(i->x, j->x);
+          int y = MIN(i->y, j->y);
+          int endX = MAX(i->endX, j->endX);
+          int endY = MAX(i->endY, j->endY);
+          int lastScanEndX = (endY > i->endY) ? j->lastScanEndX : ((endY > j->endY) ? i->lastScanEndX : MAX(i->lastScanEndX, j->lastScanEndX));
+          int newSize = (endX-x)*(endY-y-1) + (lastScanEndX - x);
+          int wastedPixels = newSize - iSize - jSize;
+          if (wastedPixels <= SPAN_MERGE_THRESHOLD && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE)
+          {
+            i->x = x;
+            i->y = y;
+            i->endX = endX;
+            i->endY = endY;
+            i->lastScanEndX = lastScanEndX;
+            iSize = newSize;
+            prev->next = j->next;
+            j = prev;
+          }
+          else // Not merging - travel to next node remembering where we came from
+            prev = j;
+        }
+      }
+
+    // Submit spans
+    for(Span *i = &spans[0]; i; i = i->next)
+    {
+      if (i->x == i->endX) continue;
+
+      // Update the write cursor if needed
+      if (spiY != i->y)
+      {
+        QUEUE_MOVE_CURSOR_TASK(CURSOR_Y, i->y);
+        spiY = i->y;
+      }
+
+      if (i->endY != i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
+      {
+        QUEUE_SET_X_WINDOW_TASK(i->x, i->endX-1);
+        spiX = i->x;
+        spiEndX = i->endX;
+      }
+      else // Singleline span
+      {
+        if (spiEndX < i->endX) // Need to push the X end window?
+        {
+          // We are doing a single line span and need to increase the X window. If possible,
+          // peek ahead to cater to the next multiline span update if that will be compatible.
+          int nextEndX = DISPLAY_WIDTH;
+          for(Span *j = i->next; j; j = j->next)
+            if (j->endY != j->y)
+            {
+              if (j->endX >= i->endX) nextEndX = j->endX;
+              break;
+            }
+          QUEUE_SET_X_WINDOW_TASK(i->x, nextEndX-1);
+          spiX = i->x;
+          spiEndX = nextEndX;
+        }
+        else if (spiX != i->x)
+        {
+          QUEUE_MOVE_CURSOR_TASK(CURSOR_X, i->x);
+          spiX = i->x;
+        }
+      }
+
+      // Submit the span pixels
+      SPITask *task = AllocTask();
+      task->cmd = 0x2C;
+      int iSize = (i->endX-i->x)*(i->endY-i->y-1) + (i->lastScanEndX - i->x);
+      task->bytes = iSize*DISPLAY_BYTESPERPIXEL;
+
+#ifdef STATISTICS
+      ++statsNumberOfSpans;
+      statsSpanLength += iSize;
+#endif
+      bytesTransferred += task->bytes+1;
+      uint16_t *scanline = framebuffer[0] + i->y * DISPLAY_WIDTH;
+      uint16_t *prevScanline = framebuffer[1] + i->y * DISPLAY_WIDTH;
+      uint16_t *data = (uint16_t*)task->data;
+      for(int y = i->y; y < i->endY; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
+      {
+        int endX = (y+1==i->endY) ? i->lastScanEndX : i->endX;
+        for(int x = i->x; x < endX; ++x)
+        {
+          *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
+        }
+        memcpy(prevScanline+i->x, scanline+i->x, (endX-i->x)*DISPLAY_BYTESPERPIXEL);
+      }
+      CommitTask();
     }
 
 #ifdef STATISTICS
@@ -605,7 +755,7 @@ int main()
       uint64_t spiThreadIdleFor = __atomic_load_n(&spiThreadIdleUsecs, __ATOMIC_RELAXED);
       __sync_fetch_and_sub(&spiThreadIdleUsecs, spiThreadIdleFor);
 
-      printf("Frame poll rate: %.3f, estimated frame interval: %.3fms, frames transferred: %.3f (of which %.2f%% progressive), SPI bus speed: %.2f bits/sec, bytes transferred: %lld (%.2f%% of total frame data), SPI thread idle: %lld us, main thread: wait for SPI: %lld us, no activity: %lld us\n",
+      printf("Fr.pollrate:%.3f, est.frameinterval: %.3fms, frms xfred: %.3f (%.2f%% prog), SPI bus: %.2fbps, transferred: %lldB (%.2f%% of total frame data), SPI idle: %lldus, main: wait for SPI: %lldus, no activity: %lldus, spans:%.2f/frm,%.2fpx/span\n",
         statsFramesPassed * 1000.0 / (elapsed / 1000.0),
         EstimateFrameRateInterval() / 1000.0,
         (statsProgressiveFramesRendered + statsInterlacedFramesRendered) * 1000.0 / (elapsed / 1000.0),
@@ -613,8 +763,10 @@ int main()
         (double)8.0 * statsBytesTransferred * 1000.0 / (elapsed / 1000.0),
         statsBytesTransferred, 
         statsBytesTransferred*100.0/((statsProgressiveFramesRendered + statsInterlacedFramesRendered)*FRAMEBUFFER_SIZE),
-        spiThreadIdleFor, statsMainThreadWaitedForSPIUsecs, statsMainThreadSleptOnNoActivityUsecs);
+        spiThreadIdleFor, statsMainThreadWaitedForSPIUsecs, statsMainThreadSleptOnNoActivityUsecs,
+        (double)statsNumberOfSpans/(statsProgressiveFramesRendered + statsInterlacedFramesRendered), (double)statsSpanLength/statsNumberOfSpans);
       statsBytesTransferred = statsProgressiveFramesRendered = statsInterlacedFramesRendered = statsFramesPassed = statsMainThreadWaitedForSPIUsecs = statsMainThreadSleptOnNoActivityUsecs = 0;
+      statsNumberOfSpans = statsSpanLength = 0;
     }
 #endif
   }
