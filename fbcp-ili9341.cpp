@@ -635,15 +635,12 @@ int main()
     if (!interlacedUpdate)
       for(Span *i = head; i; i = i->next)
       {
-        int iSize = (i->endX-i->x)*(i->endY-i->y-1) + (i->lastScanEndX - i->x);
         Span *prev = i;
         for(Span *j = i->next; j; j = j->next)
         {
           // If the spans i and j are vertically apart, don't attempt to merge span i any further, since all spans >= j will also be farther vertically apart.
           // (the list is nondecreasing with respect to Span::y)
           if (j->y > i->endY) break;
-
-          int jSize = (j->endX-j->x)*(j->endY-j->y-1) + (j->lastScanEndX - j->x);
 
           // Merge the spans i and j, and figure out the wastage of doing so
           int x = MIN(i->x, j->x);
@@ -652,7 +649,7 @@ int main()
           int endY = MAX(i->endY, j->endY);
           int lastScanEndX = (endY > i->endY) ? j->lastScanEndX : ((endY > j->endY) ? i->lastScanEndX : MAX(i->lastScanEndX, j->lastScanEndX));
           int newSize = (endX-x)*(endY-y-1) + (lastScanEndX - x);
-          int wastedPixels = newSize - iSize - jSize;
+          int wastedPixels = newSize - i->size - j->size;
           if (wastedPixels <= SPAN_MERGE_THRESHOLD && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE)
           {
             i->x = x;
@@ -660,7 +657,7 @@ int main()
             i->endX = endX;
             i->endY = endY;
             i->lastScanEndX = lastScanEndX;
-            iSize = newSize;
+            i->size = newSize;
             prev->next = j->next;
             j = prev;
           }
@@ -714,12 +711,11 @@ int main()
       // Submit the span pixels
       SPITask *task = AllocTask();
       task->cmd = 0x2C;
-      int iSize = (i->endX-i->x)*(i->endY-i->y-1) + (i->lastScanEndX - i->x);
-      task->bytes = iSize*DISPLAY_BYTESPERPIXEL;
+      task->bytes = i->size*DISPLAY_BYTESPERPIXEL;
 
 #ifdef STATISTICS
       ++statsNumberOfSpans;
-      statsSpanLength += iSize;
+      statsSpanLength += i->size;
 #endif
       bytesTransferred += task->bytes+1;
       uint16_t *scanline = framebuffer[0] + i->y * DISPLAY_WIDTH;
