@@ -574,9 +574,9 @@ int main()
     interlacedUpdate = false;
 #else
     interlacedUpdate = (changedPixels * 2 * usecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
-    if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
 #endif
 
+    if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
 #ifdef USE_GPU_VSYNC
     else __atomic_store_n(&gpuFrameAvailable, 0, __ATOMIC_RELAXED); // Doing a progressive update, so mark the latest GPU frame fully processed (in interlaced update, we'll come right back to this at next cycle)
 #endif
@@ -669,8 +669,6 @@ int main()
     // Submit spans
     for(Span *i = head; i; i = i->next)
     {
-      if (i->x == i->endX) continue;
-
       // Update the write cursor if needed
       if (spiY != i->y)
       {
@@ -678,7 +676,7 @@ int main()
         spiY = i->y;
       }
 
-      if (i->endY != i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
+      if (i->endY > i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
       {
         QUEUE_SET_X_WINDOW_TASK(i->x, i->endX-1);
         spiX = i->x;
@@ -692,7 +690,7 @@ int main()
           // peek ahead to cater to the next multiline span update if that will be compatible.
           int nextEndX = DISPLAY_WIDTH;
           for(Span *j = i->next; j; j = j->next)
-            if (j->endY != j->y)
+            if (j->endY > j->y+1)
             {
               if (j->endX >= i->endX) nextEndX = j->endX;
               break;
