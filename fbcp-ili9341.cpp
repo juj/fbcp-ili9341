@@ -588,6 +588,7 @@ int main()
 
     // Collect all spans in this image
     int numSpans = 0;
+    Span *head = 0;
     for(;y < DISPLAY_HEIGHT; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
     {
       for(int x = 0; x < DISPLAY_WIDTH; ++x)
@@ -601,6 +602,7 @@ int main()
         spans[numSpans].endY = y+1;
         spans[numSpans].size = endX - x;
         if (numSpans > 0) spans[numSpans-1].next = &spans[numSpans];
+        else head = &spans[0];
         spans[numSpans++].next = 0;
         x = endX;
       }
@@ -612,32 +614,26 @@ int main()
 #define SPAN_MERGE_THRESHOLD 4
 
     // Merge spans together on the same scanline
-    for(Span *i = &spans[0]; i; i = i->next)
+    for(Span *i = head; i; i = i->next)
     {
-      Span *prev = i;
       for(Span *j = i->next; j; j = j->next)
       {
-        // If the spans i and j are vertically apart, don't attempt to merge span i any further, since all spans >= j will also be farther vertically apart.
-        // (the list is nondecreasing with respect to Span::y)
-        if (j->y != i->y) break;
-        int newSize = j->endX-i->x-1;
+        if (j->y != i->y) break; // On the next scanline?
+
+        int newSize = j->endX-i->x;
         int wastedPixels = newSize - i->size - j->size;
-        if (wastedPixels <= SPAN_MERGE_THRESHOLD && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE)
-        {
-          i->endX = j->endX;
-          i->lastScanEndX = j->endX;
-          i->size = newSize;
-          prev->next = j->next;
-          j = prev;
-        }
-        else // Not merging - travel to next node remembering where we came from
-          prev = j;
+        if (wastedPixels > SPAN_MERGE_THRESHOLD) break; // Too far away?
+
+        i->endX = j->endX;
+        i->lastScanEndX = j->endX;
+        i->size = newSize;
+        i->next = j->next;
       }
     }
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
     if (!interlacedUpdate)
-      for(Span *i = &spans[0]; i; i = i->next)
+      for(Span *i = head; i; i = i->next)
       {
         int iSize = (i->endX-i->x)*(i->endY-i->y-1) + (i->lastScanEndX - i->x);
         Span *prev = i;
@@ -674,7 +670,7 @@ int main()
       }
 
     // Submit spans
-    for(Span *i = &spans[0]; i; i = i->next)
+    for(Span *i = head; i; i = i->next)
     {
       if (i->x == i->endX) continue;
 
@@ -731,12 +727,9 @@ int main()
       uint16_t *data = (uint16_t*)task->data;
       for(int y = i->y; y < i->endY; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
       {
-        int endX = (y+1==i->endY) ? i->lastScanEndX : i->endX;
-        for(int x = i->x; x < endX; ++x)
-        {
-          *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
-        }
-        memcpy(prevScanline+i->x, scanline+i->x, (endX-i->x)*DISPLAY_BYTESPERPIXEL);
+        int endX = (y + 1 == i->endY) ? i->lastScanEndX : i->endX;
+        for(int x = i->x; x < endX; ++x) *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
+        memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
       }
       CommitTask();
     }
