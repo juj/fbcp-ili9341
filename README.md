@@ -94,10 +94,6 @@ While developing, it was observed that using a twice as fast bus speed, 64MHz, o
 
 The codebase does implement an option to use the VideoCore GPU vertical sync signal as the method to grab new frames. This was tested and quickly rejected at least for games emulators use, since these generally do not produce frames at strict 60Hz refresh rate. Depending on the use case, it might still be preferrable to use this signal, rather than polling. The option was left in the code, under an optional `#define USE_GPU_VSYNC` that one can enable if desired.
 
-###### Vertical Merging of Scanlines?
-
-There exists a very promising research paper, [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf) which points out that a simple vertical scanline merging technique, called ***Generalized delta-method (GDM)*** in the paper, would be efficient in decomposing monochrome raster images to a minimum number of rectangles. This technique might be useful in reducing the number of overall span restarts needed to communicate with the ILI9341 display controller, resulting in fewer SPI flushes needed. This could be combined with the fact that such submitted rectangles would not need to be disjoint, but they only would need to overlap all dirty pixels on the screen. There is a change that this could help create considerably longer spans, which in turn could make the DMA hardware more suitable to be used.
-
 ### Resources
 
 The following links proved helpful when writing this:
@@ -107,4 +103,5 @@ The following links proved helpful when writing this:
  - [BCM2835 driver](http://www.airspayce.com/mikem/bcm2835/) for Raspberry Pi,
  - [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp), original framebuffer driver,
  - [tasanakorn/rpi-fbcp/#16](https://github.com/tasanakorn/rpi-fbcp/issues/16), discussion about performance,
+ - [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf), a useful research paper about merging monochrome bitmap images to rectangles, which gave good ideas for optimizing SPI span merges across multiple scan lines,
  - [VC DispmanX source code](https://github.com/raspberrypi/userland/blob/master/interface/vmcs_host/vc_vchi_dispmanx.c) (more or less the only official documentation bit on DispmanX I could ever find)
