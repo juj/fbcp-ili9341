@@ -540,7 +540,9 @@ int main()
     // Profiling, the following two lines take around ~1msec of time.
     vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
     vc_dispmanx_resource_read_data(screen_resource, &rect, framebuffer[0], vinfo.xres * vinfo.bits_per_pixel / 8);
+#ifndef USE_GPU_VSYNC
     lastFramePollTime = tFrameStart;
+#endif
 
     bool gotNewFramebuffer = false;
     for(uint32_t *newfb = (uint32_t*)framebuffer[0], *oldfb = (uint32_t*)gpuFramebuffer, *endfb = (uint32_t*)gpuFramebuffer + FRAMEBUFFER_SIZE/4; oldfb < endfb;)
