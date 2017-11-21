@@ -401,6 +401,7 @@ int main()
     SPI_TRANSFER(0xC1/*Power Control 2*/, 0x10/*AVCC=VCIx2,VGH=VCIx7,VGL=-VCIx4*/); // Sets the factor used in the step-up circuits. To reduce power consumption, set a smaller factor.
     SPI_TRANSFER(0xC5/*VCOM Control 1*/, 0x3e/*VCOMH=4.250V*/, 0x28/*VCOML=-1.500V*/);
     SPI_TRANSFER(0xC7/*VCOM Control 2*/, 0x86/*VCOMH=VMH-58,VCOML=VML-58*/);
+    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, 0x28/*MV=1,Row/Column Echange=true (Landscape mode),BGR=1(BGR order)*/);
     SPI_TRANSFER(0x3A/*COLMOD: Pixel Format Set*/, 0x55/*DPI=16bits/pixel,DBI=16bits/pixel*/);
     SPI_TRANSFER(0xB1/*Frame Rate Control (In Normal Mode/Full Colors)*/, 0x00/*DIVA=fosc*/, 0x18/*RTNA(Frame Rate)=79Hz*/);
     SPI_TRANSFER(0xB6/*Display Function Control*/, 0x08/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x82/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x27/*LCD Driver Lines=320*/);
@@ -447,23 +448,16 @@ int main()
   // Initialize GPU frame grabbing subsystem
   bcm_host_init();
   DISPMANX_DISPLAY_HANDLE_T display = vc_dispmanx_display_open(0);
-  if (!display) FATAL_ERROR("Unable to open primary display");
+  if (!display) FATAL_ERROR("vc_dispmanx_display_open failed!");
   DISPMANX_MODEINFO_T display_info;
   int ret = vc_dispmanx_display_get_info(display, &display_info);
-  if (ret) FATAL_ERROR("Unable to get primary display information");
-  syslog(LOG_INFO, "Primary display is %d x %d", display_info.width, display_info.height);
-  int fb1 = open("/dev/fb1", O_RDWR);
-  if (fb1 == -1) FATAL_ERROR("Unable to open secondary display");
-  struct fb_var_screeninfo vinfo;
-  struct fb_fix_screeninfo finfo;
-  if (ioctl(fb1, FBIOGET_FSCREENINFO, &finfo)) FATAL_ERROR("Unable to get secondary display information");
-  if (ioctl(fb1, FBIOGET_VSCREENINFO, &vinfo)) FATAL_ERROR("Unable to get secondary display information");
-  syslog(LOG_INFO, "Second display is %d x %d %dbps\n", vinfo.xres, vinfo.yres, vinfo.bits_per_pixel);
+  if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
+  syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT);
   uint32_t image_prt;
-  DISPMANX_RESOURCE_HANDLE_T screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, vinfo.xres, vinfo.yres, &image_prt);
-  if (!screen_resource) FATAL_ERROR("Unable to create screen buffer");
+  DISPMANX_RESOURCE_HANDLE_T screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, DISPLAY_WIDTH, DISPLAY_HEIGHT, &image_prt);
+  if (!screen_resource) FATAL_ERROR("vc_dispmanx_resource_create failed!");
   VC_RECT_T rect;
-  vc_dispmanx_rect_set(&rect, 0, 0, vinfo.xres, vinfo.yres);
+  vc_dispmanx_rect_set(&rect, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
 
 #ifdef USE_GPU_VSYNC
   // Register to receive vsync notifications. This is a heuristic, since the application might not be locked at vsync, and even
@@ -539,7 +533,7 @@ int main()
     // frame twice, and then potentially missing, or displaying the later appearing new frame at a very last moment.
     // Profiling, the following two lines take around ~1msec of time.
     vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
-    vc_dispmanx_resource_read_data(screen_resource, &rect, framebuffer[0], vinfo.xres * vinfo.bits_per_pixel / 8);
+    vc_dispmanx_resource_read_data(screen_resource, &rect, framebuffer[0], SCANLINE_SIZE);
 #ifndef USE_GPU_VSYNC
     lastFramePollTime = tFrameStart;
 #endif
