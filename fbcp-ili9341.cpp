@@ -490,7 +490,7 @@ int main()
 #ifdef STATISTICS
       uint64_t t0 = tick();
 #endif
-      syscall(SYS_futex, &gpuFrameAvailable, FUTEX_WAIT, queueHead, 0, 0, 0);
+      syscall(SYS_futex, &gpuFrameAvailable, FUTEX_WAIT, 0, 0, 0, 0);
 #ifdef STATISTICS
       statsMainThreadSleptOnNoActivityUsecs += tick() - t0;
 #endif
