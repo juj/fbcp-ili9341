@@ -3,9 +3,14 @@
 // Build options: Uncomment any of these, or set at the command line to configure:
 
 // If defined, prints out performance logs to stdout every second
-#define STATISTICS
+// #define STATISTICS
 
+// How often the on-screen statistics is refreshed (in usecs)
 #define STATISTICS_REFRESH_INTERVAL 200000
+
+// How many usecs worth of past frame rate data do we preserve in the history buffer. Higher values
+// make the frame rate display counter smoother and respond to changes with a delay, whereas smaller
+// values can make the display fluctuate a bit erratically.
 #define FRAMERATE_HISTORY_LENGTH 400000
 
 // If defined, no sleeps are specified and the code runs as fast as possible. This should not improve
@@ -27,22 +32,31 @@
 // too much for the display to handle)
 // #define NO_INTERLACING
 
-// #define THROTTLE_INTERLACING
-
+// If defined, all frames are always rendered as interlaced, and never use progressive rendering.
 // #define ALWAYS_INTERLACING
 
-// If defined, the GPU polling thread sleeps in TARGET_FRAMERATE intervals
+// By default, if the SPI bus is idle after rendering an interlaced frame, but the GPU has not yet produced
+// a new application frame to be displayed, the same frame will be renrered again for its other field.
+// Define this option to disable this behavior, in which case when an interlaced frame is rendered, the 
+// remaining other field half of the image will never be uploaded.
+// #define THROTTLE_INTERLACING
+
+// If defined, the GPU polling thread will be put to sleep for 1/TARGET_FRAMERATE seconds after receiving
+// each new GPU frame, to wait for the earliest moment that the next frame could arrive.
 #define SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
 
-// Detects when the activity on the screen is mostly idle, and goes to low power mode
+// Detects when the activity on the screen is mostly idle, and goes to low power mode, in which new
+// frames will be polled first at 10fps, and ultimately at only 2fps.
 #define SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
 
-// Builds a histogram of observed frame intervals and uses that to sync to a known update rate
+// Builds a histogram of observed frame intervals and uses that to sync to a known update rate. This aims
+// to detect if an application uses a non-60Hz update rate, and synchronizes to that instead.
 #define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
 
 // Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 display, divisor value of 4 does not work, and 6 is the fastest
-// possible.
+// possible. While developing, it was observed that a value of 12 or higher did not actually work, and
+// only 6, 8 and 10 were functioning properly.
 #define SPI_BUS_CLOCK_DIVISOR 6
 
 // If defined, rotates the display 180 degrees

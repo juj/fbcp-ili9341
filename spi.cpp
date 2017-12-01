@@ -46,68 +46,6 @@ void RunSPITask(SPITask *task)
   }
 }
 
-
-
-#if 0
-void RunSPITask(SPITask *task)
-{
-  while (!(spi->cs & BCM2835_SPI0_CS_DONE));
-
-  spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-  CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
-  spi->fifo = task->cmd;
-  // Interesting behavior about BCM2835: When writing one byte to TX&RX clear empty FIFO,
-  // and pausing to wait until the transfer is finished, one might think that both
-  // DONE and RXD bits would rise at the same time, since the transfer is finished when
-  // the returned byte is available for reading. However it looks like just every so often,
-  // the RXD bit flips up tiny amount before the DONE bit, so gating synchronization on RXD
-  // is a micro-perf win.
- while(!(spi->cs & (BCM2835_SPI0_CS_RXD))) ;
-
-  SET_GPIO(GPIO_TFT_DATA_CONTROL);
-
-  // Write the data bytes
-  if (task->bytes == 2) // Special case for 2 byte transfers, such as X or Y coordinate sets, or single pixel fills
-  {
-    spi->fifo = task->data[0];
-    spi->fifo = task->data[1];
-  }
-  else if (task->bytes == 4) // Special case for 4 byte transfers, such as X [begin, end] window sets
-  {
-    spi->fifo = task->data[0];
-    spi->fifo = task->data[1];
-    spi->fifo = task->data[2];
-    spi->fifo = task->data[3];
-  }
-  else
-  {
-    uint8_t *tStart = task->data;
-    uint8_t *tEnd = task->data + task->bytes;
-
-//    int prefill = 16;
-  //  while(prefill-- > 0 && tStart < tEnd) spi->fifo = *tStart++;
-
-    while(tStart < tEnd)
-    {
-      uint32_t v = spi->cs;
-      if ((v & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
-      if ((v & BCM2835_SPI0_CS_RXD)) (void)spi->fifo;
-    }
-    spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-  }
-}
-
-#endif
-
-
-
-
-
-
-
-
-
-
 SPITask tasks[SPI_QUEUE_LENGTH];
 volatile uint32_t queueHead = 0, queueTail = 0;
 volatile uint32_t spiBytesQueued = 0;

@@ -14,10 +14,13 @@
 #include "util.h"
 
 volatile uint64_t timeWastedPollingGPU = 0;
-
 int statsSpiBusSpeed = 0;
 int statsCpuFrequency = 0;
 double statsCpuTemperature = 0;
+double spiThreadUtilizationRate;
+double spiBusDataRate;
+int statsGpuPollingWasted = 0;
+uint64_t statsBytesTransferred = 0;
 
 int frameSkipTimeHistorySize = 0;
 uint64_t frameSkipTimeHistory[FRAME_HISTORY_MAX_SIZE] = {};
@@ -25,18 +28,14 @@ uint64_t frameSkipTimeHistory[FRAME_HISTORY_MAX_SIZE] = {};
 char fpsText[32] = {};
 char spiUsagePercentageText[32] = {};
 char spiBusDataRateText[32] = {};
-double spiThreadUtilizationRate;
-double spiBusDataRate;
 uint16_t spiUsageColor = 0, fpsColor = 0;
 char statsFrameSkipText[32] = {};
 char spiSpeedText[32] = {};
 char cpuTemperatureText[32] = {};
 uint16_t cpuTemperatureColor = 0;
-int statsGpuPollingWasted = 0;
 char gpuPollingWastedText[32] = {};
 uint16_t gpuPollingWastedColor = 0;
 
-uint64_t statsBytesTransferred = 0;
 uint64_t statsLastPrint = 0;
 
 void PollHardwareInfo()

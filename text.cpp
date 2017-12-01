@@ -22,7 +22,7 @@ void DrawText(uint16_t *framebuffer, const char *text, int x, int y, uint16_t co
       }
 
     y = Y + monaco_height_adjust[ch];
-    int yEnd = Y + MONACO_HEIGHT - 1;// - monaco_height_adjust[ch];
+    int yEnd = Y + MONACO_HEIGHT - 1;
 
     const uint8_t *byte = monaco_font + ch*MONACO_BYTES_PER_CHAR;
     for(int i = 0; i < MONACO_BYTES_PER_CHAR; ++i, ++byte)

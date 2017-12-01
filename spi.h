@@ -99,7 +99,7 @@ struct SPITask
   } while(0)
 
 // Main thread will dispatch SPI write tasks in a ring buffer to a worker thread
-#define SPI_QUEUE_LENGTH (DISPLAY_HEIGHT*3*6*10) // Entering a scanline costs one SPI task, setting X coordinate a second, and data span a third; have enough room for a couple of these for each scanline.
+#define SPI_QUEUE_LENGTH (DISPLAY_HEIGHT*3*6) // Entering a scanline costs one SPI task, setting X coordinate a second, and data span a third; have enough room for a couple of these for each scanline.
 extern SPITask tasks[SPI_QUEUE_LENGTH];
 extern volatile uint32_t queueHead, queueTail;
 extern volatile uint32_t spiBytesQueued;
