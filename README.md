@@ -111,6 +111,26 @@ hdmi_cvt=320 240 60 1 0 0 0
 
 These lines hint native applications about the default display mode, and let them render to the native resolution of the TFT display. This can however prevent the use of the HDMI connector, if the HDMI connected display does not support such a small resolution. As a compromise, if both HDMI and SPI displays want to be used at the same time, some other compatible resolution such as 640x480 can be used. See [Raspberry Pi HDMI documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) for the available options to do this.
 
+### Statistics Overlay
+
+![Statistics Overlay](/statistics_overlay.jpg "Performance Statistics Overlay")
+
+If the code is compiled with the `STATISTICS` config option enabled, a performance statistics overlay will be rendered on the top side of the screen. This ovelay displays the following information:
+
+1. Current update frame rate. A suffix `p` or `i` denotes whether progressive (all pixels) or interlaced (every second scanline, alternating between evens and odds) updating is being performed. If a negative number, e.g. `-1` or `-2` appears in **red** after the frame rate, it means that the display driver missed updating a frame altogether (neither even nor odd scanlines of a frame were presented). Whenever such a frame skip number is not present, each frame is getting updated at least in interlaced manner.
+
+2. Specifies the current utilization rate of the SPI communication bus. If this is 0%, the display bus is practically idle, and very few pixels are being updated on to the display. If this is 100% the bus is fully saturated and the display driver is at the communication limits, and performing interlaced screen updates, or skipping frames if needed.
+
+3. Specifies the current utilization rate of the SPI bus in actual megabits/second. The theoretical upper bound of this value on the Raspberry Pi 3 Model B is `400MHz / CDIV * 8 / 9` mbits/second, where `CDIV=6` by default.
+
+4. Tracks the current processor speed of the Pi main CPU, in MHz. On the Pi 3 Model B this typically varies between 600 MHz when idle, and 1200 MHz under load (if not overclocked).
+
+5. Tracks the current processor speed of the auxiliary BCM2835 peripheral CPU, in MHz. On the Pi 3 Model B this is typically 400 MHz, although apparently it may be possible(?) for this to drop down to 250 MHz if power or thermal limits are reached.
+
+6. The current CPU temperature.
+
+7. This field tracks the amount of extra wasted CPU power utilization caused by [this VideoCore driver issue](https://github.com/raspberrypi/userland/issues/440).
+
 ### Future Work
 
 There are a couple of interesting ideas that might be useful for tweaking further:
