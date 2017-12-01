@@ -1,4 +1,4 @@
-# fbcp-ili9341
+# Introduction
 
 This repository implements a driver for the SPI-based [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601).
 
@@ -9,31 +9,24 @@ The work was motivated by curiosity after seeing this series of videos on the Re
  - [RetroManCave: Waveshare 3.2" vs 3.5" LCD screen gaming test | Raspberry Pi / RetroPie](https://www.youtube.com/watch?v=8bazEcXemiA)
  - [Elecrow 5 Inch LCD Review | RetroPie & Raspberry Pi](https://www.youtube.com/watch?v=8VgNBDMOssg)
 
-In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays generally run at 32MHz (or at 64MHz if you're lucky) on the Pi, translating to an upper bound of 32Mibits/second of bandwidth. On a 320x240x16bpp display this would mean a theoretical update rate ceiling of 26.0417 Hz.
+In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays generally run at 31.25MHz (or at 62.5MHz if you're lucky) on the Pi, translating to an upper bound of 31.25Mibits/second of bandwidth. On a 320x240x16bpp display this would mean a theoretical update rate ceiling of 25.43 fps.
 
-The repository [rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp) implements the display driver that is used by the popular Retropie projects on these screens. I was taken by how remarkably approachable the code is written. Testing it out on my own Adafruit 2.8" 320x240 display, at the time of writing, it achieves a stable rate of about 16fps (with SPI bus at 32MHz). This is only 60% of the theoretical maximum of the bus. Could this be optimized, or is the SPI bus really so hopeless as claimed?
+The repository [rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp) implements the display driver that is used by the popular Retropie projects on these screens. I was taken by how remarkably approachable the code is written. Testing it out on my own Adafruit 2.8" 320x240 display, at the time of writing, it achieves a stable rate of about 16 fps (with SPI bus at 31.25MHz). This is only 62.9% of the theoretical maximum of the bus. Could this be optimized, or is the SPI bus really so hopeless as claimed?
+
+**Update 2017-11-28**: Turns out that this napkin math is not quite accurate due to two features. First, [the BCM2835 chip clocks itself to a turbo speed of 400 MHz on the Pi 3 Model B](https://github.com/raspberrypi/linux/issues/2094), from the base default 250 MHz referred to in the BCM2835 documentation, leading to +60% faster bandwidth. Second, there seems to be [a typo in the BCM2835 documentation](https://elinux.org/BCM2835_datasheet_errata#p156) that misstates that allowed clock dividers for the SPI chip would need to be powers of 2, whereas in practice the possible clock dividers only need to be even numbers. In particular, a CDIV value of 6 is possible to used and works well, over the original slower CDIV value 8 that corresponded to the figure 31.25 MHz referred to above, or the CDIV value 4 that proved too fast for the display hardware. Putting these two together, with CDIV=6 and a 400MHz clock, the theoretical SPI bandwidth comes out to 66.666 MiBits/second, giving a ceiling of 54.25fps.
 
 ### Results
 
-The `fbcp-ili9341` software is a drop-in replacement for the stock `fbcp` display driver program. It is named as such since it was written to operate specifically against the ILI9341 display controller that the Adafruit 2.8" PiTFT uses, although nothing in the code is fundamentally specific to the ILI9341, so it should be possible to be ported to run on other display controllers as well.
+The `fbcp-ili9341` software is a drop-in replacement for the stock `fbcp` display driver program. It is named as such since it was written to operate specifically against the ILI9341 display controller that the Adafruit 2.8" PiTFT uses, although nothing in the code is fundamentally specific to the ILI9341 alone, so it should be possible to be ported to run on other display controllers as well.
 
-Whereas the original `fbcp` refreshed at fixed 16fps, this updated driver can achieve a 60fps update rate, depending on the content that is being displayed. Check out this video for examples of the driver in action:
+Whereas the original `fbcp` refreshed at fixed 16fps, this updated driver can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
- - [YouTube: fbcp-ili9341 driver demo](https://youtu.be/h1jhuR-oZm0)
-
-Some specific data points (SPI at 32MHz):
-
-| Test                | Update Rate |
-| ------------------- | ---------------- |
-| Prince of Persia    | 60fps |
-| Outrun              | 60fps |
-| OpenTyrian          | 55-60fps |
-| Sonic the Hedgehog  | 48-60fps |
-| Quake               | 45-60fps |
+ - First version: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
+ - Second updated version with statistics overlay: [fbcp-ili9341 SPI display driver on Adafruit PiTFT 2.8"](http://youtu.be/rKSH048XRjA)
 
 ### How It Works
 
-Hey, hold on! If the maximum update rate of the bus is 26.0417 Hz, how come this seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually modified pixels on screen are submitted to the display. This is doable because the ILI9341 controller (as many other popular controllers) has communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
+Given the established theoretical update rate ceiling, how come this seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually modified pixels on screen are submitted to the display. This is doable because the ILI9341 controller (as many other popular controllers) has communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
 
 Other optimizations are also utilized to squeeze out even more performance:
  - The program directly communicates with the BCM2835 ARM Peripherals controller registers, bypassing any Linux software stack. This speeds up communication on the bus, although at great expense of power consumption, as currently neither DMA or hardware interrupts are used. It is possible that the adaptive display stream update technique would not benefit from DMA transfers much, since the optimized communication protocol requires flipping the Data/Control bus quite frequently, something that would need flushing the DMA queue every time it occurs.
@@ -54,17 +47,29 @@ While the performance of the driver is great and 60fps is just lovable, there ar
 ###### A dedicated thread hand holds the SPI FIFO
  - To maximize performance and ensure that the SPI FIFO is efficiently saturated, a dedicated SPI processing pthread is used. This thread spinwaits to observe the SPI FIFO transactions, so the CPU % consumption of this thread linearly correlates to the utilization rate of the SPI bus. If the amount of activity on the screen exceeds the SPI bus bandwidth, this will mean that the SPI thread will sit at 100% utilization. To perform efficient adaptive display stream updates, there are a lot of distinct command+data message pairs that need to be sent, which possibly would prevent the use of the DMA hardware, since a DMA transaction would not be aware to toggle the Data/Control GPIO pin while it transfers data. Depending on how much overhead the DMA hardware has, it might be possible to utilize it for the more longer spans of data, while keeping short spans on the main CPU. In addition, it might be possible to optimize by migrating the display driver to run on the Linux kernel side, utilizing SPI interrupts to process the SPI task queue in a more power efficient manner.
 
-The first performance issue might be addressed in a software update from VideoCore GPU driver (or by use of a smarter Linux API, if such a thing might exist?), while the second performance issue might be fixable by rewriting the driver to run as a kernel module, while accessing the BCM2835 DMA and SPI interrupts hardware. Without these issues resolved, expect overall CPU consumption to be at around 120% - such is the price of 60fps at the moment.
+The first performance issue might be addressed in a software update from VideoCore GPU driver (or by use of a smarter Linux API, if such a thing might exist?), while the second performance issue might be fixable by rewriting the driver to run as a kernel module, while accessing the BCM2835 DMA and SPI interrupts hardware. Without these issues resolved, expect overall CPU consumption to be up to 120% - such is the price of 60fps at the moment.
+
+**Update 2017-11-28**: Had a stab at rewriting the application as a kernel module to utilize interrupts. While this worked well to reduce CPU usage close to 0%, it had an adverse effect of losing quite a bit of available bandwidth, due to difficulty keeping the SPI FIFO fully running (possibly because of some latency that processing interrupt callbacks might cause). Also, SPI interrupts firing at a high rate has a chance of starving other interrupts, and it was observed that audio playback began to stutter. Attempting a kernel interrupts rewrite should pay close attention to these aspects.
 
 ### Should I Use This?
 
-As a caveat, this was written in one weekend as a hobby programming activity, so it's not a continuously maintained driver.
+As a caveat, this was written mostly in one weekend as a hobby programming activity, so it's not a continuously maintained driver.
 
 If your target application doesn't mind high CPU utilization on the background and you have the compatible hardware, then perhaps yes. If your Pi is on battery, this will eat through power pretty quick. To echo RetroManCave's observation as well, you should really use a HDMI display over an SPI-based one, since then the dedicated VideoCore GPU handles all the trouble of presenting frames, plus you will get vsync out of the box. The smallest HDMI displays for Raspberry Pis on the market seem to be [the size of 3.5" 480x320](https://www.raspberrypi.org/forums/viewtopic.php?t=175616), so if that's not too large and your project can manage the HDMI connector hump at the back, there's probably no reason to use SPI.
 
 Perhaps some day if both of the above mentioned performance limitations are optimized away, then high refresh rates on SPI based displays could become power efficient.
 
 ### Installation
+
+Check the following topics to set up the driver.
+
+##### Boot configuration
+
+This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) framebuffer driver, so that can be disabled if active. That is, if your `/boot/config.txt` file has a line that starts with `dtoverlay=pitft28r, ...`, it can be removed. There is no harm in keeping it though if you plan on e.g. being able to switch back and forth between `fbcp` and `fbcp-ili9341`.
+
+This program neither needs the default SPI driver enabled, so a line such as `dtparam=spi=on` in `/boot/config.txt` can likewise be removed. (In the tested kernel version of this program, that line would conflict since the program would then register the hardware SPI interrupts for itself)
+
+##### Building and running
 
 Run in the console of your Raspberry Pi:
 
@@ -80,19 +85,49 @@ sudo ./fbcp-ili9341
 
 If you have been running existing `fbcp` driver, make sure to remove that e.g. via a `sudo pkill fbcp` first (while running in SSH prompt or connected to a HDMI display), these two cannot run at the same time.
 
-To set up the driver to launch at startup, edit the file `/etc/rc.local` in `sudo` mode, and add a line `sudo /path/to/fbcp-ili9341/build/fbcp-ili9341 &` to the end. Make note of the needed ampersand `&` at the end of that line.
+##### Configuring build options
+
+Edit the file [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h) directly to customize different build options. In particular the option `#define STATISTICS` can be interesting to try to enable.
+
+##### Launching the display driver at startup
+
+To set up the driver to launch at startup, edit the file `/etc/rc.local` in `sudo` mode, and add a line
+
+```bash
+sudo /path/to/fbcp-ili9341/build/fbcp-ili9341 &
+````
+
+to the end. Make note of the needed ampersand `&` at the end of that line.
+
+##### Configuring HDMI and TFT display sizes
+
+If the size of the default HDMI output `/dev/fb0` framebuffer differs from the 320x240 resolution of the display, the source size will need to be rescaled to fit to 320x240 pixels. `fbcp-ili9341` will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the 320x240 size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
+
+```
+hdmi_group=2
+hdmi_mode=87
+hdmi_cvt=320 240 60 1 0 0 0
+```
+
+These lines hint native applications about the default display mode, and let them render to the native resolution of the TFT display. This can however prevent the use of the HDMI connector, if the HDMI connected display does not support such a small resolution. As a compromise, if both HDMI and SPI displays want to be used at the same time, some other compatible resolution such as 640x480 can be used. See [Raspberry Pi HDMI documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) for the available options to do this.
 
 ### Future Work
 
 There are a couple of interesting ideas that might be useful for tweaking further:
 
-###### 64 MHz SPI Bus?
+###### CDIV=4 ?
 
-While developing, it was observed that using a twice as fast bus speed, 64MHz, over the safer 32MHz, would work for about 80% of the time, with some visual artifacts occurring. I was left wondering whether these artifacts would be fixable by more carefully implemented timing in some part of the SPI update code, or whether the hardware is just plain incompatible. Adding extra synchronization and sleeps in specific places in code seemed to alleviate the issues a little, but this could not be made perfect. There is a `const int busDivisor` parameter in the code that may be worth setting to `4` instead of `8` when testing and see if that works, since that could double the bus speed for double the performance.
+While developing, it was observed that the SPI bus speed capped at parameter CDIV=6 (400MHz/6=66MHz). Using the next faster bus speed, CDIV=4 (400MHz/4=100MHz), would work for about 80% of the time, with some visual artifacts occurring. I was left wondering whether these artifacts would be fixable by more carefully implemented timing in some part of the SPI update code, by tweaking either the SPI offsets or phases of the BCM2835 SPI master or the ILI9341 controller chips. Adding extra synchronization and sleeps in specific places in code seemed to alleviate the issues a little, but this could not be made perfect. There is a `#define SPI_BUS_CLOCK_DIVISOR 6` parameter in the code that can be adjusted to `4` to test how this behaves.
 
 ###### VideoCore VSync Callback?
 
 The codebase does implement an option to use the VideoCore GPU vertical sync signal as the method to grab new frames. This was tested and quickly rejected at least for games emulators use, since these generally do not produce frames at strict 60Hz refresh rate. Depending on the use case, it might still be preferrable to use this signal, rather than polling. The option was left in the code, under an optional `#define USE_GPU_VSYNC` that one can enable if desired.
+
+###### LoSSI mode superior to 4-line SPI?
+
+The major source of performance problems in the utilized 4-line SPI protocol is that extra GPIO pin that dictates whether the currently sent byte on the SPI bus is a `Data` byte or a `Command` byte. Since SPI communication and this D/C pin need to be synchronized together for the bytes to be interpreted correctly, it means that the SPI FIFO needs to be flushed empty whenever the state of the D/C pin is to be toggled. The *adaptive display stream update* approach generates a lot of distinct Commands that need to be sent, so flushing the FIFO needs to be done often during a single frame. This prevents the utilization of DMA transfers for the task. In LoSSI SPI mode however, D/C information would be sent on the same line as the communication payload, which means that such kind of FIFO flushing would not need to be done. As result, display updates could theoretically be pushed directly via DMA transfers in one go. Observing the line using a logic analyzer, each flush costs about one byte worth of idle time on the bus, so DMA transfers would have a chance to avoid this altogether.
+
+Using LoSSI mode over 4-line, i.e. sending D/C information as part of the MOSI line, expands the size of each payload byte from 8 bits to 9 bits, which might at a glance seem like a -11.11..% reduction in throughput. Coincidentally, the BCM2835 SPI controller has a bandwidth limiting behavior that in Polled and Interrupt modes (i.e. when not using DMA), there is a [one clock delay after each sent byte on the SPI line](http://www.jumpnowtek.com/rpi/Analyzing-raspberry-pi-spi-performance.html), which effectively means that this cost of the 9th bit is already being paid when using 4-line SPI without DMA (in DMA transfer mode, this 9th bit overhead is not present). Therefore wiring the hardware to run in LoSSI SPI mode and re-writing this driver program to run as a kernel module and to use DMA might be the technically superior solution - close to 0% CPU usage while attaining 100% SPI line saturation.
 
 ### Resources
 
