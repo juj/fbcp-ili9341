@@ -51,8 +51,8 @@ int main()
 
   InitGPU();
 
-  uint32_t curFrameEnd = queueTail;
-  uint32_t prevFrameEnd = queueTail;
+  uint32_t curFrameEnd = spiTaskMemory->queueTail;
+  uint32_t prevFrameEnd = spiTaskMemory->queueTail;
 
   bool prevFrameWasInterlacedUpdate = false;
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
@@ -71,16 +71,11 @@ int main()
       }
 
     bool spiThreadWasWorkingHardBefore = false;
-    uint64_t detectTime = tick();
-    uint32_t bytesInQueueThen = spiBytesQueued;
-    uint32_t tasksInQueueThen = (queueTail + SPI_QUEUE_LENGTH - queueHead) % SPI_QUEUE_LENGTH;
-
-    int oldFrameSize = tasksInQueueThen - (queueTail + SPI_QUEUE_LENGTH - prevFrameEnd) % SPI_QUEUE_LENGTH; 
 
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
     // once the older of those has been displayed.
     bool once = true;
-    while ((queueTail + SPI_QUEUE_LENGTH - queueHead) % SPI_QUEUE_LENGTH > (queueTail + SPI_QUEUE_LENGTH - prevFrameEnd) % SPI_QUEUE_LENGTH)
+    while ((spiTaskMemory->queueTail + SPI_QUEUE_SIZE - spiTaskMemory->queueHead) % SPI_QUEUE_SIZE > (spiTaskMemory->queueTail + SPI_QUEUE_SIZE - prevFrameEnd) % SPI_QUEUE_SIZE)
     {
       PollHardwareInfo(); // This is a good time to update new hardware stats, since we are going to sleep anyways.
 
@@ -92,7 +87,6 @@ int main()
       if (usecsUntilSpiQueueEmpty > 0)
       {
         uint32_t bytesInQueueBefore = spiBytesQueued;
-        uint32_t tasksInQueueBefore = (queueTail + SPI_QUEUE_LENGTH - queueHead) % SPI_QUEUE_LENGTH;
         uint32_t sleepUsecs = (uint32_t)(usecsUntilSpiQueueEmpty*0.4);
 #ifdef STATISTICS
         uint64_t t0 = tick();
@@ -102,25 +96,19 @@ int main()
 #ifdef STATISTICS
         uint64_t t1 = tick();
         uint32_t bytesInQueueAfter = spiBytesQueued;
-        uint32_t tasksInQueueAfter = (queueTail + SPI_QUEUE_LENGTH - queueHead) % SPI_QUEUE_LENGTH;
-        bool starved = (queueHead == queueTail);
+        bool starved = (spiTaskMemory->queueHead == spiTaskMemory->queueTail);
         if (starved) spiThreadWasWorkingHardBefore = false;
 
         if (once && starved)
         {
-          printf("Had %u bytes/%u tasks in queue, asked to sleep for %u usecs, got %u usecs sleep, afterwards %u bytes/%u tasks in queue. (got %.2f%% work done)%s\n",
-            bytesInQueueBefore, tasksInQueueBefore, sleepUsecs, (uint32_t)(t1 - t0), bytesInQueueAfter, tasksInQueueAfter, (bytesInQueueBefore-bytesInQueueAfter)*100.0/bytesInQueueBefore,
+          printf("Had %u bytes in queue, asked to sleep for %u usecs, got %u usecs sleep, afterwards %u bytes in queue. (got %.2f%% work done)%s\n",
+            bytesInQueueBefore, sleepUsecs, (uint32_t)(t1 - t0), bytesInQueueAfter, (bytesInQueueBefore-bytesInQueueAfter)*100.0/bytesInQueueBefore,
             starved ? "  SLEPT TOO LONG, SPI THREAD STARVED" : "");
           once = false;
         }
 #endif
       }
     }
-
-    uint64_t detectTimeNoSleep = tick();
-    uint32_t tasksInQueueAfterSleep = (queueTail + SPI_QUEUE_LENGTH - queueHead) % SPI_QUEUE_LENGTH;
-
-    uint64_t tFrameStart = tick();
 
     int expiredFrames = 0;
     uint64_t now = tick();
@@ -321,11 +309,10 @@ int main()
       }
 
       // Submit the span pixels
-      SPITask *task = AllocTask();
+      SPITask *task = AllocTask(i->size*DISPLAY_BYTESPERPIXEL);
       task->cmd = DISPLAY_WRITE_PIXELS;
-      task->bytes = i->size*DISPLAY_BYTESPERPIXEL;
 
-      bytesTransferred += task->bytes+1;
+      bytesTransferred += task->size+1;
       uint16_t *scanline = framebuffer[0] + i->y * DISPLAY_WIDTH;
       uint16_t *prevScanline = framebuffer[1] + i->y * DISPLAY_WIDTH;
       uint16_t *data = (uint16_t*)task->data;
@@ -335,14 +322,14 @@ int main()
         for(int x = i->x; x < endX; ++x) *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
       }
-      CommitTask();
+      CommitTask(task);
     }
 
     // Remember where in the command queue this frame ends, to keep track of the SPI thread's progress over it
     if (bytesTransferred > 0)
     {
       prevFrameEnd = curFrameEnd;
-      curFrameEnd = queueTail;
+      curFrameEnd = spiTaskMemory->queueTail;
     }
 
 #ifdef STATISTICS

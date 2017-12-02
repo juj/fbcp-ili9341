@@ -31,8 +31,8 @@ void RunSPITask(SPITask *task)
   spi->fifo = task->cmd;
 
   uint8_t *tStart = task->data;
-  uint8_t *tEnd = task->data + task->bytes;
-  uint8_t *tPrefillEnd = task->data + MIN(15, task->bytes);
+  uint8_t *tEnd = task->data + task->size;
+  uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
 
   while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE)));
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
@@ -46,8 +46,7 @@ void RunSPITask(SPITask *task)
   }
 }
 
-SPITask tasks[SPI_QUEUE_LENGTH];
-volatile uint32_t queueHead = 0, queueTail = 0;
+SharedMemory *spiTaskMemory = 0;
 volatile uint32_t spiBytesQueued = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
@@ -56,13 +55,24 @@ double spiUsecsPerByte;
 
 SPITask *GetTask() // Returns the first task in the queue, called in worker thread
 {
-  return (queueHead != queueTail) ? tasks+queueHead : 0;
+  uint32_t head = spiTaskMemory->queueHead;
+  uint32_t tail = spiTaskMemory->queueTail;
+  if (head == tail) return 0;
+  SPITask *task = (SPITask*)(spiTaskMemory->buffer + head);
+  if (task->cmd == 0) // Wrapped around?
+  {
+    spiTaskMemory->queueHead = 0;
+    __sync_synchronize();
+    if (tail == 0) return 0;
+    task = (SPITask*)spiTaskMemory->buffer;
+  }
+  return task;
 }
 
-void DoneTask() // Frees the first SPI task from the queue, called in worker thread
+void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called in worker thread
 {
-  __atomic_fetch_sub(&spiBytesQueued, tasks[queueHead].bytes, __ATOMIC_RELAXED);
-  queueHead = (queueHead + 1) % SPI_QUEUE_LENGTH;
+  __atomic_fetch_sub(&spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
+  spiTaskMemory->queueHead = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
   __sync_synchronize();
 }
 
@@ -71,14 +81,18 @@ void *spi_thread(void*)
 {
   for(;;)
   {
-    if (queueTail != queueHead)
+    if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
       BEGIN_SPI_COMMUNICATION();
       {
-        while(queueTail != queueHead)
+        while(spiTaskMemory->queueTail != spiTaskMemory->queueHead)
         {
-          RunSPITask(GetTask());
-          DoneTask();
+          SPITask *task = GetTask();
+          if (task)
+          {
+            RunSPITask(task);
+            DoneTask(task);
+          }
         }
       }
       END_SPI_COMMUNICATION();
@@ -90,7 +104,7 @@ void *spi_thread(void*)
       spiThreadSleepStartTime = t0;
       __atomic_store_n(&spiThreadSleeping, 1, __ATOMIC_RELAXED);
 #endif
-      syscall(SYS_futex, &queueTail, FUTEX_WAIT, queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
 #ifdef STATISTICS
       __atomic_store_n(&spiThreadSleeping, 0, __ATOMIC_RELAXED);
       uint64_t t1 = tick();
@@ -133,6 +147,10 @@ void InitSPI()
   // Estimate how many microseconds transferring a single byte over the SPI bus takes?
   spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR * 9.0/8.0/*BCM2835 SPI master idles for one bit per each byte*/ / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
 
+  // Initialize SPI thread task buffer memory
+  spiTaskMemory = (SharedMemory*)malloc(SHARED_MEMORY_SIZE);
+  spiTaskMemory->queueHead = spiTaskMemory->queueTail = 0;
+
   InitSPIDisplay();
 
   // Create a dedicated thread to feed the SPI bus. While this is fast, it consumes a lot of CPU. It would be best to replace
@@ -144,6 +162,8 @@ void InitSPI()
 
 void DeinitSPI()
 {
+  free(spiTaskMemory);
+  spiTaskMemory = 0;
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0);
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0);

@@ -42,17 +42,19 @@ void InitILI9341()
 //    SPI_TRANSFER(0x39/*Idle Mode ON*/); // Idle mode gives a super-saturated high contrast reduced colors mode
 
     // Since we are doing delta updates to only changed pixels, clear display initially to black for known starting state
-    SPITask clearLine = {};
-    clearLine.cmd = 0x2C;
-    clearLine.bytes = SCANLINE_SIZE;
     for(int y = 0; y < DISPLAY_HEIGHT; ++y)
     {
-      SPI_TRANSFER(0x2A/*X*/, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-      SPI_TRANSFER(0x2B/*Y*/, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-      RunSPITask(&clearLine);
+      SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
+      SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
+      SPITask *clearLine = AllocTask(SCANLINE_SIZE);
+      clearLine->cmd = DISPLAY_WRITE_PIXELS;
+      memset(clearLine->data, 0, clearLine->size);
+      CommitTask(clearLine);
+      RunSPITask(clearLine);
+      DoneTask(clearLine);
     }
-    SPI_TRANSFER(0x2A/*X*/, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    SPI_TRANSFER(0x2B/*Y*/, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
+    SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
+    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
   }
 
   END_SPI_COMMUNICATION();
