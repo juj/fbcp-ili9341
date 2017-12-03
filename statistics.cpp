@@ -97,16 +97,18 @@ void RefreshStatisticsOverlayText()
 
 #ifdef KERNEL_MODULE_CLIENT
   spiThreadUtilizationRate = 0; // TODO
+  int spiRate = 0;
+  strcpy(spiUsagePercentageText, "N/A");
 #else
   uint64_t spiThreadIdleFor = __atomic_load_n(&spiThreadIdleUsecs, __ATOMIC_RELAXED);
   __sync_fetch_and_sub(&spiThreadIdleUsecs, spiThreadIdleFor);
   if (__atomic_load_n(&spiThreadSleeping, __ATOMIC_RELAXED)) spiThreadIdleFor += tick() - spiThreadSleepStartTime;
   spiThreadUtilizationRate = MIN(1.0, MAX(0.0, 1.0 - spiThreadIdleFor / (double)STATISTICS_REFRESH_INTERVAL));
+  int spiRate = (int)MIN(100, (spiThreadUtilizationRate*100.0));
+  sprintf(spiUsagePercentageText, "%d%%", spiRate);
 #endif
   spiBusDataRate = (double)8.0 * statsBytesTransferred * 1000.0 / (elapsed / 1000.0);
 
-  int spiRate = (int)MIN(100, (spiThreadUtilizationRate*100.0));
-  sprintf(spiUsagePercentageText, "%d%%", spiRate);
   if (spiRate < 90) spiUsageColor = RGB565(0,63,0);
   else if (spiRate < 100) spiUsageColor = RGB565(31,63,0);
   else spiUsageColor = RGB565(31,0, 0);
