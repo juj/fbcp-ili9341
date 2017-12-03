@@ -60,8 +60,16 @@
 #define SPI_BUS_CLOCK_DIVISOR 6
 
 // If defined, rotates the display 180 degrees
-#define DISPLAY_ROTATE_180_DEGREES
+// #define DISPLAY_ROTATE_180_DEGREES
 
 // If defined, displays in landscape. Undefine to display in portrait. When changing this, swap
 // values of  DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
 #define DISPLAY_OUTPUT_LANDSCAPE
+
+#ifndef KERNEL_MODULE
+
+// Define this if building the program to run against the kernel driver module, rather than a
+// self-contained userland program.
+// #define KERNEL_MODULE_CLIENT
+
+#endif

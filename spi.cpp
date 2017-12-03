@@ -1,3 +1,4 @@
+#ifndef KERNEL_MODULE
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
@@ -7,6 +8,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#endif
 
 #include "config.h"
 #include "spi.h"
@@ -20,12 +22,11 @@ void RunSPITask(SPITask *task)
 {
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   uint32_t cs;
-  do {
-    cs = spi->cs;
-    if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-  } while (!(cs & (BCM2835_SPI0_CS_DONE)));
+  while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE))
+    if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
+      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
 
-  spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+  if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
 
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
   spi->fifo = task->cmd;
@@ -33,21 +34,20 @@ void RunSPITask(SPITask *task)
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
   uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
+  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
 
-  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE)));
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
 
   while(tStart < tPrefillEnd) spi->fifo = *tStart++;
   while(tStart < tEnd)
   {
-    uint32_t v = spi->cs;
-    if ((v & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
-    if ((v & BCM2835_SPI0_CS_RXD)) (void)spi->fifo;
+    cs = spi->cs;
+    if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+    if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
   }
 }
 
 SharedMemory *spiTaskMemory = 0;
-volatile uint32_t spiBytesQueued = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
 volatile int spiThreadSleeping = 0;
@@ -71,13 +71,14 @@ SPITask *GetTask() // Returns the first task in the queue, called in worker thre
 
 void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called in worker thread
 {
-  __atomic_fetch_sub(&spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
+  __atomic_fetch_sub(&spiTaskMemory->spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
   spiTaskMemory->queueHead = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
   __sync_synchronize();
 }
 
+#ifndef KERNEL_MODULE
 // A worker thread that keeps the SPI bus filled at all times
-void *spi_thread(void*)
+void *spi_thread(void *unused)
 {
   for(;;)
   {
@@ -113,9 +114,23 @@ void *spi_thread(void*)
     }
   }
 }
+#endif
 
-void InitSPI()
+int InitSPI()
 {
+#ifdef KERNEL_MODULE
+
+#define BCM2835_PERI_BASE               0x3F000000
+#define BCM2835_GPIO_BASE               0x200000
+#define BCM2835_SPI0_BASE               0x204000
+  printk("ioremapping %p\n", (void*)(BCM2835_PERI_BASE+BCM2835_GPIO_BASE));
+  void *bcm2835 = ioremap(BCM2835_PERI_BASE+BCM2835_GPIO_BASE, 32768);
+  printk("Got bcm address %p\n", bcm2835);
+  if (!bcm2835) FATAL_ERROR("Failed to map BCM2835 address!");
+  spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE - BCM2835_GPIO_BASE);
+  gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835);
+
+#else // Userland version
   // Find the memory address to the BCM2835 peripherals
   FILE *fp = fopen("/proc/device-tree/soc/ranges", "rb");
   if (!fp) FATAL_ERROR("Failed to open /proc/device-tree/soc/ranges!");
@@ -132,7 +147,12 @@ void InitSPI()
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
   close(mem);
+#endif
 
+  // Estimate how many microseconds transferring a single byte over the SPI bus takes?
+  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR * 9.0/8.0/*BCM2835 SPI master idles for one bit per each byte*/ / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
+
+#ifndef KERNEL_MODULE_CLIENT
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04); // Set the SPI0 pins to the Alt 0 function (0x04) to enable SPI0 access on them
@@ -143,14 +163,28 @@ void InitSPI()
 
   spi->cs = BCM2835_SPI0_CS_CLEAR; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk
-
-  // Estimate how many microseconds transferring a single byte over the SPI bus takes?
-  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR * 9.0/8.0/*BCM2835 SPI master idles for one bit per each byte*/ / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
+#endif
 
   // Initialize SPI thread task buffer memory
-  spiTaskMemory = (SharedMemory*)malloc(SHARED_MEMORY_SIZE);
-  spiTaskMemory->queueHead = spiTaskMemory->queueTail = 0;
+#ifdef KERNEL_MODULE_CLIENT
+  int driverfd = open("/proc/lkmc_mmap", O_RDWR|O_SYNC);
+  if (driverfd < 0) FATAL_ERROR("Could not open SPI ring buffer - kernel driver module not running?");
+  spiTaskMemory = (SharedMemory*)mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
+  close(driverfd);
+  if (spiTaskMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI ring buffer!");
+  printf("Got shared memory block %p, ring buffer head %p, ring buffer tail %p\n", (const char *)spiTaskMemory, spiTaskMemory->queueHead, spiTaskMemory->queueTail);
+#else
 
+#ifdef KERNEL_MODULE
+  spiTaskMemory = (SharedMemory*)kmalloc(SHARED_MEMORY_SIZE, GFP_KERNEL);
+#else
+  spiTaskMemory = (SharedMemory*)malloc(SHARED_MEMORY_SIZE);
+#endif
+
+  spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
+#endif
+
+#if !defined(KERNEL_MODULE) && !defined(KERNEL_MODULE_CLIENT)
   InitSPIDisplay();
 
   // Create a dedicated thread to feed the SPI bus. While this is fast, it consumes a lot of CPU. It would be best to replace
@@ -158,16 +192,26 @@ void InitSPI()
   pthread_t thread;
   int rc = pthread_create(&thread, NULL, spi_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
   if (rc != 0) FATAL_ERROR("Failed to create SPI thread!");
+#endif
+
+  return 0;
 }
 
 void DeinitSPI()
 {
+#ifndef KERNEL_MODULE_CLIENT
+
+#ifdef KERNEL_MODULE
+  kfree(spiTaskMemory);
+#else
   free(spiTaskMemory);
+#endif
   spiTaskMemory = 0;
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0);
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0);
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0);
-  SET_GPIO_MODE(GPIO_SPI0_CLK, 0);  
+  SET_GPIO_MODE(GPIO_SPI0_CLK, 0);
+#endif
 }

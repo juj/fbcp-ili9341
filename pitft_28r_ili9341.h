@@ -11,5 +11,5 @@
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C
 
-void InitILI9341();
+void InitILI9341(void);
 #define InitSPIDisplay InitILI9341

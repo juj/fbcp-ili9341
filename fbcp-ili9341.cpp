@@ -79,14 +79,14 @@ int main()
     {
       PollHardwareInfo(); // This is a good time to update new hardware stats, since we are going to sleep anyways.
 
-      if (spiBytesQueued > 10000)
+      if (spiTaskMemory->spiBytesQueued > 10000)
         spiThreadWasWorkingHardBefore = true; // SPI thread had too much work in queue atm (2 full frames)
 
       // Peek at the SPI thread's workload and throttle a bit if it has got a lot of work still to do.
-      double usecsUntilSpiQueueEmpty = spiBytesQueued*spiUsecsPerByte;
+      double usecsUntilSpiQueueEmpty = spiTaskMemory->spiBytesQueued*spiUsecsPerByte;
       if (usecsUntilSpiQueueEmpty > 0)
       {
-        uint32_t bytesInQueueBefore = spiBytesQueued;
+        uint32_t bytesInQueueBefore = spiTaskMemory->spiBytesQueued;
         uint32_t sleepUsecs = (uint32_t)(usecsUntilSpiQueueEmpty*0.4);
 #ifdef STATISTICS
         uint64_t t0 = tick();
@@ -95,7 +95,7 @@ int main()
 
 #ifdef STATISTICS
         uint64_t t1 = tick();
-        uint32_t bytesInQueueAfter = spiBytesQueued;
+        uint32_t bytesInQueueAfter = spiTaskMemory->spiBytesQueued;
         bool starved = (spiTaskMemory->queueHead == spiTaskMemory->queueTail);
         if (starved) spiThreadWasWorkingHardBefore = false;
 
@@ -168,7 +168,7 @@ int main()
     interlacedUpdate = (changedPixels > 0);
 #else
     uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_WIDTH+DISPLAY_HEIGHT*4);
-    interlacedUpdate = ((bytesToSend + spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
+    interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
@@ -324,6 +324,13 @@ int main()
       }
       CommitTask(task);
     }
+
+#ifdef KERNEL_MODULE_CLIENT
+    // Wake the kernel module up to run tasks. TODO: This might not be best placed here, we could pre-empt
+    // to start running tasks already half-way during task submission above.
+    if (spiTaskMemory->queueHead != spiTaskMemory->queueTail && !(spi->cs & BCM2835_SPI0_CS_TA))
+      spi->cs |= BCM2835_SPI0_CS_TA;
+#endif
 
     // Remember where in the command queue this frame ends, to keep track of the SPI thread's progress over it
     if (bytesTransferred > 0)

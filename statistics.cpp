@@ -95,12 +95,17 @@ void RefreshStatisticsOverlayText()
   uint64_t elapsed = now - statsLastPrint;
   if (elapsed < STATISTICS_REFRESH_INTERVAL) return;
 
+#ifdef KERNEL_MODULE_CLIENT
+  spiThreadUtilizationRate = 0; // TODO
+#else
   uint64_t spiThreadIdleFor = __atomic_load_n(&spiThreadIdleUsecs, __ATOMIC_RELAXED);
+  __sync_fetch_and_sub(&spiThreadIdleUsecs, spiThreadIdleFor);
   if (__atomic_load_n(&spiThreadSleeping, __ATOMIC_RELAXED)) spiThreadIdleFor += tick() - spiThreadSleepStartTime;
-  spiThreadUtilizationRate = MIN(1.0, MAX(0.0, spiThreadIdleFor / (double)STATISTICS_REFRESH_INTERVAL));
+  spiThreadUtilizationRate = MIN(1.0, MAX(0.0, 1.0 - spiThreadIdleFor / (double)STATISTICS_REFRESH_INTERVAL));
+#endif
   spiBusDataRate = (double)8.0 * statsBytesTransferred * 1000.0 / (elapsed / 1000.0);
 
-  int spiRate = 100 - (int)MIN(100.0, spiThreadUtilizationRate*100.0);
+  int spiRate = (int)MIN(100, (spiThreadUtilizationRate*100.0));
   sprintf(spiUsagePercentageText, "%d%%", spiRate);
   if (spiRate < 90) spiUsageColor = RGB565(0,63,0);
   else if (spiRate < 100) spiUsageColor = RGB565(31,63,0);
@@ -115,7 +120,6 @@ void RefreshStatisticsOverlayText()
   //const double gpuPollingWastedScalingFactor = 0.369; // A crude heuristic to scale time spent in useless polling to what Linux 'top' tool shows as % usage percentages
   statsGpuPollingWasted = (int)(wastedTime /** gpuPollingWastedScalingFactor*/ * 100 / (now - statsLastPrint));
 
-  __sync_fetch_and_sub(&spiThreadIdleUsecs, spiThreadIdleFor);
   statsBytesTransferred = 0;
 
   if (statsSpiBusSpeed > 0 && statsCpuFrequency > 0) sprintf(spiSpeedText, "%d/%dMHz", statsCpuFrequency, statsSpiBusSpeed);
