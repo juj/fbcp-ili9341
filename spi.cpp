@@ -167,7 +167,7 @@ int InitSPI()
 
   // Initialize SPI thread task buffer memory
 #ifdef KERNEL_MODULE_CLIENT
-  int driverfd = open("/proc/lkmc_mmap", O_RDWR|O_SYNC);
+  int driverfd = open("/proc/bcm2835_spi_display_bus", O_RDWR|O_SYNC);
   if (driverfd < 0) FATAL_ERROR("Could not open SPI ring buffer - kernel driver module not running?");
   spiTaskMemory = (SharedMemory*)mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
   close(driverfd);
