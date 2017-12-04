@@ -4,16 +4,16 @@
 
 #include "gpu.h"
 
-void PollHardwareInfo();
-void RefreshStatisticsOverlayText();
+int InitStatistics(void);
+void RefreshStatisticsOverlayText(void);
 void DrawStatisticsOverlay(uint16_t *framebuffer);
 
 #ifdef STATISTICS
 
 extern volatile uint64_t timeWastedPollingGPU;
-extern int statsSpiBusSpeed;
-extern int statsCpuFrequency;
-extern double statsCpuTemperature;
+extern volatile int statsSpiBusSpeed;
+extern volatile int statsCpuFrequency;
+extern volatile double statsCpuTemperature;
 extern double spiThreadUtilizationRate;
 extern double spiBusDataRate;
 extern int statsGpuPollingWasted;

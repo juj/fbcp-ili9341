@@ -51,6 +51,8 @@ int main()
 
   InitGPU();
 
+  InitStatistics();
+
   uint32_t curFrameEnd = spiTaskMemory->queueTail;
   uint32_t prevFrameEnd = spiTaskMemory->queueTail;
 
@@ -66,7 +68,6 @@ int main()
 #endif
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
-        PollHardwareInfo(); // This is a good time to update new hardware stats, since we are going to sleep anyways.
         syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Start sleeping until we get new tasks
       }
 
@@ -77,8 +78,6 @@ int main()
     bool once = true;
     while ((spiTaskMemory->queueTail + SPI_QUEUE_SIZE - spiTaskMemory->queueHead) % SPI_QUEUE_SIZE > (spiTaskMemory->queueTail + SPI_QUEUE_SIZE - prevFrameEnd) % SPI_QUEUE_SIZE)
     {
-      PollHardwareInfo(); // This is a good time to update new hardware stats, since we are going to sleep anyways.
-
       if (spiTaskMemory->spiBytesQueued > 10000)
         spiThreadWasWorkingHardBefore = true; // SPI thread had too much work in queue atm (2 full frames)
 

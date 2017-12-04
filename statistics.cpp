@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <pthread.h>
+#include <syslog.h>
 
 #include "tick.h"
 #include "text.h"
@@ -14,9 +16,9 @@
 #include "util.h"
 
 volatile uint64_t timeWastedPollingGPU = 0;
-int statsSpiBusSpeed = 0;
-int statsCpuFrequency = 0;
-double statsCpuTemperature = 0;
+volatile int statsSpiBusSpeed = 0;
+volatile int statsCpuFrequency = 0;
+volatile double statsCpuTemperature = 0;
 double spiThreadUtilizationRate;
 double spiBusDataRate;
 int statsGpuPollingWasted = 0;
@@ -38,21 +40,23 @@ uint16_t gpuPollingWastedColor = 0;
 
 uint64_t statsLastPrint = 0;
 
-void PollHardwareInfo()
+void *poll_thread(void *unused)
 {
-  static uint64_t lastPollTime = tick();
-  uint64_t now = tick();
-  if (now - lastPollTime > 500000)
+  for(;;)
   {
+    usleep(1000000);
     // SPI bus speed
-    FILE *handle = fopen("/sys/kernel/debug/clk/aux_spi1/clk_rate", "r");
-    char t[32] = {};
+    FILE *handle = popen("vcgencmd measure_clock core", "r");
+    char t[64] = {};
     if (handle)
     {
-      fread(t, 1, sizeof(t)-1, handle);
-      fclose(handle);
+      int ret = fread(t, 1, sizeof(t)-1, handle);
+      pclose(handle);
     }
-    statsSpiBusSpeed = atoi(t)/1000000;
+    char *s = t;
+    while(*s && *s != '=') ++s;
+    if (*s == '=') ++s;
+    statsSpiBusSpeed = atoi(s)/1000000;
 
     // CPU temperature
     handle = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
@@ -73,9 +77,14 @@ void PollHardwareInfo()
       fclose(handle);
     }
     statsCpuFrequency = atoi(t3) / 1000;
-
-    lastPollTime = now;
   }
+}
+
+int InitStatistics()
+{
+  pthread_t thread;
+  int rc = pthread_create(&thread, NULL, poll_thread, NULL);
+  if (rc != 0) FATAL_ERROR("Failed to create Statistics polling thread!");
 }
 
 void DrawStatisticsOverlay(uint16_t *framebuffer)
@@ -176,7 +185,7 @@ void RefreshStatisticsOverlayText()
   }
 }
 #else
-void PollHardwareInfo() {}
+int InitStatistics() {}
 void RefreshStatisticsOverlayText() {}
 void DrawStatisticsOverlay(uint16_t *) {}
 #endif // ~STATISTICS
