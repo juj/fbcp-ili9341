@@ -29,6 +29,7 @@ void RunSPITask(SPITask *task)
   if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
 
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
+
   spi->fifo = task->cmd;
 
   uint8_t *tStart = task->data;
@@ -155,11 +156,15 @@ int InitSPI()
 #ifndef KERNEL_MODULE_CLIENT
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
-  SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04); // Set the SPI0 pins to the Alt 0 function (0x04) to enable SPI0 access on them
-  SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_CLK, 0x04);
+
+  // Set the SPI 0 pin explicitly to output, and enable chip select on the line by setting it to low.
+  // fbcp-ili9341 assumes exclusive access to the SPI0 bus, and exclusive presence of only one device on the bus,
+  // which is (permanently) activated here.
+  SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
+  CLEAR_GPIO(GPIO_SPI0_CE0);
 
   spi->cs = BCM2835_SPI0_CS_CLEAR; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk

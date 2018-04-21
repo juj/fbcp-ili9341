@@ -89,13 +89,13 @@ int InitStatistics()
 
 void DrawStatisticsOverlay(uint16_t *framebuffer)
 {
-  DrawText(framebuffer, fpsText, 1, 1, fpsColor, 0);
-  DrawText(framebuffer, statsFrameSkipText, strlen(fpsText)*6, 1, RGB565(31,0,0), 0);
-  DrawText(framebuffer, spiUsagePercentageText, 49, 1, spiUsageColor, 0);
-  DrawText(framebuffer, spiBusDataRateText, 79, 1, 0xFFFF, 0);
-  DrawText(framebuffer, spiSpeedText, 145, 1, RGB565(31,14,20), 0);
-  DrawText(framebuffer, cpuTemperatureText, 220, 1, cpuTemperatureColor, 0);
-  DrawText(framebuffer, gpuPollingWastedText, 262, 1, gpuPollingWastedColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, statsFrameSkipText, strlen(fpsText)*5, 1, RGB565(31,0,0), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 45, 1, spiUsageColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 75, 1, 0xFFFF, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 140, 1, RGB565(31,14,20), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 210, 1, cpuTemperatureColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 242, 1, gpuPollingWastedColor, 0);
 }
 
 void RefreshStatisticsOverlayText()

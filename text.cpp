@@ -2,8 +2,9 @@
 #include "text.h"
 #include "display.h"
 
-void DrawText(uint16_t *framebuffer, const char *text, int x, int y, uint16_t color, uint16_t bgColor)
+void DrawText(uint16_t *framebuffer, int framebufferWidth, int framebufferStrideBytes, int framebufferHeight, const char *text, int x, int y, uint16_t color, uint16_t bgColor)
 {
+  framebufferStrideBytes >>= 1; // to uint16 elements
   const int Y = y;
   while(*text)
   {
@@ -16,9 +17,9 @@ void DrawText(uint16_t *framebuffer, const char *text, int x, int y, uint16_t co
 
     for(y = Y-1; y < Y + monaco_height_adjust[ch]; ++y)
       for(int x = X; x < endX+1; ++x)
-      if (x >= 0 && y >= 0 && x < DISPLAY_WIDTH && y < DISPLAY_HEIGHT)
+      if (x >= 0 && y >= 0 && x < framebufferWidth && y < framebufferHeight)
       {
-        framebuffer[y*DISPLAY_WIDTH+x] = bgColor;
+        framebuffer[y*framebufferStrideBytes+x] = bgColor;
       }
 
     y = Y + monaco_height_adjust[ch];
@@ -29,15 +30,15 @@ void DrawText(uint16_t *framebuffer, const char *text, int x, int y, uint16_t co
     {
       for(uint8_t bit = 1; bit; bit <<= 1)
       {
-        if (x >= 0 && y >= 0 && x < DISPLAY_WIDTH && y < DISPLAY_HEIGHT)
+        if (x >= 0 && y >= 0 && x < framebufferWidth && y < framebufferHeight)
         {
-          if ((*byte & bit)) framebuffer[y*DISPLAY_WIDTH+x] = color;
-          else framebuffer[y*DISPLAY_WIDTH+x] = bgColor;
+          if ((*byte & bit)) framebuffer[y*framebufferStrideBytes+x] = color;
+          else framebuffer[y*framebufferStrideBytes+x] = bgColor;
         }
         ++x;
         if (x == endX)
         {
-          if (x < DISPLAY_WIDTH) framebuffer[y*DISPLAY_WIDTH+x] = bgColor;
+          if (x < framebufferWidth) framebuffer[y*framebufferStrideBytes+x] = bgColor;
           x = X;
           ++y;
           if (y == yEnd)

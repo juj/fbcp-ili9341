@@ -43,6 +43,7 @@ typedef struct GPIORegisterFile
 extern volatile GPIORegisterFile *gpio;
 
 #define SET_GPIO_MODE(pin, mode) gpio->gpfsel[(pin)/10] = (gpio->gpfsel[(pin)/10] & ~(0x7 << ((pin) % 10) * 3)) | ((mode) << ((pin) % 10) * 3)
+#define GET_GPIO_MODE(pin) ((gpio->gpfsel[(pin)/10] & (0x7 << ((pin) % 10) * 3)) >> (((pin) % 10) * 3))
 #define SET_GPIO(pin) gpio->gpset[0] = 1 << (pin) // Pin must be (0-31)
 #define CLEAR_GPIO(pin) gpio->gpclr[0] = 1 << (pin) // Pin must be (0-31)
 
@@ -59,7 +60,7 @@ extern volatile SPIRegisterFile *spi;
 // been implemented with the assumption that an individual task in the buffer is considerably smaller than the size of the ring
 // buffer itself. Also, MAX_SPI_TASK_SIZE >= SCANLINE_SIZE should hold, scanline merging assumes that it can always fit one full
 // scanline bytes of data in one task.
-#define MAX_SPI_TASK_SIZE (SCANLINE_SIZE*16)
+#define MAX_SPI_TASK_SIZE (DISPLAY_WIDTH*32)
 
 // Defines the size of the SPI task memory buffer in bytes. This memory buffer can contain two frames worth of tasks at maximum,
 // so for best performance, should be at least ~DISPLAY_WIDTH*DISPLAY_HEIGHT*BYTES_PER_PIXEL*2 bytes in size, plus some small

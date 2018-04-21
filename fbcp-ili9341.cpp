@@ -42,14 +42,14 @@ int main()
   int spiY = 0;
   int spiEndX = DISPLAY_WIDTH;
 
-  uint16_t *framebuffer[2] = { (uint16_t *)malloc(FRAMEBUFFER_SIZE), (uint16_t *)malloc(FRAMEBUFFER_SIZE) };
-  memset(framebuffer[0], 0, FRAMEBUFFER_SIZE); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
-  memset(framebuffer[1], 0, FRAMEBUFFER_SIZE); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
-
-  uint16_t *gpuFramebuffer = (uint16_t *)malloc(FRAMEBUFFER_SIZE);
-  memset(gpuFramebuffer, 0, FRAMEBUFFER_SIZE); // third buffer contains last seen GPU memory contents, used to compare polled frames to whether they actually have changed.
-
   InitGPU();
+
+  uint16_t *framebuffer[2] = { (uint16_t *)malloc(gpuFramebufferSizeBytes), (uint16_t *)malloc(gpuFramebufferSizeBytes) };
+  memset(framebuffer[0], 0, gpuFramebufferSizeBytes); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
+  memset(framebuffer[1], 0, gpuFramebufferSizeBytes); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
+
+  uint16_t *gpuFramebuffer = (uint16_t *)malloc(gpuFramebufferSizeBytes);
+  memset(gpuFramebuffer, 0, gpuFramebufferSizeBytes); // third buffer contains last seen GPU memory contents, used to compare polled frames to whether they actually have changed.
 
   InitStatistics();
 
@@ -132,7 +132,7 @@ int main()
     bool gotNewFramebuffer = (numNewFrames > 0);
     if (gotNewFramebuffer)
     {
-      memcpy(framebuffer[0], videoCoreFramebuffer[0], FRAMEBUFFER_SIZE);
+      memcpy(framebuffer[0], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
 #ifdef STATISTICS
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
@@ -145,16 +145,23 @@ int main()
       RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
       AddHistogramSample();
-      memcpy(gpuFramebuffer, framebuffer[0], FRAMEBUFFER_SIZE);
+      memcpy(gpuFramebuffer, framebuffer[0], gpuFramebufferSizeBytes);
     }
 
     // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
     uint16_t *scanline = framebuffer[0];
     uint16_t *prevScanline = framebuffer[1];
     int changedPixels = 0;
-    for(int i = 0; i < DISPLAY_WIDTH*DISPLAY_HEIGHT; ++i)
-      if (*scanline++ != *prevScanline++)
-        ++changedPixels;
+    for(int y = 0; y < gpuFrameHeight; ++y)
+    {
+      for(int x = 0; x < gpuFrameWidth; ++x)
+        if (scanline[x] != prevScanline[x])
+          ++changedPixels;
+
+      scanline += gpuFramebufferScanlineStrideBytes >> 1;
+      prevScanline += gpuFramebufferScanlineStrideBytes >> 1;
+    }
+
 
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
@@ -166,27 +173,27 @@ int main()
 #elif defined(ALWAYS_INTERLACING)
     interlacedUpdate = (changedPixels > 0);
 #else
-    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_WIDTH+DISPLAY_HEIGHT*4);
+    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (gpuFrameWidth+gpuFrameHeight*4); // TODO: Review this " (gpuFrameWidth+gpuFrameHeight*4) " part?
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
     int y = interlacedUpdate ? frameParity : 0;
-    scanline = framebuffer[0] + y*DISPLAY_WIDTH;
-    prevScanline = framebuffer[1] + y*DISPLAY_WIDTH;
+    scanline = framebuffer[0] + y*(gpuFramebufferScanlineStrideBytes>>1);
+    prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1);
 
     int bytesTransferred = 0;
 
     // Collect all spans in this image
     int numSpans = 0;
     Span *head = 0;
-    for(;y < DISPLAY_HEIGHT; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
+    for(;y < gpuFrameHeight; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
     {
-      for(int x = 0; x < DISPLAY_WIDTH; ++x)
+      for(int x = 0; x < gpuFrameWidth; ++x)
       {
         if (scanline[x] == prevScanline[x]) continue;
         int endX = x+1;
-        while(endX < DISPLAY_WIDTH && scanline[endX] != prevScanline[endX]) ++endX; // Find where this span ends
+        while(endX < gpuFrameWidth && scanline[endX] != prevScanline[endX]) ++endX; // Find where this span ends
         spans[numSpans].x = x;
         spans[numSpans].endX = spans[numSpans].lastScanEndX = endX;
         spans[numSpans].y = y;
@@ -199,7 +206,7 @@ int main()
       }
 
       // If doing an interlaced update, skip over every second scanline.
-      if (interlacedUpdate) ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH;
+      if (interlacedUpdate) ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1;
     }
 
     // Merge spans together on the same scanline
@@ -279,7 +286,7 @@ int main()
 
       if (i->endY > i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
       {
-        QUEUE_SET_X_WINDOW_TASK(i->x, displayXOffset + i->endX - 1);
+        QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + i->endX - 1);
         spiX = i->x;
         spiEndX = i->endX;
       }
@@ -289,14 +296,14 @@ int main()
         {
           // We are doing a single line span and need to increase the X window. If possible,
           // peek ahead to cater to the next multiline span update if that will be compatible.
-          int nextEndX = DISPLAY_WIDTH;
+          int nextEndX = gpuFrameWidth;
           for(Span *j = i->next; j; j = j->next)
             if (j->endY > j->y+1)
             {
               if (j->endX >= i->endX) nextEndX = j->endX;
               break;
             }
-          QUEUE_SET_X_WINDOW_TASK(i->x, displayXOffset + nextEndX - 1);
+          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + nextEndX - 1);
           spiX = i->x;
           spiEndX = nextEndX;
         }
@@ -312,10 +319,10 @@ int main()
       task->cmd = DISPLAY_WRITE_PIXELS;
 
       bytesTransferred += task->size+1;
-      uint16_t *scanline = framebuffer[0] + i->y * DISPLAY_WIDTH;
-      uint16_t *prevScanline = framebuffer[1] + i->y * DISPLAY_WIDTH;
+      uint16_t *scanline = framebuffer[0] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
+      uint16_t *prevScanline = framebuffer[1] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
       uint16_t *data = (uint16_t*)task->data;
-      for(int y = i->y; y < i->endY; ++y, scanline += DISPLAY_WIDTH, prevScanline += DISPLAY_WIDTH)
+      for(int y = i->y; y < i->endY; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
       {
         int endX = (y + 1 == i->endY) ? i->lastScanEndX : i->endX;
         for(int x = i->x; x < endX; ++x) *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus

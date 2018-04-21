@@ -25,6 +25,15 @@ volatile int numNewGpuFrames = 0;
 
 int displayXOffset = 0;
 int displayYOffset = 0;
+int gpuFrameWidth = 0;
+int gpuFrameHeight = 0;
+int gpuFramebufferScanlineStrideBytes = 0;
+int gpuFramebufferSizeBytes = 0;
+
+int excessPixelsLeft = 0;
+int excessPixelsRight = 0;
+int excessPixelsTop = 0;
+int excessPixelsBottom = 0;
 
 #ifdef USE_GPU_VSYNC
 
@@ -145,7 +154,7 @@ void *gpu_polling_thread(void*)
     }
 #endif
 
-   uint64_t t0 = tick();
+    uint64_t t0 = tick();
     // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
     // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
     // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
@@ -153,14 +162,14 @@ void *gpu_polling_thread(void*)
     // frame twice, and then potentially missing, or displaying the later appearing new frame at a very last moment.
     // Profiling, the following two lines take around ~1msec of time.
     vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
-    vc_dispmanx_resource_read_data(screen_resource, &rect, videoCoreFramebuffer[0], SCANLINE_SIZE);
+    vc_dispmanx_resource_read_data(screen_resource, &rect, videoCoreFramebuffer[0] - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft, gpuFramebufferScanlineStrideBytes);
 #ifndef USE_GPU_VSYNC
     lastFramePollTime = t0;
 #endif
 
     // Check the pixel contents of the snapshot to see if we actually received a new frame to render
     bool gotNewFramebuffer = false;
-    for(uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0], *oldfb = (uint32_t*)videoCoreFramebuffer[1], *endfb = (uint32_t*)videoCoreFramebuffer[1] + FRAMEBUFFER_SIZE/4; oldfb < endfb;)
+    for(uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0], *oldfb = (uint32_t*)videoCoreFramebuffer[1], *endfb = (uint32_t*)videoCoreFramebuffer[1] + gpuFramebufferSizeBytes/4; oldfb < endfb;)
       if (*newfb++ != *oldfb++)
       {
         gotNewFramebuffer = true;
@@ -178,20 +187,20 @@ void *gpu_polling_thread(void*)
     }
     else
     {
-      memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], FRAMEBUFFER_SIZE);
+      memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
       __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
       syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
     }
   }
 }
 
+int RoundUpToMultipleOf(int val, int multiple)
+{
+  return ((val + multiple - 1) / multiple) * multiple;
+}
+
 void InitGPU()
 {
-  videoCoreFramebuffer[0] = (uint16_t *)malloc(FRAMEBUFFER_SIZE);
-  videoCoreFramebuffer[1] = (uint16_t *)malloc(FRAMEBUFFER_SIZE);
-  memset(videoCoreFramebuffer[0], 0, FRAMEBUFFER_SIZE);
-  memset(videoCoreFramebuffer[1], 0, FRAMEBUFFER_SIZE);
-
   // Initialize GPU frame grabbing subsystem
   bcm_host_init();
   display = vc_dispmanx_display_open(0);
@@ -199,34 +208,93 @@ void InitGPU()
   DISPMANX_MODEINFO_T display_info;
   int ret = vc_dispmanx_display_get_info(display, &display_info);
   if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
+
   // We may need to scale the main framebuffer to fit the native pixel size of the display. Always want to do such scaling in aspect ratio fixed mode to not stretch the image.
   // (For non-square pixels or similar, could apply a correction factor here to fix aspect ratio)
+
   displayXOffset = 0;
   displayYOffset = 0;
-  int scaledWidth = DISPLAY_WIDTH;
-  int scaledHeight = DISPLAY_HEIGHT;
+  int scaledWidth = DISPLAY_DRAWABLE_WIDTH;
+  int scaledHeight = DISPLAY_DRAWABLE_HEIGHT;
   double scalingFactor = 1.0;
 
-  if (DISPLAY_WIDTH * display_info.height < DISPLAY_HEIGHT * display_info.width)
+  // Often it happens that the content that is being rendered already has black letterboxes/pillarboxes if it was produced for a different aspect ratio than
+  // what the current HDMI resolution is. However the current HDMI resolution might not be in the same aspect ratio as DISPLAY_DRAWABLE_WIDTH x DISPLAY_DRAWABLE_HEIGHT.
+  // Therefore we may be aspect ratio correcting content that has already letterboxes/pillarboxes on it, which can result in letterboxes-on-pillarboxes, or vice versa.
+
+  // To enable removing the double aspect ratio correction, the following settings enable "overscan": crop left/right and top/down parts of the source image
+  // to remove the letterboxed parts of the source. This overscan method can also used to crop excess edges of old emulator based games intended for analog TVs,
+  // e.g. NES games often had graphical artifacts on left or right edge of the screen when the game scrolls, which usually were hidden on analog TVs with overscan.
+
+  // The overscan values are in normalized 0.0 .. 1.0 percentages of the total width/height of the screen.
+
+  // TODO: Make this dynamic somehow?
+
+  // NES:
+  /*
+  double overscanLeft = 0.045;
+  double overscanRight = 0.045;
+  double overscanTop = 0.045;
+  double overscanBottom = 0.04;
+  */
+
+  /*
+  // OpenTyrian:
+  double overscanLeft = 0.00;
+  double overscanRight = 0.00;
+  double overscanTop = 0.08;
+  double overscanBottom = 0.08;
+  */
+
+  // No overscan (e.g. Quake):
+  double overscanLeft = 0.00;
+  double overscanRight = 0.00;
+  double overscanTop = 0.00;
+  double overscanBottom = 0.00;
+
+  int relevantDisplayWidth = (int)(display_info.width * (1.0 - overscanLeft - overscanRight) + 0.5);
+  int relevantDisplayHeight = (int)(display_info.height * (1.0 - overscanTop - overscanBottom) + 0.5);
+  printf("Relevant source display area size with overscan cropped away: %dx%d.\n", relevantDisplayWidth, relevantDisplayHeight);
+
+  if (DISPLAY_DRAWABLE_WIDTH * relevantDisplayHeight < DISPLAY_DRAWABLE_HEIGHT * relevantDisplayWidth)
   {
-    scaledHeight = (int)((double)DISPLAY_WIDTH * display_info.height / display_info.width + 0.5);
-    scalingFactor = (double)DISPLAY_WIDTH/display_info.width;
-    displayYOffset = (DISPLAY_HEIGHT - scaledHeight) / 2;
+    scaledHeight = (int)((double)DISPLAY_DRAWABLE_WIDTH * relevantDisplayHeight / relevantDisplayWidth + 0.5);
+    scalingFactor = (double)DISPLAY_DRAWABLE_WIDTH/relevantDisplayWidth;
+    displayXOffset = DISPLAY_COVERED_LEFT_SIDE;
+    displayYOffset = DISPLAY_COVERED_TOP_SIDE + (DISPLAY_DRAWABLE_HEIGHT - scaledHeight) / 2;
   }
   else
   {
-    scaledWidth = (int)((double)DISPLAY_HEIGHT * display_info.width / display_info.height + 0.5);
-    scalingFactor = (double)DISPLAY_HEIGHT/display_info.height;
-    displayXOffset = (DISPLAY_WIDTH - scaledWidth) / 2;
+    scaledWidth = (int)((double)DISPLAY_DRAWABLE_HEIGHT * relevantDisplayWidth / relevantDisplayHeight + 0.5);
+    scalingFactor = (double)DISPLAY_DRAWABLE_HEIGHT/relevantDisplayHeight;
+    displayXOffset = DISPLAY_COVERED_LEFT_SIDE + (DISPLAY_DRAWABLE_WIDTH - scaledWidth) / 2;
+    displayYOffset = DISPLAY_COVERED_TOP_SIDE;
   }
 
-  syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
-  printf("GPU display is %dx%d. SPI display is %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
+  excessPixelsLeft = (int)(display_info.width * overscanLeft * scalingFactor + 0.5);
+  excessPixelsRight = (int)(display_info.width * overscanRight * scalingFactor + 0.5);
+  excessPixelsTop = (int)(display_info.height * overscanTop * scalingFactor + 0.5);
+  excessPixelsBottom = (int)(display_info.height * overscanBottom * scalingFactor + 0.5);
+
+  gpuFrameWidth = scaledWidth;
+  gpuFrameHeight = scaledHeight;
+  gpuFramebufferScanlineStrideBytes = RoundUpToMultipleOf((gpuFrameWidth + excessPixelsLeft + excessPixelsRight) * 2, 32);
+  gpuFramebufferSizeBytes = gpuFramebufferScanlineStrideBytes * (gpuFrameHeight + excessPixelsTop + excessPixelsBottom);
+
+  videoCoreFramebuffer[0] = (uint16_t *)malloc(gpuFramebufferSizeBytes);
+  videoCoreFramebuffer[1] = (uint16_t *)malloc(gpuFramebufferSizeBytes);
+  memset(videoCoreFramebuffer[0], 0, gpuFramebufferSizeBytes);
+  memset(videoCoreFramebuffer[1], 0, gpuFramebufferSizeBytes);
+
+  syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d with drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
+  printf("Source GPU display is %dx%d. Output SPI display is %dx%d with a drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
 
   uint32_t image_prt;
-  screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledWidth, scaledHeight, &image_prt);
+  printf("Creating dispmanX resource of size %dx%d.\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom);
+  screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, &image_prt);
   if (!screen_resource) FATAL_ERROR("vc_dispmanx_resource_create failed!");
-  vc_dispmanx_rect_set(&rect, 0, 0, scaledWidth, scaledHeight);
+  printf("GPU grab rectangle is offset x=%d,y=%d, size w=%dxh=%d\n", excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
+  vc_dispmanx_rect_set(&rect, excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
 
   pthread_t gpuPollingThread;
   int rc = pthread_create(&gpuPollingThread, NULL, gpu_polling_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.

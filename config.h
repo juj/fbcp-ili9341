@@ -3,7 +3,7 @@
 // Build options: Uncomment any of these, or set at the command line to configure:
 
 // If defined, prints out performance logs to stdout every second
-// #define STATISTICS
+#define STATISTICS
 
 // How often the on-screen statistics is refreshed (in usecs)
 #define STATISTICS_REFRESH_INTERVAL 200000
@@ -36,7 +36,7 @@
 // #define ALWAYS_INTERLACING
 
 // By default, if the SPI bus is idle after rendering an interlaced frame, but the GPU has not yet produced
-// a new application frame to be displayed, the same frame will be renrered again for its other field.
+// a new application frame to be displayed, the same frame will be rendered again for its other field.
 // Define this option to disable this behavior, in which case when an interlaced frame is rendered, the 
 // remaining other field half of the image will never be uploaded.
 // #define THROTTLE_INTERLACING
@@ -57,7 +57,12 @@
 // values are faster. On my PiTFT 2.8 display, divisor value of 4 does not work, and 6 is the fastest
 // possible. While developing, it was observed that a value of 12 or higher did not actually work, and
 // only 6, 8 and 10 were functioning properly.
+#ifdef ADAFRUIT_ILI9341_PITFT
+#define SPI_BUS_CLOCK_DIVISOR 4
+#else
+// Waveshare32b display doesn't seem to be able to manage CDIV=4, only CDIV=6 works.
 #define SPI_BUS_CLOCK_DIVISOR 6
+#endif
 
 // If defined, rotates the display 180 degrees
 // #define DISPLAY_ROTATE_180_DEGREES

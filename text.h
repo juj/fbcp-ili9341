@@ -1063,4 +1063,4 @@ static const int8_t monaco_height_adjust[] = {
 
 #define RGB565(r, g, b) (((r) << 11) | ((g) << 5) | (b))
 
-void DrawText(uint16_t *framebuffer, const char *text, int x, int y, uint16_t color, uint16_t bgColor);
+void DrawText(uint16_t *framebuffer, int framebufferWidth, int framebufferStrideBytes, int framebufferHeight, const char *text, int x, int y, uint16_t color, uint16_t bgColor);
