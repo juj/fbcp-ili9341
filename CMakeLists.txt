@@ -5,7 +5,19 @@ link_directories(/opt/vc/lib)
 
 file(GLOB sourceFiles *.cpp)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -march=armv8-a+crc -mcpu=cortex-a53 -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+option(PI_ZERO "Target Raspberry Pi Zero (W)" OFF)
+
+message(STATUS "Doing a ${CMAKE_BUILD_TYPE} build")
+if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+  message(STATUS "Pass -DCMAKE_BUILD_TYPE=Release to do a fast optimized build.")
+endif()
+
+if (PI_ZERO)
+  message(STATUS "Targeting Raspberry Pi Zero (W)")
+elseif ()
+  message(STATUS "Enabling optimization flags that target Raspberry Pi 3 Model B hardware. Pass -DPI_ZERO=ON to target Raspberry Pi Zero (W) instead.")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -march=armv8-a+crc -mcpu=cortex-a53 -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+endif()
 
 option(ADAFRUIT_ILI9341_PITFT "Target Adafruit's ILI9341-based PiTFT display" OFF)
 option(FREEPLAYTECH_WAVESHARE32B "Target WaveShare32B ILI9341 display on Freeplaytech's CM3/Zero devices)" OFF)
