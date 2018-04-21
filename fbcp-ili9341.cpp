@@ -31,7 +31,7 @@ struct Span
   uint16_t x, endX, y, endY, lastScanEndX, size; // Specifies a box of width [x, endX[ * [y, endY[, where scanline endY-1 can be partial, and ends in lastScanEndX.
   Span *next; // Maintain a linked skip list inside the array for fast seek to next active element when pruning
 };
-Span spans[DISPLAY_WIDTH*DISPLAY_HEIGHT/2];
+Span *spans = 0;
 
 int main()
 {
@@ -44,6 +44,7 @@ int main()
 
   InitGPU();
 
+  spans = (Span*)malloc((gpuFrameWidth * gpuFrameHeight / 2) * sizeof(Span));
   uint16_t *framebuffer[2] = { (uint16_t *)malloc(gpuFramebufferSizeBytes), (uint16_t *)malloc(gpuFramebufferSizeBytes) };
   memset(framebuffer[0], 0, gpuFramebufferSizeBytes); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, gpuFramebufferSizeBytes); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
@@ -180,9 +181,22 @@ int main()
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
     int y = interlacedUpdate ? frameParity : 0;
     scanline = framebuffer[0] + y*(gpuFramebufferScanlineStrideBytes>>1);
-    prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1);
+    prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1); // (same scanline from previous frame, not preceding scanline)
 
     int bytesTransferred = 0;
+
+    // Looking at SPI communication in a logic analyzer, it is observed that waiting for the finish of an SPI command FIFO causes pretty exactly one byte of delay to the command stream.
+    // Therefore the time/bandwidth cost of ending the current span and starting a new span is as follows:
+    // 1 byte to wait for the current SPI FIFO batch to finish,
+    // +1 byte to send the cursor X coordinate change command,
+    // +1 byte to wait for that FIFO to flush,
+    // +2 bytes to send the new X coordinate,
+    // +1 byte to wait for the FIFO to flush again,
+    // +1 byte to send the data_write command,
+    // +1 byte to wait for that FIFO to flush,
+    // after which the communication is ready to start pushing pixels. This totals to 8 bytes, or 4 pixels, meaning that if there are 4 unchanged pixels or less between two adjacent dirty
+    // spans, it is all the same to just update through those pixels as well to not have to wait to flush the FIFO.
+#define SPAN_MERGE_THRESHOLD 4
 
     // Collect all spans in this image
     int numSpans = 0;
@@ -193,12 +207,28 @@ int main()
       {
         if (scanline[x] == prevScanline[x]) continue;
         int endX = x+1;
-        while(endX < gpuFrameWidth && scanline[endX] != prevScanline[endX]) ++endX; // Find where this span ends
+        int spanEndX = endX;
+        int numConsecutiveUnchangedPixels = 0;
+        // Find where this span ends; potentially merge adjacent spans if they only have a few changed pixels in between
+        while(endX < gpuFrameWidth)
+        {
+          if (scanline[endX] != prevScanline[endX])
+          {
+            spanEndX = ++endX;
+            numConsecutiveUnchangedPixels = 0;
+          }
+          else
+          {
+            ++endX;
+            if (++numConsecutiveUnchangedPixels > SPAN_MERGE_THRESHOLD)
+              break;
+          }
+        }
         spans[numSpans].x = x;
-        spans[numSpans].endX = spans[numSpans].lastScanEndX = endX;
+        spans[numSpans].endX = spans[numSpans].lastScanEndX = spanEndX;
         spans[numSpans].y = y;
         spans[numSpans].endY = y+1;
-        spans[numSpans].size = endX - x;
+        spans[numSpans].size = spanEndX - x;
         if (numSpans > 0) spans[numSpans-1].next = &spans[numSpans];
         else head = &spans[0];
         spans[numSpans++].next = 0;
@@ -208,36 +238,6 @@ int main()
       // If doing an interlaced update, skip over every second scanline.
       if (interlacedUpdate) ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1;
     }
-
-    // Merge spans together on the same scanline
-    for(Span *i = head; i; i = i->next)
-      for(Span *j = i->next; j; j = j->next)
-      {
-        if (j->y != i->y) break; // On the next scanline?
-
-        int newSize = j->endX-i->x;
-        int wastedPixels = newSize - i->size - j->size;
-
-        // Looking at SPI communication in a logic analyzer, it is observed that waiting for the finish of an SPI command FIFO causes pretty exactly one byte of delay to the command stream.
-        // Therefore the time/bandwidth cost of ending the current span and starting a new span is as follows:
-        // 1 byte to wait for the current SPI FIFO batch to finish,
-        // +1 byte to send the cursor X coordinate change command,
-        // +1 byte to wait for that FIFO to flush,
-        // +2 bytes to send the new X coordinate,
-        // +1 byte to wait for the FIFO to flush again,
-        // +1 byte to send the data_write command,
-        // +1 byte to wait for that FIFO to flush,
-        // after which the communication is ready to start pushing pixels. This totals to 8 bytes, or 4 pixels, meaning that if there are 4 unchanged pixels or less between two adjacent dirty
-        // spans, it is all the same to just update through those pixels as well to not have to wait to flush the FIFO.
-#define SPAN_MERGE_THRESHOLD 4
-
-        if (wastedPixels > SPAN_MERGE_THRESHOLD) break; // Too far away?
-
-        i->endX = j->endX;
-        i->lastScanEndX = j->endX;
-        i->size = newSize;
-        i->next = j->next;
-      }
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
     if (!interlacedUpdate)
