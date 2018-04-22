@@ -38,8 +38,8 @@ int main()
   InitSPI();
 
   // Track current SPI display controller write X and Y cursors.
-  int spiX = 0;
-  int spiY = 0;
+  int spiX = -1;
+  int spiY = -1;
   int spiEndX = DISPLAY_WIDTH;
 
   InitGPU();
