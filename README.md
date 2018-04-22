@@ -107,6 +107,7 @@ If the size of the default HDMI output `/dev/fb0` framebuffer differs from the 3
 hdmi_group=2
 hdmi_mode=87
 hdmi_cvt=320 240 60 1 0 0 0
+hdmi_force_hotplug=1
 ```
 
 These lines hint native applications about the default display mode, and let them render to the native resolution of the TFT display. This can however prevent the use of the HDMI connector, if the HDMI connected display does not support such a small resolution. As a compromise, if both HDMI and SPI displays want to be used at the same time, some other compatible resolution such as 640x480 can be used. See [Raspberry Pi HDMI documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) for the available options to do this.
