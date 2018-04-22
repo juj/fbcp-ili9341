@@ -54,15 +54,10 @@
 #define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
 
 // Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
-// values are faster. On my PiTFT 2.8 display, divisor value of 4 does not work, and 6 is the fastest
-// possible. While developing, it was observed that a value of 12 or higher did not actually work, and
-// only 6, 8 and 10 were functioning properly.
-#ifdef ADAFRUIT_ILI9341_PITFT
-#define SPI_BUS_CLOCK_DIVISOR 4
-#else
-// Waveshare32b display doesn't seem to be able to manage CDIV=4, only CDIV=6 works.
+// values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
+// 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
+// actually work either, and only 6, 8 and 10 were functioning properly.
 #define SPI_BUS_CLOCK_DIVISOR 6
-#endif
 
 // If defined, rotates the display 180 degrees
 // #define DISPLAY_ROTATE_180_DEGREES
