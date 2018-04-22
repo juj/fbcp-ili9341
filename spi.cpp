@@ -8,14 +8,35 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <pthread.h>
+#include <errno.h>
 #endif
 
 #include "config.h"
 #include "spi.h"
 #include "util.h"
+#include "dma.h"
 
+volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
+
+void DumpSPICS(uint32_t reg)
+{
+  PRINT_FLAG(BCM2835_SPI0_CS_CS);
+  PRINT_FLAG(BCM2835_SPI0_CS_CPHA);
+  PRINT_FLAG(BCM2835_SPI0_CS_CPOL);
+  PRINT_FLAG(BCM2835_SPI0_CS_CLEAR_TX);
+  PRINT_FLAG(BCM2835_SPI0_CS_CLEAR_RX);
+  PRINT_FLAG(BCM2835_SPI0_CS_TA);
+  PRINT_FLAG(BCM2835_SPI0_CS_DMAEN);
+  PRINT_FLAG(BCM2835_SPI0_CS_INTD);
+  PRINT_FLAG(BCM2835_SPI0_CS_INTR);
+  PRINT_FLAG(BCM2835_SPI0_CS_DONE);
+  PRINT_FLAG(BCM2835_SPI0_CS_RXD);
+  PRINT_FLAG(BCM2835_SPI0_CS_TXD);
+  PRINT_FLAG(BCM2835_SPI0_CS_RXR);
+  PRINT_FLAG(BCM2835_SPI0_CS_RXF);
+}
 
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
@@ -39,12 +60,21 @@ void RunSPITask(SPITask *task)
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
 
-  while(tStart < tPrefillEnd) spi->fifo = *tStart++;
-  while(tStart < tEnd)
+  // Do a DMA transfer if this task is suitable in size for DMA to handle
+#ifdef USE_DMA_TRANSFERS
+  if (tEnd - tStart > 128 && (tEnd - tStart) % 4 == 0 && tEnd - tStart < 65530)
+    SPIDMATransfer(task);
+  else
+#endif
   {
-    cs = spi->cs;
-    if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
-    if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+    while(tStart < tPrefillEnd) spi->fifo = *tStart++;
+    while(tStart < tEnd)
+    {
+      cs = spi->cs;
+      if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+// TODO:      else asm volatile("yield");
+      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+    }
   }
 }
 
@@ -143,7 +173,7 @@ int InitSPI()
   // Memory map GPIO and SPI peripherals for direct access
   int mem = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
-  void *bcm2835 = mmap(NULL, be32toh(ranges.peripheralsSize), (PROT_READ | PROT_WRITE), MAP_SHARED, mem, be32toh(ranges.peripheralsAddress));
+  bcm2835 = mmap(NULL, be32toh(ranges.peripheralsSize), (PROT_READ | PROT_WRITE), MAP_SHARED, mem, be32toh(ranges.peripheralsAddress));
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
@@ -153,7 +183,7 @@ int InitSPI()
   // Estimate how many microseconds transferring a single byte over the SPI bus takes?
   spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR * 9.0/8.0/*BCM2835 SPI master idles for one bit per each byte*/ / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
 
-#ifndef KERNEL_MODULE_CLIENT
+#if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0x04);
@@ -177,11 +207,23 @@ int InitSPI()
   spiTaskMemory = (SharedMemory*)mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
   close(driverfd);
   if (spiTaskMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI ring buffer!");
-  printf("Got shared memory block %p, ring buffer head %p, ring buffer tail %p\n", (const char *)spiTaskMemory, spiTaskMemory->queueHead, spiTaskMemory->queueTail);
+  printf("Got shared memory block %p, ring buffer head %p, ring buffer tail %p, shared memory block phys address: %p\n", (const char *)spiTaskMemory, spiTaskMemory->queueHead, spiTaskMemory->queueTail, spiTaskMemory->sharedMemoryBaseInPhysMemory);
+
+#ifdef USE_DMA_TRANSFERS
+  printf("DMA TX channel: %d, DMA RX channel: %d\n", spiTaskMemory->dmaTxChannel, spiTaskMemory->dmaRxChannel);
+#endif
+
 #else
 
 #ifdef KERNEL_MODULE
-  spiTaskMemory = (SharedMemory*)kmalloc(SHARED_MEMORY_SIZE, GFP_KERNEL);
+  spiTaskMemory = (SharedMemory*)kmalloc(SHARED_MEMORY_SIZE, GFP_KERNEL | GFP_DMA);
+  // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer in 'spiTaskMemory'. However
+  // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
+  // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to the following intermediate 'dmaSourceMemory'
+  // memory area to perform the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
+  dmaSourceMemory = (SharedMemory*)dma_alloc_writecombine(0, SHARED_MEMORY_SIZE, &spiTaskMemoryPhysical, GFP_KERNEL);
+  LOG("Allocated DMA memory: mem: %p, phys: %p", spiTaskMemory, (void*)spiTaskMemoryPhysical);
+  memset((void*)spiTaskMemory, 0, SHARED_MEMORY_SIZE);
 #else
   spiTaskMemory = (SharedMemory*)malloc(SHARED_MEMORY_SIZE);
 #endif
@@ -189,16 +231,23 @@ int InitSPI()
   spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
 #endif
 
-#if !defined(KERNEL_MODULE) && !defined(KERNEL_MODULE_CLIENT)
+#ifdef USE_DMA_TRANSFERS
+  InitDMA();
+#endif
+
+#if !defined(KERNEL_MODULE) && (!defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES))
+  printf("Initializing display\n");
   InitSPIDisplay();
 
   // Create a dedicated thread to feed the SPI bus. While this is fast, it consumes a lot of CPU. It would be best to replace
   // this thread with a kernel module that processes the created SPI task queue using interrupts. (while juggling the GPIO D/C line as well)
   pthread_t thread;
+  printf("Creating SPI task thread\n");
   int rc = pthread_create(&thread, NULL, spi_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
   if (rc != 0) FATAL_ERROR("Failed to create SPI thread!");
 #endif
 
+  LOG("InitSPI done");
   return 0;
 }
 
@@ -208,6 +257,8 @@ void DeinitSPI()
 
 #ifdef KERNEL_MODULE
   kfree(spiTaskMemory);
+  dma_free_writecombine(0, SHARED_MEMORY_SIZE, dmaSourceMemory, spiTaskMemoryPhysical);
+  spiTaskMemoryPhysical = 0;
 #else
   free(spiTaskMemory);
 #endif

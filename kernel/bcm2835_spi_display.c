@@ -1,6 +1,7 @@
 #include <linux/buffer_head.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
+#include <linux/dma-mapping.h>
 #include <linux/fb.h>
 #include <linux/fs.h>
 #include <linux/futex.h>
@@ -10,13 +11,15 @@
 #include <linux/kernel.h>
 #include <linux/kthread.h>
 #include <linux/math64.h>
-#include <linux/mm.h>  
+#include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/platform_data/dma-bcm2708.h>
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/spi/spidev.h>
 #include <linux/time.h>
 #include <linux/timer.h>
+#include <asm/io.h>
 #include <asm/segment.h>
 #include <asm/uaccess.h>
 
@@ -24,9 +27,17 @@
 #include "../display.h"
 #include "../spi.h"
 #include "../util.h"
+#include "../dma.h"
+
+static inline uint64_t tick(void)
+{
+    struct timespec start = current_kernel_time();
+    return start.tv_sec * 1000000 + start.tv_nsec / 1000;
+}
 
 // TODO: Super-dirty temp, factor this into kbuild Makefile.
 #include "../spi.cpp"
+#include "../dma.cpp"
 
 volatile SPITask *currentTask = 0;
 volatile uint8_t *taskNextByte = 0;
@@ -99,8 +110,10 @@ static const struct file_operations fops =
   .release = p_release,
 };
 
+#ifdef KERNEL_DRIVE_WITH_IRQ
 static irqreturn_t irq_handler(int irq, void* dev_id)
 {
+#ifndef KERNEL_MODULE_CLIENT_DRIVES
   uint32_t cs = spi->cs;
   if (!taskNextByte)
   {
@@ -112,8 +125,12 @@ static irqreturn_t irq_handler(int irq, void* dev_id)
       return IRQ_HANDLED;
     }
 
-    if ((cs & BCM2835_SPI0_CS_RXF)) (void)spi->fifo;
-    while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
+    if ((cs & (BCM2835_SPI0_CS_RXF|BCM2835_SPI0_CS_RXR))) (void)spi->fifo;
+    while (!(spi->cs & BCM2835_SPI0_CS_DONE))
+    {
+      if ((spi->cs & (BCM2835_SPI0_CS_RXF|BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXD)))
+        (void)spi->fifo;
+    }
     CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
     spi->fifo = currentTask->cmd;
     if (currentTask->size == 0) // Was this a task without data bytes? If so, nothing more to do here, go to sleep to wait for next IRQ event
@@ -127,7 +144,7 @@ static irqreturn_t irq_handler(int irq, void* dev_id)
       taskNextByte = currentTask->data;
       taskEndByte = currentTask->data + currentTask->size;
     }
-#if 1 // Testing overhead of not returning after command byte, but synchronously polling it out..
+#if 0 // Testing overhead of not returning after command byte, but synchronously polling it out..
     while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
     (void)spi->fifo;
 #else
@@ -140,25 +157,184 @@ static irqreturn_t irq_handler(int irq, void* dev_id)
     __sync_synchronize();
   }
 
-  int maxBytesToSend = (cs & BCM2835_SPI0_CS_DONE) ? 16 : 12;
-  if ((cs & BCM2835_SPI0_CS_RXF)) (void)spi->fifo;
-  if ((cs & BCM2835_SPI0_CS_RXR)) for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; (void)spi->fifo; }
-  else for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; }
+  // Test code: write and read from FIFO as many bytes as spec says we should be allowed to, without checking CS in between.
+//  int maxBytesToSend = (cs & BCM2835_SPI0_CS_DONE) ? 16 : 12;
+//  if ((cs & BCM2835_SPI0_CS_RXF)) (void)spi->fifo;
+//  if ((cs & BCM2835_SPI0_CS_RXR)) for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; (void)spi->fifo; }
+//  else for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; }
+
+  while(taskNextByte < taskEndByte)
+  {
+    uint32_t cs = spi->cs;
+    if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF))) spi->cs = cs | BCM2835_SPI0_CS_CLEAR_RX;
+    if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *taskNextByte++;
+    if ((cs & BCM2835_SPI0_CS_RXD)) (void)spi->fifo;
+    else break;
+  }
+
   if (taskNextByte >= taskEndByte)
   {
-    if ((cs & BMC2835_SPI0_CS_INTR)) spi->cs = (cs & ~BMC2835_SPI0_CS_INTR) | BMC2835_SPI0_CS_INTD;
+    if ((cs & BCM2835_SPI0_CS_INTR)) spi->cs = (cs & ~BCM2835_SPI0_CS_INTR) | BCM2835_SPI0_CS_INTD;
     taskNextByte = 0;
   }
   else
   {
-    if (!(cs & BMC2835_SPI0_CS_INTR)) spi->cs = (cs | BMC2835_SPI0_CS_INTR) & ~BMC2835_SPI0_CS_INTR;
+    if (!(cs & BCM2835_SPI0_CS_INTR)) spi->cs = (cs | BCM2835_SPI0_CS_INTR) & ~BCM2835_SPI0_CS_INTR;
   }
+#endif
   return IRQ_HANDLED;
+}
+#endif
+
+#define req(cnd) if (!(cnd)) { LOG("!!!%s!!!\n", #cnd);}
+
+uint32_t virt_to_bus_address(volatile void *virtAddress)
+{
+  return (uint32_t)virt_to_phys((void*)virtAddress) | 0x40000000U;
+}
+
+volatile int shuttingDown = 0;
+dma_addr_t spiTaskMemoryPhysical = 0;
+
+#ifdef USE_DMA_TRANSFERS
+
+void DMATest(void);
+
+// Debug code to verify memory->memory streaming of DMA, no SPI peripheral interaction (remove this)
+void DMATest()
+{
+  LOG("Testing DMA transfers");
+
+  dma_addr_t dma_mem_phys = 0;
+  void *dma_mem = dma_alloc_writecombine(0, SHARED_MEMORY_SIZE, &dma_mem_phys, GFP_KERNEL);
+  LOG("Allocated DMA memory: mem: %p, phys: %p", dma_mem, (void*)dma_mem_phys);
+
+  spiTaskMemory = (SharedMemory *)dma_mem;
+  while(!shuttingDown)
+  {
+    msleep(100);
+    static int ctr = 0;
+    uint32_t base = (ctr++ * 34153) % SPI_QUEUE_SIZE;
+    uint32_t size = 65;
+    uint32_t base2 = base + size;
+    if (base2 + size > SPI_QUEUE_SIZE) continue;
+
+    memset((void*)spiTaskMemory->buffer, 0xCB, SPI_QUEUE_SIZE);
+
+    uint8_t *src = (uint8_t *)(spiTaskMemory->buffer + base);
+    src = (uint8_t *)((uintptr_t)src);
+    for(int i = 0; i < size; ++i)
+      src[i] = i;
+
+    uint8_t *dst = (uint8_t *)(spiTaskMemory->buffer + base2);
+    dst = (uint8_t *)((uintptr_t)dst);
+
+#define TO_BUS(ptr) (( ((uint32_t)dma_mem_phys + ((uintptr_t)(ptr) - (uintptr_t)dma_mem))) | 0xC0000000U)
+
+    volatile DMAChannelRegisterFile *dmaCh = dma+dmaTxChannel;
+//    printk(KERN_INFO "CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
+//      dmaCh->cs, (void*)dmaCh->cbAddr, dmaCh->cb.ti, (void*)dmaCh->cb.src, (void*)dmaCh->cb.dst, dmaCh->cb.len, dmaCh->cb.stride, (void*)dmaCh->cb.next, dmaCh->cb.debug);
+
+    volatile DMAControlBlock *cb = &spiTaskMemory->cb[0].cb;
+    req(((uintptr_t)cb) % 256 == 0);
+    cb->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC;
+    cb->src = TO_BUS(src);
+    cb->dst = TO_BUS(dst);
+    cb->len = size;
+    cb->stride = 0;
+    cb->next = 0;
+    cb->debug = 0;
+    cb->reserved = 0;
+//    DumpCS(dmaCh->cs);
+//    DumpDebug(dmaCh->cb.debug);
+//    DumpTI(dmaCh->cb.ti);
+    LOG("Waiting for transfer %d, src:%p(phys:%p) to dst:%p (phys:%p)", ctr, (void*)src, (void*)cb->src, (void*)dst, (void*)cb->dst);
+    writel(TO_BUS(cb), &dmaCh->cbAddr);
+    writel(BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END | BCM2835_DMA_CS_INT | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES | BCM2835_DMA_CS_SET_PRIORITY(0xF) | BCM2835_DMA_CS_SET_PANIC_PRIORITY(0xF), &dmaCh->cs);
+
+    while((readl(&dmaCh->cs) & BCM2835_DMA_CS_ACTIVE) && !shuttingDown)
+    {
+      cpu_relax();
+    }
+
+    if (shuttingDown)
+    {
+      LOG("Module shutdown");
+      spiTaskMemory = 0;
+      return;
+    }
+    int errors = 0;
+    for(int i = 0; i < size; ++i)
+      if (dst[i] != src[i])
+      {
+        errors = true;
+        break;
+      }
+
+    if (errors)
+    {
+      printk(KERN_INFO "CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
+        dmaCh->cs, (void*)dmaCh->cbAddr, dmaCh->cb.ti, (void*)dmaCh->cb.src, (void*)dmaCh->cb.dst, dmaCh->cb.len, dmaCh->cb.stride, (void*)dmaCh->cb.next, dmaCh->cb.debug);
+      for(int i = 0; i < size; ++i)
+      {
+        printk(KERN_INFO "Result %p %d: %x vs dst %p %x\n", (void*)virt_to_phys(src+i), i, src[i], (void*)virt_to_phys(dst+i), dst[i]);
+      }
+      DumpCS(dmaCh->cs);
+      DumpDebug(dmaCh->cb.debug);
+      DumpTI(dmaCh->cb.ti);
+      LOG("Abort");
+      break;
+    }
+  }
+  LOG("DMA transfer test done");
+  spiTaskMemory = 0;
+}
+#endif
+
+void PumpSPI(void)
+{
+#ifdef KERNEL_DRIVE_WITH_IRQ
+  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_INTR | BCM2835_SPI0_CS_INTD; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
+#else
+  if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
+  {
+    BEGIN_SPI_COMMUNICATION();
+    {
+      int i = 0;
+      while(spiTaskMemory->queueTail != spiTaskMemory->queueHead)
+      {
+        ++i;
+        if (i > 500) break;
+        SPITask *task = GetTask();
+        if (task)
+        {
+          RunSPITask(task);
+          DoneTask(task);
+        }
+        else
+          break;
+      }
+    }
+    END_SPI_COMMUNICATION();
+  }
+#endif
+}
+
+static struct timer_list my_timer;
+ void my_timer_callback( unsigned long data )
+{
+  if (shuttingDown) return;
+
+  PumpSPI();
+  int ret = mod_timer( &my_timer, jiffies + msecs_to_jiffies(1) );
+  if (ret) printk("Error in mod_timer\n");
 }
 
 static int display_initialization_thread(void *unused)
 {
   printk(KERN_INFO "BCM2835 SPI Display driver thread started");
+
+#ifndef KERNEL_MODULE_CLIENT_DRIVES
 
   // Initialize display. TODO: Move to be shared with ili9341.cpp.
   QUEUE_SPI_TRANSFER(0xC0/*Power Control 1*/, 0x23/*VRH=4.60V*/); // Set the GVDD level, which is a reference level for the VCOM level and the grayscale voltage level.
@@ -185,29 +361,61 @@ static int display_initialization_thread(void *unused)
   QUEUE_SPI_TRANSFER(0xE1/*Negative Gamma Correction*/, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F);
   QUEUE_SPI_TRANSFER(0x11/*Sleep Out*/);
 
-  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BMC2835_SPI0_CS_INTR | BMC2835_SPI0_CS_INTD; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
+  PumpSPI();
   msleep(1000);
   QUEUE_SPI_TRANSFER(/*Display ON*/0x29);
+
+#if 1
+  // XXX Debug: Random garbage to verify screen updates working
+  for(int y = 0; y < DISPLAY_HEIGHT; ++y)
+  {
+    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
+    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
+    SPITask *clearLine = AllocTask(DISPLAY_SCANLINE_SIZE);
+    clearLine->cmd = DISPLAY_WRITE_PIXELS;
+    clearLine->size = DISPLAY_SCANLINE_SIZE;
+    for(int i = 0; i < DISPLAY_SCANLINE_SIZE; ++i)
+      clearLine->data[i] = tick() * y + i;
+    CommitTask(clearLine);
+  }
+  PumpSPI();
+  msleep(1000);
+#endif
 
   // Initial screen clear
   for(int y = 0; y < DISPLAY_HEIGHT; ++y)
   {
     QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
     QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-    SPITask *clearLine = AllocTask(SCANLINE_SIZE);
+    SPITask *clearLine = AllocTask(DISPLAY_SCANLINE_SIZE);
     clearLine->cmd = DISPLAY_WRITE_PIXELS;
-    clearLine->size = SCANLINE_SIZE;
-    memset((void*)clearLine->data, 0, SCANLINE_SIZE);
+    clearLine->size = DISPLAY_SCANLINE_SIZE;
+    memset((void*)clearLine->data, 0, DISPLAY_SCANLINE_SIZE);
     CommitTask(clearLine);
   }
+  PumpSPI();
+
   QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
   QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
 
-  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BMC2835_SPI0_CS_INTR | BMC2835_SPI0_CS_INTD; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
+  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_INTR | BCM2835_SPI0_CS_INTD;
+#endif
+
+  PumpSPI();
 
   // Expose SPI worker ring bus to user space driver application.
   proc_create(SPI_BUS_PROC_ENTRY_FILENAME, 0, NULL, &fops);
 
+#if 0
+  // XXX Debug:
+  DMATest();
+#endif
+
+  setup_timer(&my_timer, my_timer_callback, 0);
+   printk("Starting timer to fire in 200ms (%ld)\n", jiffies);
+  int ret = mod_timer( &my_timer, jiffies + msecs_to_jiffies(200) );
+  if (ret) printk("Error in mod_timer\n");
+ 
   return 0;
 }
 
@@ -215,20 +423,37 @@ static struct task_struct *displayThread = 0;
 static uint32_t irqHandlerCookie = 0;
 static uint32_t irqRegistered = 0;
 
-int bcm2385_spi_display_init(void)
+int bcm2835_spi_display_init(void)
 {
   InitSPI();
+#ifdef KERNEL_DRIVE_WITH_IRQ
   int ret = request_irq(84, irq_handler, IRQF_SHARED, "spi_handler", &irqHandlerCookie);
   if (ret != 0) FATAL_ERROR("request_irq failed!");
   irqRegistered = 1;
+#endif
+
+  if (!spiTaskMemory) FATAL_ERROR("Shared memory block not initialized!");
+
+#ifdef USE_DMA_TRANSFERS
+  printk(KERN_INFO "DMA TX channel: %d, irq: %d", dmaTxChannel, dmaTxIrq);
+  printk(KERN_INFO "DMA RX channel: %d, irq: %d", dmaRxChannel, dmaRxIrq);
+  spiTaskMemory->dmaTxChannel = dmaTxChannel;
+  spiTaskMemory->dmaRxChannel = dmaRxChannel;
+#endif
+
+  spiTaskMemory->sharedMemoryBaseInPhysMemory = (uint32_t)virt_to_phys(spiTaskMemory) | 0x40000000U;
+  LOG("PhysBase: %p", (void*)spiTaskMemory->sharedMemoryBaseInPhysMemory);
 
   displayThread = kthread_create(display_initialization_thread, NULL, "display_thread");
   if (displayThread) wake_up_process(displayThread);
+
   return 0;
 }
 
-void bcm2385_spi_display_exit(void)
+void bcm2835_spi_display_exit(void)
 {
+  shuttingDown = 1;
+  msleep(2000);
   spi->cs = BCM2835_SPI0_CS_CLEAR;
   msleep(200);
   DeinitSPI();
@@ -240,7 +465,9 @@ void bcm2385_spi_display_exit(void)
   }
 
   remove_proc_entry(SPI_BUS_PROC_ENTRY_FILENAME, NULL);
-}
 
-module_init(bcm2385_spi_display_init);
-module_exit(bcm2385_spi_display_exit);
+  int ret = del_timer( &my_timer );
+  if (ret) printk("The timer is still in use...\n");}
+
+module_init(bcm2835_spi_display_init);
+module_exit(bcm2835_spi_display_exit);

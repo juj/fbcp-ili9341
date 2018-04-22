@@ -66,10 +66,19 @@
 // values of  DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
 #define DISPLAY_OUTPUT_LANDSCAPE
 
+// If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling
+// writes will be performed (possibly with interrupts, if using kernel side driver module)
+#define USE_DMA_TRANSFERS
+
 #ifndef KERNEL_MODULE
 
-// Define this if building the program to run against the kernel driver module, rather than a
-// self-contained userland program.
-// #define KERNEL_MODULE_CLIENT
+// Define this if building the client side program to run against the kernel driver module, rather than
+// as a self-contained userland program.
+#define KERNEL_MODULE_CLIENT
 
 #endif
+
+// Experimental/debugging: If defined, let the userland side program create and run the SPI peripheral
+// driving thread. Otherwise, let the kernel drive SPI (e.g. via interrupts or its own thread)
+// This should be unset, only available for debugging.
+// #define KERNEL_MODULE_CLIENT_DRIVES
