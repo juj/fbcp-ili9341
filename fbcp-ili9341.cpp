@@ -203,9 +203,13 @@ int main()
     Span *head = 0;
     for(;y < gpuFrameHeight; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
     {
-      for(int x = 0; x < gpuFrameWidth; ++x)
+      for(int x = 0; x < gpuFrameWidth;)
       {
-        if (scanline[x] == prevScanline[x]) continue;
+        if (scanline[x] == prevScanline[x])
+        {
+          ++x;
+          continue;
+        }
         int endX = x+1;
         int spanEndX = endX;
         int numConsecutiveUnchangedPixels = 0;
