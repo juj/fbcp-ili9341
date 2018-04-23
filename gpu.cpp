@@ -230,28 +230,36 @@ void InitGPU()
 
   // TODO: Make this dynamic somehow?
 
+#ifdef FREEPLAYTECH_WAVESHARE32B
+  /* In /opt/retropie/configs/nes/retroarch.cfg put:
+      aspect_ratio_index = "22"
+      custom_viewport_width = "256"
+      custom_viewport_height = "224"
+      custom_viewport_x = "32"
+      custom_viewport_y = "8"
+      (see https://github.com/RetroPie/RetroPie-Setup/wiki/Smaller-RetroArch-Screen)
+    and configure /boot/config.txt to 320x240 HDMI mode to get pixel perfect rendering without blurring scaling.
+  */
   // NES:
-  /*
-  double overscanLeft = 0.045;
-  double overscanRight = 0.045;
-  double overscanTop = 0.045;
-  double overscanBottom = 0.04;
-  */
-
-  /*
-  // OpenTyrian:
-  double overscanLeft = 0.00;
-  double overscanRight = 0.00;
-  double overscanTop = 0.08;
-  double overscanBottom = 0.08;
-  */
-
+  double overscanLeft = 9.0/320;
+  double overscanRight = 9.0/320;
+  double overscanTop = 19.0/240;
+  double overscanBottom = 19.0/240;
+#else
   // No overscan (e.g. Quake):
   double overscanLeft = 0.00;
   double overscanRight = 0.00;
   double overscanTop = 0.00;
   double overscanBottom = 0.00;
+#endif
 
+  /*
+  // OpenTyrian: (320x200 -> 320x240)
+  double overscanLeft = 0.00;
+  double overscanRight = 0.00;
+  double overscanTop = 20.0/240;
+  double overscanBottom = 20.0/240;
+  */
   int relevantDisplayWidth = (int)(display_info.width * (1.0 - overscanLeft - overscanRight) + 0.5);
   int relevantDisplayHeight = (int)(display_info.height * (1.0 - overscanTop - overscanBottom) + 0.5);
   printf("Relevant source display area size with overscan cropped away: %dx%d.\n", relevantDisplayWidth, relevantDisplayHeight);
@@ -290,10 +298,10 @@ void InitGPU()
   printf("Source GPU display is %dx%d. Output SPI display is %dx%d with a drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
 
   uint32_t image_prt;
-  printf("Creating dispmanX resource of size %dx%d.\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom);
+  printf("Creating dispmanX resource of size %dx%d (aspect ratio=%f).\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, (double)(scaledWidth + excessPixelsLeft + excessPixelsRight) / (scaledHeight + excessPixelsTop + excessPixelsBottom));
   screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, &image_prt);
   if (!screen_resource) FATAL_ERROR("vc_dispmanx_resource_create failed!");
-  printf("GPU grab rectangle is offset x=%d,y=%d, size w=%dxh=%d\n", excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
+  printf("GPU grab rectangle is offset x=%d,y=%d, size w=%dxh=%d, aspect ratio=%f\n", excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight, (double)scaledWidth / scaledHeight);
   vc_dispmanx_rect_set(&rect, excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
 
   pthread_t gpuPollingThread;
