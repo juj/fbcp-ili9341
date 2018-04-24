@@ -138,7 +138,7 @@ void *gpu_polling_thread(void*)
     const int64_t earlyFramePrediction = 500;
     uint64_t earliestNextFrameArrivaltime = lastNewFrameReceivedTime + 1000000/TARGET_FRAME_RATE - earlyFramePrediction;
     uint64_t now = tick();
-    if (now < earliestNextFrameArrivaltime)
+    if (earliestNextFrameArrivaltime > now)
     {
       usleep(earliestNextFrameArrivaltime - now);
     }
@@ -161,8 +161,24 @@ void *gpu_polling_thread(void*)
     // without any concept of "finished frames". If this is the case, it's possible that this could grab the same
     // frame twice, and then potentially missing, or displaying the later appearing new frame at a very last moment.
     // Profiling, the following two lines take around ~1msec of time.
-    vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
-    vc_dispmanx_resource_read_data(screen_resource, &rect, videoCoreFramebuffer[0] - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft, gpuFramebufferScanlineStrideBytes);
+    int failed = vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
+    if (failed)
+    {
+      printf("vc_dispmanx_snapshot() failed with return code %d!\n", failed);
+      exit(failed);
+    }
+    // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
+    // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
+    // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
+    // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
+    // to randomly fail and then subsequently hang if called a second time)
+    uint16_t *destPtr = videoCoreFramebuffer[0] - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft;
+    failed = vc_dispmanx_resource_read_data(screen_resource, &rect, destPtr, gpuFramebufferScanlineStrideBytes);
+    if (failed)
+    {
+      printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
+      exit(failed);
+    }
 #ifndef USE_GPU_VSYNC
     lastFramePollTime = t0;
 #endif
@@ -289,10 +305,17 @@ void InitGPU()
   gpuFramebufferScanlineStrideBytes = RoundUpToMultipleOf((gpuFrameWidth + excessPixelsLeft + excessPixelsRight) * 2, 32);
   gpuFramebufferSizeBytes = gpuFramebufferScanlineStrideBytes * (gpuFrameHeight + excessPixelsTop + excessPixelsBottom);
 
-  videoCoreFramebuffer[0] = (uint16_t *)malloc(gpuFramebufferSizeBytes);
-  videoCoreFramebuffer[1] = (uint16_t *)malloc(gpuFramebufferSizeBytes);
-  memset(videoCoreFramebuffer[0], 0, gpuFramebufferSizeBytes);
-  memset(videoCoreFramebuffer[1], 0, gpuFramebufferSizeBytes);
+  // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
+  // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
+  // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
+  // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
+  // to randomly fail and then subsequently hang if called a second time)
+  videoCoreFramebuffer[0] = (uint16_t *)malloc(gpuFramebufferSizeBytes*2);
+  videoCoreFramebuffer[1] = (uint16_t *)malloc(gpuFramebufferSizeBytes*2);
+  memset(videoCoreFramebuffer[0], 0, gpuFramebufferSizeBytes*2);
+  memset(videoCoreFramebuffer[1], 0, gpuFramebufferSizeBytes*2);
+  videoCoreFramebuffer[0] += (gpuFramebufferSizeBytes>>1);
+  videoCoreFramebuffer[1] += (gpuFramebufferSizeBytes>>1);
 
   syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d with drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
   printf("Source GPU display is %dx%d. Output SPI display is %dx%d with a drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);

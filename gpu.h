@@ -21,7 +21,6 @@ extern int excessPixelsRight;
 extern int excessPixelsTop;
 extern int excessPixelsBottom;
 
-
 #define FRAME_HISTORY_MAX_SIZE 240
 extern int frameTimeHistorySize;
 

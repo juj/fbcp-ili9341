@@ -99,6 +99,7 @@ int main()
         bool starved = (spiTaskMemory->queueHead == spiTaskMemory->queueTail);
         if (starved) spiThreadWasWorkingHardBefore = false;
 
+/*
         if (once && starved)
         {
           printf("Had %u bytes in queue, asked to sleep for %u usecs, got %u usecs sleep, afterwards %u bytes in queue. (got %.2f%% work done)%s\n",
@@ -106,6 +107,7 @@ int main()
             starved ? "  SLEPT TOO LONG, SPI THREAD STARVED" : "");
           once = false;
         }
+*/
 #endif
       }
     }

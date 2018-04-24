@@ -143,19 +143,27 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
   uint32_t bytesToAllocate = sizeof(SPITask) + bytes;
   uint32_t tail = spiTaskMemory->queueTail;
   uint32_t newTail = tail + bytesToAllocate;
-  if (spiTaskMemory->queueTail + bytesToAllocate + sizeof(SPITask)/*Add extra SPITask size so that there will always be room for eob marker*/ >= SPI_QUEUE_SIZE)
+  // Is the new task too large to write contiguously into the ring buffer, that it's split into two parts? We never split,
+  // but instead write a sentinel at the end of the ring buffer, and jump the tail back to the beginning of the buffer and
+  // allocate the new task there. However in doing so, we must make sure that we don't write over the head marker.
+  if (newTail + sizeof(SPITask)/*Add extra SPITask size so that there will always be room for eob marker*/ >= SPI_QUEUE_SIZE)
   {
     uint32_t head = spiTaskMemory->queueHead;
+    // Write a sentinel, but wait for the head to advance first so that it is safe to write.
     while(head > tail || head == 0/*Head must move > 0 so that we don't stomp on it*/)
     {
-#ifndef KERNEL_MODULE
+#if defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
+      // Hack: Pump the kernel module to start transferring in case it has stopped. TODO: Remove this line:
       if (!(spi->cs & BCM2835_SPI0_CS_TA)) spi->cs |= BCM2835_SPI0_CS_TA;
-      usleep(100); // Wait until there are no remaining bytes to process in the far right end of the buffer - we'll write an eob marker there as soon as the read pointer has cleared it.
+      // Wait until there are no remaining bytes to process in the far right end of the buffer - we'll write an eob marker there as soon as the read pointer has cleared it.
+      // At this point the SPI queue may actually be quite empty, so don't sleep (except for now in kernel client app)
+      usleep(100);
 #endif
       head = spiTaskMemory->queueHead;
     }
     SPITask *endOfBuffer = (SPITask*)(spiTaskMemory->buffer + tail);
     endOfBuffer->cmd = 0; // Use cmd=0x00 to denote "end of buffer, wrap to beginning"
+    __sync_synchronize();
     spiTaskMemory->queueTail = 0;
     __sync_synchronize();
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
@@ -169,10 +177,11 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
   uint32_t head = spiTaskMemory->queueHead;
   while(head > tail && head <= newTail)
   {
-#ifndef KERNEL_MODULE
+#if defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
+      // Hack: Pump the kernel module to start transferring in case it has stopped. TODO: Remove this line:
     if (!(spi->cs & BCM2835_SPI0_CS_TA)) spi->cs |= BCM2835_SPI0_CS_TA;
-    usleep(100);
 #endif
+    usleep(100); // Since the SPI queue is full, we can afford to sleep a bit on the main thread without introducing lag.
     head = spiTaskMemory->queueHead;
   }
 
