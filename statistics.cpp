@@ -155,15 +155,15 @@ void RefreshStatisticsOverlayText()
 
   if (frameTimeHistorySize >= 3)
   {
-    bool haveInterlacedFramesInHistory = false;
+    int numInterlacedFramesInHistory = false;
     for(int i = 0; i < frameTimeHistorySize; ++i)
       if (frameTimeHistory[i].interlaced)
       {
-        haveInterlacedFramesInHistory = true;
+        numInterlacedFramesInHistory = true;
         break;
       }
     int frames = frameTimeHistorySize;
-    if (haveInterlacedFramesInHistory)
+    if (numInterlacedFramesInHistory)
       for(int i = 0; i < frameTimeHistorySize; ++i)
         if (!frameTimeHistory[i].interlaced) ++frames; // Progressive frames count twice
     int fps = (0.5 + (frames - 1) * 1000000.0 / (frameTimeHistory[frameTimeHistorySize-1].time - frameTimeHistory[0].time));
@@ -171,8 +171,16 @@ void RefreshStatisticsOverlayText()
     sprintf(fpsText, "%d", fps);
     fpsColor = 0xFFFF;
 #else
-    sprintf(fpsText, "%d%c", fps, haveInterlacedFramesInHistory ? 'i' : 'p');
-    fpsColor = haveInterlacedFramesInHistory ? RGB565(31, 30, 11) : 0xFFFF;
+    if (numInterlacedFramesInHistory > 0)
+    {
+      sprintf(fpsText, "%di/%d", fps, numInterlacedFramesInHistory);
+      fpsColor = RGB565(31, 30, 11);
+    }
+    else
+    {
+      sprintf(fpsText, "%dp", fps);
+      fpsColor = 0xFFFF;
+    }
 #endif
     if (frameSkipTimeHistorySize > 0) sprintf(statsFrameSkipText, "-%d", frameSkipTimeHistorySize);
     else statsFrameSkipText[0] = '\0';

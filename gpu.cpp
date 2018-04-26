@@ -83,7 +83,7 @@ uint64_t EstimateFrameRateInterval()
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
   if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return 500000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
   if (timeNow - mostRecentFrame > 100000) return 100000; // if it's been more than 100ms since last seen update, assume interval of 100ms.
-  if (histogramSize <= HISTOGRAM_SIZE) return 1000000/TARGET_FRAME_RATE;
+  if (histogramSize < HISTOGRAM_SIZE) return 1000000/TARGET_FRAME_RATE;
 #ifndef SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
   return 1000000/TARGET_FRAME_RATE;
 #endif

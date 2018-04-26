@@ -169,14 +169,14 @@ int main()
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
-    const double tooMuchToUpdateUsecs = 1000000 / desiredTargetFps * 4 / 5; // Use a rather arbitrary 4/5ths heuristic as an estimate of too much workload.
+    const double tooMuchToUpdateUsecs = 1000000 / desiredTargetFps;
     if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
 #ifdef NO_INTERLACING
     interlacedUpdate = false;
 #elif defined(ALWAYS_INTERLACING)
     interlacedUpdate = (changedPixels > 0);
 #else
-    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (gpuFrameWidth+gpuFrameHeight*4); // TODO: Review this " (gpuFrameWidth+gpuFrameHeight*4) " part?
+    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL;
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 

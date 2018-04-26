@@ -6,6 +6,16 @@
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C
 
+// ILI9341 displays are able to update at any rate between 61Hz to up to 119Hz. Default at power on is 70Hz.
+#define ILI9341_FRAMERATE_61_HZ 0x1F
+#define ILI9341_FRAMERATE_70_HZ 0x1B
+#define ILI9341_FRAMERATE_79_HZ 0x18
+#define ILI9341_FRAMERATE_119_HZ 0x10
+
+// Visually estimating NES Super Mario Bros 3 "match mushroom, flower, star" arcade game, 119Hz gives most tear
+// free scrolling, so default to using that.
+#define ILI9341_UPDATE_FRAMERATE ILI9341_FRAMERATE_119_HZ
+
 #ifdef ADAFRUIT_ILI9341_PITFT
 #include "pitft_28r_ili9341.h"
 #elif defined(FREEPLAYTECH_WAVESHARE32B)

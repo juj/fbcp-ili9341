@@ -63,7 +63,7 @@ void InitILI9341()
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
 
     SPI_TRANSFER(0x3A/*COLMOD: Pixel Format Set*/, 0x55/*DPI=16bits/pixel,DBI=16bits/pixel*/);
-    SPI_TRANSFER(0xB1/*Frame Rate Control (In Normal Mode/Full Colors)*/, 0x00/*DIVA=fosc*/, 0x18/*RTNA(Frame Rate)=79Hz*/);
+    SPI_TRANSFER(0xB1/*Frame Rate Control (In Normal Mode/Full Colors)*/, 0x00/*DIVA=fosc*/, ILI9341_UPDATE_FRAMERATE/*RTNA(Frame Rate)*/);
     SPI_TRANSFER(0xB6/*Display Function Control*/, 0x08/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x82/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x27/*LCD Driver Lines=320*/);
     SPI_TRANSFER(0xF2/*Enable 3G*/, 0x02/*False*/); // This one is present only in ILI9341 Data Sheet v1.11 (2011/06/10)
     SPI_TRANSFER(0x26/*Gamma Set*/, 0x01/*Gamma curve 1 (G2.2)*/);
@@ -72,6 +72,7 @@ void InitILI9341()
     SPI_TRANSFER(0x11/*Sleep Out*/);
     usleep(120 * 1000);
     SPI_TRANSFER(/*Display ON*/0x29);
+
 
     // Some wonky effects to try out:
 //    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
