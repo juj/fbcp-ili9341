@@ -66,7 +66,7 @@ extern volatile SPIRegisterFile *spi;
 // so for best performance, should be at least ~DISPLAY_WIDTH*DISPLAY_HEIGHT*BYTES_PER_PIXEL*2 bytes in size, plus some small
 // amount for structuring each SPITask command. Technically this can be something very small, like 4096b, and not need to contain
 // even a single full frame of data, but such small buffers can cause performance issues from threads starving.
-#define SHARED_MEMORY_SIZE (DISPLAY_WIDTH*DISPLAY_HEIGHT*DISPLAY_BYTESPERPIXEL*5/2)
+#define SHARED_MEMORY_SIZE (DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT*DISPLAY_BYTESPERPIXEL*2)
 #define SPI_QUEUE_SIZE (SHARED_MEMORY_SIZE - sizeof(SharedMemory))
 
 typedef struct __attribute__((packed)) SPITask
