@@ -158,10 +158,8 @@ void RefreshStatisticsOverlayText()
     int numInterlacedFramesInHistory = false;
     for(int i = 0; i < frameTimeHistorySize; ++i)
       if (frameTimeHistory[i].interlaced)
-      {
-        numInterlacedFramesInHistory = true;
-        break;
-      }
+        ++numInterlacedFramesInHistory;
+
     int frames = frameTimeHistorySize;
     if (numInterlacedFramesInHistory)
       for(int i = 0; i < frameTimeHistorySize; ++i)
