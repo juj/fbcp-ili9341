@@ -3,9 +3,13 @@
 // Data specific to the Waveshare32b display, as present on FreePlayTech's CM3/Zero devices (https://www.freeplaytech.com/)
 #ifdef FREEPLAYTECH_WAVESHARE32B
 
+#if !defined(GPIO_TFT_DATA_CONTROL)
 #define GPIO_TFT_DATA_CONTROL 22
+#endif
 
+#if !defined(GPIO_TFT_RESET_PIN)
 #define GPIO_TFT_RESET_PIN 27
+#endif
 
 #define DISPLAY_WIDTH 320
 #define DISPLAY_HEIGHT 240
@@ -20,7 +24,6 @@
 #define DISPLAY_DRAWABLE_WIDTH (DISPLAY_WIDTH-DISPLAY_COVERED_LEFT_SIDE)
 #define DISPLAY_DRAWABLE_HEIGHT (DISPLAY_HEIGHT-DISPLAY_COVERED_TOP_SIDE-DISPLAY_COVERED_BOTTOM_SIDE)
 
-void InitWaveshare32BILI9341(void);
-#define InitSPIDisplay InitWaveshare32BILI9341
+#define InitSPIDisplay InitILI9341
 
 #endif

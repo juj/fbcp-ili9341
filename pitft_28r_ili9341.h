@@ -11,7 +11,9 @@
 // if you did your wiring customized directly on the GPIO pins, you will likely need to check which pin to
 // configure here. This pin numberings is specified in the BCM pins namespace.
 
+#if !defined(GPIO_TFT_DATA_CONTROL)
 #define GPIO_TFT_DATA_CONTROL 25  /*!< Version 1, Pin P1-22, PiTFT 2.8 resistive Data/Control pin */
+#endif
 
 #define DISPLAY_WIDTH 320
 #define DISPLAY_HEIGHT 240
@@ -23,7 +25,6 @@
 #define DISPLAY_DRAWABLE_WIDTH (DISPLAY_WIDTH-DISPLAY_COVERED_LEFT_SIDE)
 #define DISPLAY_DRAWABLE_HEIGHT (DISPLAY_HEIGHT-DISPLAY_COVERED_TOP_SIDE-DISPLAY_COVERED_BOTTOM_SIDE)
 
-void InitAdafruitILI9341PiTFT(void);
-#define InitSPIDisplay InitAdafruitILI9341PiTFT
+#define InitSPIDisplay InitILI9341
 
 #endif

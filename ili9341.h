@@ -10,6 +10,12 @@
 #include "pitft_28r_ili9341.h"
 #elif defined(FREEPLAYTECH_WAVESHARE32B)
 #include "freeplaytech_waveshare32b.h"
-#else
-#error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON or -FREEPLAYTECH_WAVESHARE32B=ON (or contribute ports to more displays yourself)
+#elif !defined(ILI9341)
+#error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON, -FREEPLAYTECH_WAVESHARE32B=ON or -DILI9341=ON (or contribute ports to more displays yourself)
 #endif
+
+#if !defined(GPIO_TFT_DATA_CONTROL)
+#error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
+#endif
+
+void InitILI9341(void);
