@@ -55,7 +55,7 @@ uint64_t EstimateFrameRateInterval()
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
 // The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
 // main menu <-> ingame transitions
-#define HISTOGRAM_SIZE 30
+#define HISTOGRAM_SIZE (2*TARGET_FRAME_RATE)
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
 uint64_t lastFramePollTime = 0;
@@ -82,19 +82,19 @@ uint64_t EstimateFrameRateInterval()
   uint64_t timeNow = tick();
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
   if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return 500000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
-  if (timeNow - mostRecentFrame > 100000) return 100000; // if it's been more than 100ms since last seen update, assume interval of 100ms.
+  if (timeNow - mostRecentFrame > 1000000) return 250000; // if it's been more than a second since last seen update, assume interval of 100ms.
   if (histogramSize < HISTOGRAM_SIZE) return 1000000/TARGET_FRAME_RATE;
 #ifndef SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
   return 1000000/TARGET_FRAME_RATE;
 #endif
 #endif
 
-  // Look at the intervals of all previous arrived frames, and take their 40% percentile as our expected current frame rate
+  // Look at the intervals of all previous arrived frames, and take their 10% percentile as our expected current frame rate
   uint64_t intervals[HISTOGRAM_SIZE-1];
   for(int i = 0; i < histogramSize-1; ++i)
     intervals[i] = GET_HISTOGRAM(i) - GET_HISTOGRAM(i+1);
   qsort(intervals, histogramSize-1, sizeof(uint64_t), cmp);
-  uint64_t interval = intervals[(histogramSize-1)*2/5];
+  uint64_t interval = intervals[(histogramSize-1)/10];
 
   // With bad luck, we may actually have synchronized to observing every second update, so halve the computed interval if it looks like a long period of time
   if (interval >= 2000000/TARGET_FRAME_RATE) interval /= 2;
