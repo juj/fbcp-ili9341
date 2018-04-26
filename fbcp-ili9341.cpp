@@ -176,7 +176,7 @@ int main()
 #elif defined(ALWAYS_INTERLACING)
     interlacedUpdate = (changedPixels > 0);
 #else
-    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL;
+    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
