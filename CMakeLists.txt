@@ -25,6 +25,10 @@ option(FREEPLAYTECH_WAVESHARE32B "Target WaveShare32B ILI9341 display on Freepla
 option(GPIO_TFT_DATA_CONTROL "Explicitly specify the Data/Control GPIO pin (sometimes also called Register Select)" 0)
 option(GPIO_TFT_RESET_PIN "Explicitly specify the Reset GPIO pin (leave out if there is no Reset line)" 0)
 
+option(KERNEL_MODULE_CLIENT "If enabled, run fbcp-ili9341 userland program against the kernel module found in kernel/ subdirectory (must be started before the userland program)" OFF)
+
+option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, a CPU thread is busy spinning to drive communication with the SPI display" OFF)
+
 if (GPIO_TFT_DATA_CONTROL)
 	message(STATUS "Using GPIO pin ${GPIO_TFT_DATA_CONTROL} for Data/Control line")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_DATA_CONTROL=${GPIO_TFT_DATA_CONTROL}")
@@ -33,6 +37,16 @@ endif()
 if (GPIO_TFT_RESET_PIN)
 	message(STATUS "Using GPIO pin ${GPIO_TFT_RESET_PIN} for Reset line")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_RESET_PIN=${GPIO_TFT_RESET_PIN}")
+endif()
+
+if (KERNEL_MODULE_CLIENT)
+	message(STATUS "KERNEL_MODULE_CLIENT enabled, building userland program to operate against fbcp-ili9341 kernel module")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKERNEL_MODULE_CLIENT=1")
+endif()
+
+if (USE_DMA_TRANSFERS)
+	message(STATUS "USE_DMA_TRANSFERS enabled")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_DMA_TRANSFERS=1")
 endif()
 
 if (ADAFRUIT_ILI9341_PITFT)

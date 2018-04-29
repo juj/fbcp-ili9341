@@ -68,13 +68,13 @@
 
 // If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling
 // writes will be performed (possibly with interrupts, if using kernel side driver module)
-#define USE_DMA_TRANSFERS
+// #define USE_DMA_TRANSFERS
 
 #ifndef KERNEL_MODULE
 
 // Define this if building the client side program to run against the kernel driver module, rather than
 // as a self-contained userland program.
-#define KERNEL_MODULE_CLIENT
+// #define KERNEL_MODULE_CLIENT
 
 #endif
 
