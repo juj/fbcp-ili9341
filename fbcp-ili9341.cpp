@@ -135,7 +135,7 @@ int main()
     bool gotNewFramebuffer = (numNewFrames > 0);
     if (gotNewFramebuffer)
     {
-      memcpy(framebuffer[0], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
+      memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #ifdef STATISTICS
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
