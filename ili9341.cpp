@@ -26,6 +26,7 @@ void InitILI9341()
 {
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
 #if defined(GPIO_TFT_RESET_PIN) && GPIO_TFT_RESET_PIN >= 0
+  printf("Resetting display at reset GPIO pin %d\n", GPIO_TFT_RESET_PIN);
   SET_GPIO_MODE(GPIO_TFT_RESET_PIN, 1);
   SET_GPIO(GPIO_TFT_RESET_PIN);
   usleep(120 * 1000);
@@ -37,6 +38,9 @@ void InitILI9341()
 
   BEGIN_SPI_COMMUNICATION();
   {
+    SPI_TRANSFER(0x01/*Software Reset*/);
+    usleep(5*1000);
+    SPI_TRANSFER(0x28/*Display OFF*/);
     // The following appear in ILI9341 Data Sheet v1.11 (2011/06/10), but not in older v1.02 (2010/12/06).
     SPI_TRANSFER(0xCB/*Power Control A*/, 0x39/*Reserved*/, 0x2C/*Reserved*/, 0x00/*Reserved*/, 0x34/*REG_VD=1.6V*/, 0x02/*VBC=5.6V*/); // These are the same as power on.
     SPI_TRANSFER(0xCF/*Power Control B*/, 0x00/*Always Zero*/, 0xC1/*Power Control=0,DRV_ena=0,PCEQ=1*/, 0x30/*DC_ena=1*/); // Not sure what the effect is, set to default as per ILI9341 Application Notes v0.6 (2011/03/11) document (which is not apparently same as default at power on).
