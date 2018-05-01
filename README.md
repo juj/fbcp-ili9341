@@ -51,6 +51,9 @@ The first performance issue might be addressed in a software update from VideoCo
 
 **Update 2017-11-28**: Had a stab at rewriting the application as a kernel module to utilize interrupts. While this worked well to reduce CPU usage close to 0%, it had an adverse effect of losing quite a bit of available bandwidth, due to difficulty keeping the SPI FIFO fully running (possibly because of some latency that processing interrupt callbacks might cause). Also, SPI interrupts firing at a high rate has a chance of starving other interrupts, and it was observed that audio playback began to stutter. Attempting a kernel interrupts rewrite should pay close attention to these aspects.
 
+###### Not usable on single core Raspberry Pis (Zero, Zero W, Pi 1)
+ - Since one thread is allocated to dedicated communication with the SPI bus, this program is currently not usable on the Pis with only one hardware thread. The driver does build and run on those devices, but performance will be really bad. If you are able to help with porting the driver to run with DMA transfers enabled, then it may be possible to make it work on single core Pis as well.
+
 ### Should I Use This?
 
 As a caveat, this was written mostly in one weekend as a hobby programming activity, so it's not a continuously maintained driver.
