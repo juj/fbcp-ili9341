@@ -32,6 +32,13 @@
 // too much for the display to handle)
 // #define NO_INTERLACING
 
+#if defined(FREEPLAYTECH_WAVESHARE32B) && USE_DMA_TRANSFERS && !defined(NO_INTERLACING)
+// The Freeplaytech CM3/Zero displays actually only have a visible display resolution of 302x202, instead of
+// 320x240, and this is enough to give them full progressive 320x240x60fps without ever resorting to
+// interlacing.
+#define NO_INTERLACING
+#endif
+
 // If defined, all frames are always rendered as interlaced, and never use progressive rendering.
 // #define ALWAYS_INTERLACING
 
