@@ -5,7 +5,7 @@
 #define BCM2835_DMA_BASE                  0x7000
 #define BCM2835_DMAENABLE_REGISTER_OFFSET 0xff0
 
-typedef struct DMAControlBlock
+typedef struct __attribute__ ((packed)) DMAControlBlock
 {
   uint32_t ti;
   uint32_t src;
@@ -17,13 +17,7 @@ typedef struct DMAControlBlock
   uint32_t reserved;
 } DMAControlBlock;
 
-typedef struct AlignedDMAControlBlock
-{
-  volatile DMAControlBlock cb;
-  uint8_t padding[224];
-} AlignedDMAControlBlock;
-
-typedef struct DMARegisterFile
+typedef struct __attribute__ ((packed)) DMAChannelRegisterFile
 {
   volatile uint32_t cs;
   volatile uint32_t cbAddr;

@@ -144,7 +144,7 @@ typedef struct __attribute__((packed)) SPITask
 typedef struct SharedMemory
 {
 #ifdef USE_DMA_TRANSFERS
-  volatile AlignedDMAControlBlock cb[2];
+  volatile DMAControlBlock cb[2];
   volatile uint32_t dummyDMADestinationWriteAddress;
   volatile uint32_t dmaTxChannel, dmaRxChannel;
 #endif
@@ -170,6 +170,8 @@ extern volatile uint64_t spiThreadIdleUsecs;
 extern volatile uint64_t spiThreadSleepStartTime;
 extern volatile int spiThreadSleeping;
 #endif
+
+extern int mem_fd;
 
 static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new SPI task block, called on main thread
 {

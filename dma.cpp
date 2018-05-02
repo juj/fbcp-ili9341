@@ -4,6 +4,11 @@
 #include <memory.h>
 #include <inttypes.h>
 #include <syslog.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #endif
 
 #include "config.h"
@@ -24,12 +29,29 @@ int dmaTxIrq = 0;
 int dmaRxChannel = 0;
 int dmaRxIrq = 0;
 
+#define PAGE_SIZE 4096
+
+struct GpuMemory
+{
+  uint32_t allocationHandle;
+  void *virtualAddr;
+  uintptr_t busAddress;
+  uint32_t sizeBytes;
+};
+
+#define NUM_DMA_CBS 2
+GpuMemory dmaCb, dmaSourceBuffer;
+
 static int AllocateDMAChannel(int *dmaChannel, int *irq)
 {
+  // Snooping DMA, channels 3, 5 and 6 seen active.
   // TODO: Actually reserve the DMA channel to the system using bcm_dma_chan_alloc() and bcm_dma_chan_free()?...
-  // Right now, use (lite) channels 12 and 13 which seem to be free.
-  const int freeChannels[] = { /*0, 3,*/ 12, 13, 9, 10, 13, 13 };
+  // Right now, use channels 1 and 4 which seem to be free.
+  // Note: The send channel could be a lite channel, but receive channel cannot, since receiving uses the IGNORE flag
+  // that lite DMA engines don't have.
+  const int freeChannels[] = { 1, 4 };
   static int nextFreeChannel = 0;
+  if (nextFreeChannel >= sizeof(freeChannels) / sizeof(freeChannels[0])) FATAL_ERROR("No free DMA channels");
 
   *dmaChannel = freeChannels[nextFreeChannel++];
   LOG("Allocated DMA channel %d", *dmaChannel);
@@ -37,24 +59,116 @@ static int AllocateDMAChannel(int *dmaChannel, int *irq)
   return 0;
 }
 
+// Sends a pointer to the given buffer over to the VideoCore mailbox. See https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
+void SendMailbox(void *buffer)
+{
+  int vcio = open("/dev/vcio", 0);
+  if (vcio < 0) FATAL_ERROR("Failed to open VideoCore kernel mailbox!");
+  int ret = ioctl(vcio, _IOWR(/*MAJOR_NUM=*/100, 0, char *), buffer);
+  close(vcio);
+  if (ret < 0) FATAL_ERROR("SendMailbox failed in ioctl!");
+}
+
+// Defines the structure of a Mailbox message
+template<int PayloadSize>
+struct MailboxMessage
+{
+  MailboxMessage(uint32_t messageId):messageSize(sizeof(*this)), requestCode(0), messageId(messageId), messageSizeBytes(sizeof(uint32_t)*PayloadSize), dataSizeBytes(sizeof(uint32_t)*PayloadSize), messageEndSentinel(0) {}
+  uint32_t messageSize;
+  uint32_t requestCode;
+  uint32_t messageId;
+  uint32_t messageSizeBytes;
+  uint32_t dataSizeBytes;
+  union
+  {
+    uint32_t payload[PayloadSize];
+    uint32_t result;
+  };
+  uint32_t messageEndSentinel;
+};
+
+// Message IDs for different mailbox GPU memory allocation messages
+#define MEM_ALLOC_MESSAGE 0x3000c // This message is 3 u32s: numBytes, alignment and flags
+#define MEM_FREE_MESSAGE 0x3000f // This message is 1 u32: handle
+#define MEM_LOCK_MESSAGE 0x3000d // 1 u32: handle
+#define MEM_UNLOCK_MESSAGE 0x3000e // 1 u32: handle
+
+// Memory allocation flags
+#define MEM_ALLOC_FLAG_DIRECT (1 << 2) // Allocate uncached memory that bypasses L1 and L2 cache on loads and stores
+
+// Sends a mailbox message with 1xuint32 payload
+uint32_t Mailbox(uint32_t messageId, uint32_t payload0)
+{
+  MailboxMessage<1> msg(messageId);
+  msg.payload[0] = payload0;
+  SendMailbox(&msg);
+  return msg.result;
+}
+
+// Sends a mailbox message with 3xuint32 payload
+uint32_t Mailbox(uint32_t messageId, uint32_t payload0, uint32_t payload1, uint32_t payload2)
+{
+  MailboxMessage<3> msg(messageId);
+  msg.payload[0] = payload0;
+  msg.payload[1] = payload1;
+  msg.payload[2] = payload2;
+  SendMailbox(&msg);
+  return msg.result;
+}
+
+#define BUS_TO_PHYS(x) ((x) & ~0xC0000000)
+
+// Allocates the given number of bytes in GPU side memory, and returns the virtual address and physical bus address of the allocated memory block.
+// The virtual address holds an uncached view to the allocated memory, so writes and reads to that memory address bypass the L1 and L2 caches. Use
+// this kind of memory to pass data blocks over to the DMA controller to process.
+GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes)
+{
+  GpuMemory mem;
+  mem.sizeBytes = ALIGN_UP(numBytes, PAGE_SIZE);
+  mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/MEM_ALLOC_FLAG_DIRECT);
+  mem.busAddress = Mailbox(MEM_LOCK_MESSAGE, mem.allocationHandle);
+  mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, BUS_TO_PHYS(mem.busAddress));
+  if (mem.virtualAddr == MAP_FAILED) FATAL_ERROR("Failed to mmap GPU memory!");
+  return mem;
+}
+
+void FreeUncachedGpuMemory(GpuMemory mem)
+{
+  munmap(mem.virtualAddr, mem.sizeBytes);
+  Mailbox(MEM_UNLOCK_MESSAGE, mem.allocationHandle);
+  Mailbox(MEM_FREE_MESSAGE, mem.allocationHandle);
+}
+
 int InitDMA()
 {
-#ifdef KERNEL_MODULE
-  dma = (volatile DMAChannelRegisterFile *)ioremap(BCM2835_PERI_BASE+BCM2835_DMA_BASE, 0x1000);
+#if defined(KERNEL_MODULE)
+  dma = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA_BASE, 0x1000);
+#else
+  dma = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA_BASE);
+#endif
+
+#ifdef KERNEL_MODULE_CLIENT
+  dmaTxChannel = spiTaskMemory->dmaTxChannel;
+  dmaRxChannel = spiTaskMemory->dmaRxChannel;
+#else
   int ret = AllocateDMAChannel(&dmaTxChannel, &dmaTxIrq);
   if (ret != 0) FATAL_ERROR("Unable to allocate TX DMA channel!");
   ret = AllocateDMAChannel(&dmaRxChannel, &dmaRxIrq);
   if (ret != 0) FATAL_ERROR("Unable to allocate RX DMA channel!");
 
+  printf("Enabling DMA channels Tx:%d and Rx:%d\n", dmaTxChannel, dmaRxChannel);
+  volatile uint32_t *dmaEnableRegister = (volatile uint32_t *)((uintptr_t)dma + BCM2835_DMAENABLE_REGISTER_OFFSET);
+
   // Enable the allocated DMA channels
-  volatile uint32_t *dmaEnableRegister = (volatile uint32_t *)((uint32_t)dma + BCM2835_DMAENABLE_REGISTER_OFFSET);
   *dmaEnableRegister |= (1 << dmaTxChannel);
   *dmaEnableRegister |= (1 << dmaRxChannel);
-#else
-  dma = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA_BASE);
-  dmaTxChannel = spiTaskMemory->dmaTxChannel;
-  dmaRxChannel = spiTaskMemory->dmaRxChannel;
 #endif
+
+#if !defined(KERNEL_MODULE)
+  dmaCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock) * NUM_DMA_CBS);
+  dmaSourceBuffer = AllocateUncachedGpuMemory(MAX_SPI_TASK_SIZE);
+#endif
+
   LOG("DMA hardware register file is at ptr: %p, using DMA TX channel: %d and DMA RX channel: %d", dma, dmaTxChannel, dmaRxChannel);
   if (!dma) FATAL_ERROR("Failed to map DMA!");
 
@@ -68,7 +182,7 @@ int InitDMA()
   dmaTx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
   dmaRx->cs = BCM2835_DMA_CS_RESET;
   dmaRx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
-  
+
   // TODO: Set up IRQ
   LOG("DMA all set up");
   return 0;
@@ -127,62 +241,32 @@ void DumpTI(uint32_t reg)
 
 #define DMA_SPI_FIFO_PHYS_ADDRESS 0x7E204004
 
-#define req(cnd) if (!(cnd)) { LOG("!!!%s!!!\n", #cnd);}
-
 void SPIDMATransfer(SPITask *task)
 {
-#ifdef KERNEL_MODULE
-  // TODO: SPI should be in DONE state at this point, this is rather a paranoia check for debugging time. It should be possible to just
-  // remove this block altogether!
-  while (!(spi->cs & BCM2835_SPI0_CS_DONE))
-  {
-    if ((spi->cs & BCM2835_SPI0_CS_DMAEN))
-      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-
-    if ((spi->cs & BCM2835_SPI0_CS_CS))
-      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-
-    if ((spi->cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
-      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-  }
-
   // Transition the SPI peripheral to enable the use of DMA
   spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
   task->dmaSpiHeader = BCM2835_SPI0_CS_TA | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
-
-  // TODO: DMA should be in DONE state at this point, it should be possible to remove the following lines! (or if not, we'll want to refactor so that
-  // the wait for previous DMA done is done somewhere earlier!)
-  while (dmaTx->cbAddr && (dmaTx->cs & BCM2835_DMA_CS_ACTIVE));
-  while (dmaRx->cbAddr && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE));
 
   // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
   // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
   // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to an intermediate 'dmaSourceMemory' memory area to perform
   // the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
-  volatile DMAControlBlock *txcb = &dmaSourceMemory->cb[0].cb;
+  memcpy(dmaSourceBuffer.virtualAddr, (void*)&task->dmaSpiHeader, task->size + 4);
+
+  volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+  volatile DMAControlBlock *txcb = &cb[0];
   txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
-  memcpy((void*)dmaSourceMemory->buffer, (void*)&task->dmaSpiHeader, task->size + 4); // task->size is the actual payload, +4 bytes comes from the SPI DLEN header that DMA writes
-
-  // Source pixel data flows from memory -> SPI 'data' register
-  txcb->src = VIRT_TO_BUS(dmaSourceMemory->buffer);
-  // Ideally would want the above line to just directly do the following (but it's not cache coherent!):
-  //  txcb->src = VIRT_TO_BUS(&task->dmaSpiHeader);
-
+  txcb->src = dmaSourceBuffer.busAddress;
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
   txcb->len = task->size + 4;
   txcb->stride = 0;
   txcb->next = 0;
   txcb->debug = 0;
   txcb->reserved = 0;
-  __sync_synchronize();
-  dmaTx->cbAddr = VIRT_TO_BUS(txcb);
-  __sync_synchronize();
-  req(dmaTx->cbAddr % 256 == 0);
+  dmaTx->cbAddr = dmaCb.busAddress;
 
-  // SPI DMA transfer needs a second DMA channel to receive. We don't actually use this, so data is not written anywhere, but must just pump the reads to empty the SPI read FIFO.
-  volatile DMAControlBlock *rxcb = &dmaSourceMemory->cb[1].cb;
-  rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
-
+  volatile DMAControlBlock *rxcb = &cb[1];
+  rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   rxcb->dst = 0;
   rxcb->len = task->size;
@@ -190,77 +274,21 @@ void SPIDMATransfer(SPITask *task)
   rxcb->next = 0;
   rxcb->debug = 0;
   rxcb->reserved = 0;
-  __sync_synchronize();
-  dmaRx->cbAddr = VIRT_TO_BUS(rxcb);
-  __sync_synchronize();
-  req(dmaRx->cbAddr % 256 == 0);
+  dmaRx->cbAddr = dmaCb.busAddress + sizeof(DMAControlBlock);
 
-  // TODO: Review the need for any of the flags BCM2835_DMA_CS_INT, BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES, BCM2835_DMA_CS_SET_PRIORITY(0x??) or BCM2835_DMA_CS_SET_PANIC_PRIORITY(0x??)
-  dmaTx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END;
   __sync_synchronize();
-  dmaRx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END;
+  dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
+  dmaRx->cs = BCM2835_DMA_CS_ACTIVE;
   __sync_synchronize();
 
-  // XXX DEBUGGING: Synchronously wait for the DMA transfers to finish:
-  // Currently there is a bug that occassionally the DMA TX (or RX) transfers will hang waiting for DREQ, seemingly for no reason.
-#if 1
-  uint64_t now = tick();
-  while(!(dmaTx->cs & BCM2835_DMA_CS_END) && dmaTx->cb.src - txcb->src < task->size)
-  {
-    if (tick() - now > 100000)
-    {
-      DumpCS(dmaTx->cs);
-      DumpDebug(dmaTx->cb.debug);
-      DumpTI(dmaTx->cb.ti);
-      DumpSPICS(spi->cs);
-      LOG("Waiting for TX, CB physAddr: %p, src physAddr: %p->%p, dst physAddr: %p", 
-        (void*)VIRT_TO_BUS(txcb), (void*)txcb->src, (void*)(txcb->src+txcb->len), (void*)txcb->dst);
-      LOG("CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
-        dmaTx->cs, (void*)dmaTx->cbAddr, dmaTx->cb.ti, (void*)dmaTx->cb.src, (void*)dmaTx->cb.dst, dmaTx->cb.len, dmaTx->cb.stride, (void*)dmaTx->cb.next, dmaTx->cb.debug);
-      LOG("Header %x, dlen: %u, bytesWritten: %u", task->dmaSpiHeader, spi->dlen, dmaTx->cb.src - txcb->src);
+  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
 
-      // XXX HACK: When we detect we've stalled, just move on
-      dmaTx->cs = BCM2835_DMA_CS_ABORT | BCM2835_DMA_CS_RESET;
-      break;
-    }
-  }
-
-  now = tick();
-  while(!(dmaRx->cs & BCM2835_DMA_CS_END))
-  {
-    if (tick() - now > 100000)
-    {
-      LOG("TX:");
-      DumpCS(dmaTx->cs);
-      DumpDebug(dmaTx->cb.debug);
-      DumpTI(dmaTx->cb.ti);
-      DumpSPICS(spi->cs);
-      LOG("Waiting for TX, CB physAddr: %p, src physAddr: %p->%p, dst physAddr: %p", (void*)VIRT_TO_BUS(txcb), (void*)txcb->src, (void*)(txcb->src+txcb->len), (void*)txcb->dst);
-      LOG("CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
-        dmaTx->cs, (void*)dmaTx->cbAddr, dmaTx->cb.ti, (void*)dmaTx->cb.src, (void*)dmaTx->cb.dst, dmaTx->cb.len, dmaTx->cb.stride, (void*)dmaTx->cb.next, dmaTx->cb.debug);
-      LOG("Header %x, dlen: %u, bytesWritten: %u", task->dmaSpiHeader, spi->dlen, dmaTx->cb.src - txcb->src);
-
-      LOG("RX:");
-      DumpCS(dmaRx->cs);
-      DumpDebug(dmaRx->cb.debug);
-      DumpTI(dmaRx->cb.ti);
-      DumpSPICS(spi->cs);
-      LOG("Waiting for RX, CB physAddr: %p, src physAddr: %p, dst physAddr: %p->%p", (void*)VIRT_TO_BUS(rxcb), (void*)rxcb->src, (void*)rxcb->dst, (void*)(rxcb->dst+rxcb->len));
-      LOG("CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
-        dmaRx->cs, (void*)dmaRx->cbAddr, dmaRx->cb.ti, (void*)dmaRx->cb.src, (void*)dmaRx->cb.dst, dmaRx->cb.len, dmaRx->cb.stride, (void*)dmaRx->cb.next, dmaRx->cb.debug);
-      LOG("Header %x, dlen: %u, bytesRead: %d", task->dmaSpiHeader, spi->dlen, dmaRx->cb.dst - rxcb->dst);
-
-      dmaRx->cs = BCM2835_DMA_CS_ABORT | BCM2835_DMA_CS_RESET;
-      break;
-    }
-  }
-#endif
-
-  // Remove DMAEN from SPI to disable DMA transfers, we might be doing some polled SPI transfers next.
   __sync_synchronize();
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
   __sync_synchronize();
-#endif
 }
 
 #endif

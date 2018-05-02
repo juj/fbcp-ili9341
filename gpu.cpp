@@ -12,6 +12,11 @@
 #include "util.h"
 #include "statistics.h"
 
+// Uncomment these build options to make the display output a random performance test pattern instead of the actual
+// display content. Used to debug/measure performance.
+// #define RANDOM_TEST_PATTERN
+// #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
+
 DISPMANX_DISPLAY_HANDLE_T display;
 DISPMANX_RESOURCE_HANDLE_T screen_resource;
 VC_RECT_T rect;
@@ -155,6 +160,25 @@ void *gpu_polling_thread(void*)
 #endif
 
     uint64_t t0 = tick();
+
+#ifdef RANDOM_TEST_PATTERN
+    // Generate random noise that updates each frame
+    uint32_t randomColor = rand() % 65536;
+    randomColor = randomColor | (randomColor << 16);
+    uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
+    for(int y = 0; y < gpuFrameHeight; ++y)
+    {
+      int x = 0;
+      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
+      while(x + XX <= gpuFrameWidth>>1)
+      {
+        for(int X = 0; X < XX; ++X)
+          newfb[x+X] = randomColor;
+        x += XX + 6;
+      }
+      newfb += gpuFramebufferScanlineStrideBytes>>2;
+    }
+#else
     // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
     // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
     // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
@@ -179,6 +203,8 @@ void *gpu_polling_thread(void*)
       printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
       exit(failed);
     }
+#endif
+
 #ifndef USE_GPU_VSYNC
     lastFramePollTime = t0;
 #endif

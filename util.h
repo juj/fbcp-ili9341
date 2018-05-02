@@ -3,6 +3,10 @@
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 
+#ifndef ALIGN_UP
+#define ALIGN_UP(ptr, alignment) ((ptr) + ((alignment)-1)) & ~((alignment)-1);
+#endif
+
 #ifdef KERNEL_MODULE
 #define LOG(...) do { printk(KERN_INFO __VA_ARGS__); } while(0)
 #define FATAL_ERROR(msg) do { pr_alert(msg "\n"); return -1; } while(0)

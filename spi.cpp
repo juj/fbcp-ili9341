@@ -16,6 +16,7 @@
 #include "util.h"
 #include "dma.h"
 
+int mem_fd = -1;
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
@@ -60,9 +61,13 @@ void RunSPITask(SPITask *task)
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
 
+// For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
+// For larger transfers though that are more than this amount of bytes, using DMA is faster.
+// This cutoff number was experimentally tested to find where Polled SPI and DMA are as fast.
+#define DMA_IS_FASTER_THAN_POLLED_SPI 240
   // Do a DMA transfer if this task is suitable in size for DMA to handle
 #ifdef USE_DMA_TRANSFERS
-  if (tEnd - tStart > 128 && (tEnd - tStart) % 4 == 0 && tEnd - tStart < 65530)
+  if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)// && tEnd - tStart <= 4090)
     SPIDMATransfer(task);
   else
 #endif
@@ -171,13 +176,13 @@ int InitSPI()
   if (n != 1) FATAL_ERROR("Failed to read /proc/device-tree/soc/ranges!");
 
   // Memory map GPIO and SPI peripherals for direct access
-  int mem = open("/dev/mem", O_RDWR|O_SYNC);
-  if (mem < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
-  bcm2835 = mmap(NULL, be32toh(ranges.peripheralsSize), (PROT_READ | PROT_WRITE), MAP_SHARED, mem, be32toh(ranges.peripheralsAddress));
+  mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
+  if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
+  bcm2835 = mmap(NULL, be32toh(ranges.peripheralsSize), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, be32toh(ranges.peripheralsAddress));
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
-  close(mem);
+  // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 
   // Estimate how many microseconds transferring a single byte over the SPI bus takes?

@@ -77,7 +77,6 @@ void InitILI9341()
     usleep(120 * 1000);
     SPI_TRANSFER(/*Display ON*/0x29);
 
-
     // Some wonky effects to try out:
 //    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
 //    SPI_TRANSFER(0x21/*Display Inversion ON*/);
