@@ -87,7 +87,7 @@ extern volatile DMAChannelRegisterFile *dmaRx; // DMA channel allocated to readi
 #define BCM2835_DMA_TI_PERMAP                               (0x1F<<16)
 #define BCM2835_DMA_TI_PERMAP_SPI_TX                        (6<<16)
 #define BCM2835_DMA_TI_PERMAP_SPI_RX                        (7<<16)
-#define BCM2835_DMA_TI_BURST_LENGTH                         (0xF<<12)
+#define BCM2835_DMA_TI_BURST_LENGTH(x)                      ((x)<<12)
 #define BCM2835_DMA_TI_SRC_IGNORE                           (1<<11)
 #define BCM2835_DMA_TI_SRC_DREQ                             (1<<10)
 #define BCM2835_DMA_TI_SRC_WIDTH                            (1<<9)

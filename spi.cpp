@@ -60,16 +60,8 @@ void RunSPITask(SPITask *task)
 
   if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
 
-  CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
-
-  spi->fifo = task->cmd;
-
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
-  uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
-  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
-
-  SET_GPIO(GPIO_TFT_DATA_CONTROL);
 
 // For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
 // For larger transfers though that are more than this amount of bytes, using DMA is faster.
@@ -87,6 +79,15 @@ void RunSPITask(SPITask *task)
   else
 #endif
   {
+    CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
+
+    spi->fifo = task->cmd;
+
+    uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
+    while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
+
+    SET_GPIO(GPIO_TFT_DATA_CONTROL);
+
     while(tStart < tPrefillEnd) spi->fifo = *tStart++;
     while(tStart < tEnd)
     {
