@@ -41,7 +41,7 @@
 
 // If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's
 // too much for the display to handle)
-// #define NO_INTERLACING
+#define NO_INTERLACING
 
 #if defined(FREEPLAYTECH_WAVESHARE32B) && USE_DMA_TRANSFERS && !defined(NO_INTERLACING) && !defined(PI_ZERO)
 // The Freeplaytech CM3/Zero displays actually only have a visible display resolution of 302x202, instead of

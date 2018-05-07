@@ -39,8 +39,43 @@ struct GpuMemory
   uint32_t sizeBytes;
 };
 
-#define NUM_DMA_CBS 7
+#define NUM_DMA_CBS 512
 GpuMemory dmaCb, dmaSourceBuffer;
+GpuMemory dmaRecvCb;
+
+volatile DMAControlBlock *dmaSendTail = 0;
+//volatile DMAControlBlock *dmaRecvTail = 0;
+volatile uint8_t *dmaSourceEnd = 0;
+
+volatile DMAControlBlock *GrabFreeCBs(int num)
+{
+  volatile DMAControlBlock *firstCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+  volatile DMAControlBlock *endCB = firstCB + NUM_DMA_CBS;
+  for(;;)
+  {
+//    volatile DMAControlBlock *firstFreeCB = MAX(firstCB, MAX(dmaSendTail+1, dmaRecvTail+1));
+    volatile DMAControlBlock *firstFreeCB = MAX(firstCB, dmaSendTail+1);
+    if (firstFreeCB + num <= endCB)
+      return firstFreeCB;
+    else
+    {
+//      printf("ops\n");
+      WaitForDMAFinished();
+      dmaSendTail = 0;
+//      dmaRecvTail = 0;
+    }
+  }
+}
+
+volatile uint8_t *GrabFreeDMASourceBytes(int bytes)
+{
+  if ((uintptr_t)dmaSourceEnd + bytes > (uintptr_t)dmaSourceBuffer.virtualAddr + SHARED_MEMORY_SIZE)
+    dmaSourceEnd = (volatile uint8_t *)dmaSourceBuffer.virtualAddr;
+
+  volatile uint8_t *ret = dmaSourceEnd;
+  dmaSourceEnd += bytes;
+  return ret;
+}
 
 static int AllocateDMAChannel(int *dmaChannel, int *irq)
 {
@@ -168,7 +203,9 @@ int InitDMA()
 
 #if !defined(KERNEL_MODULE)
   dmaCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock) * NUM_DMA_CBS);
-  dmaSourceBuffer = AllocateUncachedGpuMemory(MAX_SPI_TASK_SIZE);
+  dmaRecvCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock));
+  dmaSourceBuffer = AllocateUncachedGpuMemory(SHARED_MEMORY_SIZE);
+  dmaSourceEnd = (volatile uint8_t *)dmaSourceBuffer.virtualAddr;
 #endif
 
   LOG("DMA hardware register file is at ptr: %p, using DMA TX channel: %d and DMA RX channel: %d", dma, dmaTxChannel, dmaRxChannel);
@@ -252,42 +289,81 @@ void WaitForDMAFinished()
 //  if ((dmaTx->cs & BCM2835_DMA_CS_ACTIVE) || (dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
 //  {
 //    uint64_t t0 = tick();
+//  printf("1\n");
+  int spins = 0;
+  uint64_t t0 = tick();
     while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-      ;
+    {
+      usleep(100);
+      if (tick() - t0 > 1000000)
+      {
+        printf("TX stalled\n");
+        DumpCS(dmaTx->cs);
+        DumpSPICS(spi->cs);
+        DumpTI(dmaTx->cb.ti);
+        printf("DMATX cbAddr: %p\n", dmaTx->cbAddr);
+        exit(1);
+      }
+    }
+//  printf("2\n");
+    spins = 0;
+    t0 = tick();
     while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
-      ;
+    {
+      usleep(100);
+      if (tick() - t0 > 1000000)
+      {
+        printf("RX stalled\n");
+        DumpCS(dmaRx->cs);
+        DumpSPICS(spi->cs);
+        DumpTI(dmaRx->cb.ti);
+        printf("DMARX cbAddr: %p\n", dmaRx->cbAddr);
+        exit(1);
+      }
+    }
+//  printf("3\n");
 //    uint64_t t1 = tick();
 //    printf("Waited %llu usecs for dma\n", t1-t0);
 //  }
+    dmaSendTail = 0;
+//    dmaRecvTail = 0;
 }
 
 void SPIDMATransfer(SPITask *task)
 {
-  WaitForDMAFinished();
+//  WaitForDMAFinished();
   // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
   // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
   // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to an intermediate 'dmaSourceMemory' memory area to perform
   // the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
+  /*
   volatile uint32_t *buf = (volatile uint32_t *)dmaSourceBuffer.virtualAddr;
-  volatile uint32_t *sendCmd = buf;
+  volatile uint32_t *sendCmd = buf; */
+  volatile uint32_t *sendCmd = (volatile uint32_t *)GrabFreeDMASourceBytes(8);
   sendCmd[0] = BCM2835_SPI0_CS_TA | (1 << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
   sendCmd[1] = task->cmd;
-  volatile uint32_t *disableTA = buf+2;
+  //volatile uint32_t *disableTA = buf+2;
+  volatile uint32_t *disableTA = (volatile uint32_t *)GrabFreeDMASourceBytes(4);
   *disableTA = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR_TX;
-  volatile uint32_t *set_gpio = buf+3;
+//  volatile uint32_t *set_gpio = buf+3;
+  volatile uint32_t *set_gpio = (volatile uint32_t *)GrabFreeDMASourceBytes(4);
   *set_gpio = (1 << GPIO_TFT_DATA_CONTROL);
-  volatile uint32_t *sendPixels = buf+4;
-  sendPixels[0] = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR_TX | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+//  volatile uint32_t *sendPixels = buf+4;
+  volatile uint32_t *sendPixels = (volatile uint32_t *)GrabFreeDMASourceBytes(4+task->size);
+  sendPixels[0] = BCM2835_SPI0_CS_TA | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
   memcpy((void*)(sendPixels+1), (void*)&task->data, task->size);
- 
-  volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+
+  //volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+  volatile DMAControlBlock *cb = GrabFreeCBs(7);
+//  printf("Got cbs at index %d\n", cb - (volatile DMAControlBlock *)dmaCb.virtualAddr);
   volatile DMAControlBlock *startSend = &cb[0];
   volatile DMAControlBlock *clear_dc_gpio_line = &cb[1];
   volatile DMAControlBlock *datacb = &cb[2];
   volatile DMAControlBlock *ta_disable = &cb[3];
   volatile DMAControlBlock *set_dc_gpio_line = &cb[4];
   volatile DMAControlBlock *txcb = &cb[5];
-  volatile DMAControlBlock *rxcb = &cb[6];
+//  volatile DMAControlBlock *rxcb = &cb[6];
+  volatile DMAControlBlock *rxcb = (volatile DMAControlBlock *)dmaRecvCb.virtualAddr;
 
   startSend->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   startSend->src = VIRT_TO_BUS(dmaSourceBuffer, disableTA);
@@ -297,7 +373,6 @@ void SPIDMATransfer(SPITask *task)
   startSend->next = VIRT_TO_BUS(dmaCb, clear_dc_gpio_line);
   startSend->debug = 0;
   startSend->reserved = 0;
-  dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, startSend);
 
   clear_dc_gpio_line->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   clear_dc_gpio_line->src = VIRT_TO_BUS(dmaSourceBuffer, set_gpio);
@@ -344,16 +419,63 @@ void SPIDMATransfer(SPITask *task)
   txcb->debug = 0;
   txcb->reserved = 0;
 
+  WaitForDMAFinished();
+
   rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   rxcb->dst = 0;
   rxcb->len = 1 + task->size;
   rxcb->stride = 0;
   rxcb->next = 0;
+//  rxcb->next = VIRT_TO_BUS(dmaRecvCb, rxcb);
   rxcb->debug = 0;
   rxcb->reserved = 0;
-  dmaRx->cbAddr = VIRT_TO_BUS(dmaCb, rxcb);
 
+
+//  dmaTx->cs = BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
+//  dmaRx->cs = BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
+  __sync_synchronize();
+  /*
+  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+    */
+  __sync_synchronize();
+
+  if (!dmaTx->cbAddr || !dmaSendTail)
+  {
+    dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, startSend);
+//    printf("Started new TX\n");
+  }
+  else
+  {
+    dmaSendTail->next = VIRT_TO_BUS(dmaCb, startSend);
+//    printf("Queued to existing TX\n");
+  }
+  dmaSendTail = txcb;
+
+  dmaRx->cbAddr = VIRT_TO_BUS(dmaRecvCb, rxcb);
+/*
+  if (!dmaRx->cbAddr || !dmaRecvTail)
+  {
+    dmaRx->cbAddr = VIRT_TO_BUS(dmaCb, rxcb);
+    printf("Started new RX\n");
+  }
+  else
+  {
+    dmaRecvTail->next = VIRT_TO_BUS(dmaCb, rxcb); 
+    printf("Queued to existing RX\n");
+  }
+  dmaRecvTail = rxcb;
+  */
+/*
+  if (!(dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+  {
+    dmaRx->cbAddr = VIRT_TO_BUS(dmaRecvCb, rxcb);
+    dmaRx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
+  }
+*/
   __sync_synchronize();
   dmaTx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
   dmaRx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;

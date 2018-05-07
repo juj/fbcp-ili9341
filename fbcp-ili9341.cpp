@@ -205,7 +205,8 @@ int main()
     // +1 byte to wait for that FIFO to flush,
     // after which the communication is ready to start pushing pixels. This totals to 8 bytes, or 4 pixels, meaning that if there are 4 unchanged pixels or less between two adjacent dirty
     // spans, it is all the same to just update through those pixels as well to not have to wait to flush the FIFO.
-#define SPAN_MERGE_THRESHOLD 4
+//#define SPAN_MERGE_THRESHOLD 4
+#define SPAN_MERGE_THRESHOLD 320
 
     // Collect all spans in this image
     int numSpans = 0;
