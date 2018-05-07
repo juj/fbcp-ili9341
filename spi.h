@@ -123,7 +123,7 @@ typedef struct __attribute__((packed)) SPITask
     memcpy(t->data, data_buffer, sizeof(data_buffer)); \
     CommitTask(t); \
   } while(0)
-
+/*
 #define QUEUE_MOVE_CURSOR_TASK(cursor, pos) do { \
     SPITask *task = AllocTask(2); \
     task->cmd = (cursor); \
@@ -132,10 +132,10 @@ typedef struct __attribute__((packed)) SPITask
     bytesTransferred += 3; \
     CommitTask(task); \
   } while(0)
-
-#define QUEUE_SET_X_WINDOW_TASK(x, endX) do { \
+*/
+#define QUEUE_SET_WRITE_WINDOW_TASK(cursor, x, endX) do { \
     SPITask *task = AllocTask(4); \
-    task->cmd = DISPLAY_SET_CURSOR_X; \
+    task->cmd = (cursor); \
     task->data[0] = (x) >> 8; \
     task->data[1] = (x) & 0xFF; \
     task->data[2] = (endX) >> 8; \

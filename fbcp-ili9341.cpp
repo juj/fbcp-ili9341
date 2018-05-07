@@ -290,21 +290,31 @@ int main()
     // Submit spans
     for(Span *i = head; i; i = i->next)
     {
+      // One pixel spans are forbidden:
+      if (i->size == 1)
+      {
+        if (i->endX < DISPLAY_DRAWABLE_WIDTH) { ++i->endX; ++i->lastScanEndX; }
+        else --i->x;
+        ++i->size;
+      }
       // Update the write cursor if needed
       if (spiY != i->y)
       {
-        QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
+//        QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, DISPLAY_DRAWABLE_HEIGHT-1);
         spiY = i->y;
       }
 
       if (i->endY > i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
       {
-        QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + i->endX - 1);
+//        QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + i->endX - 1);
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, i->x + displayXOffset, displayXOffset + i->endX - 1);
         spiX = i->x;
         spiEndX = i->endX;
       }
       else // Singleline span
       {
+#if 0
         if (spiEndX < i->endX) // Need to push the X end window?
         {
           // We are doing a single line span and need to increase the X window. If possible,
@@ -316,14 +326,19 @@ int main()
               if (j->endX >= i->endX) nextEndX = j->endX;
               break;
             }
-          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + nextEndX - 1);
+//          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + nextEndX - 1);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, i->x + displayXOffset, displayXOffset + nextEndX - 1);
           spiX = i->x;
           spiEndX = nextEndX;
         }
-        else if (spiX != i->x)
+        else
+#endif
+        if (spiX != i->x || spiEndX < i->endX)
         {
-          QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
+//          QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, DISPLAY_DRAWABLE_WIDTH-1);
           spiX = i->x;
+          spiEndX = DISPLAY_DRAWABLE_WIDTH - displayXOffset;
         }
       }
 

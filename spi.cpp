@@ -49,17 +49,12 @@ void DumpSPICS(uint32_t reg)
 // https://www.raspberrypi.org/forums/viewtopic.php?f=44&t=181154
 #define UNLOCK_FAST_8_CLOCKS_SPI() (spi->dlen = 2)
 
+bool previousTaskWasSPI = true;
+
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
 {
-  // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   uint32_t cs;
-  while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE))
-    if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
-      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-
-  if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
-
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
 
@@ -69,16 +64,22 @@ void RunSPITask(SPITask *task)
 #define DMA_IS_FASTER_THAN_POLLED_SPI 240
   // Do a DMA transfer if this task is suitable in size for DMA to handle
 #ifdef USE_DMA_TRANSFERS
-  if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)
+  if (tEnd - tStart >= 4 && /*DMA_IS_FASTER_THAN_POLLED_SPI*/ (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y/* && previousTaskWasSPI*/))// || task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_Y || task->cmd == DISPLAY_SET_CURSOR_X)//DMA_IS_FASTER_THAN_POLLED_SPI)// && tEnd - tStart <= 4090)
   {
     SPIDMATransfer(task);
-
-    // After having done a DMA transfer, the SPI0 DLEN register has reset to zero, so restore it to fast mode.
-    UNLOCK_FAST_8_CLOCKS_SPI();
+    previousTaskWasSPI = false;
   }
   else
 #endif
   {
+    if (!previousTaskWasSPI)
+    {
+      WaitForDMAFinished();
+      spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR_TX;
+      // After having done a DMA transfer, the SPI0 DLEN register has reset to zero, so restore it to fast mode.
+      UNLOCK_FAST_8_CLOCKS_SPI();
+    }
+    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
     CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
     spi->fifo = task->cmd;
@@ -96,6 +97,14 @@ void RunSPITask(SPITask *task)
 // TODO:      else asm volatile("yield");
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
     }
+
+    while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE))
+      if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
+        spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+
+    if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+
+    previousTaskWasSPI = true;
   }
 }
 
@@ -130,7 +139,7 @@ void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called 
 
 void ExecuteSPITasks()
 {
-  BEGIN_SPI_COMMUNICATION();
+//  BEGIN_SPI_COMMUNICATION();
   {
     while(spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
@@ -142,7 +151,7 @@ void ExecuteSPITasks()
       }
     }
   }
-  END_SPI_COMMUNICATION();
+//  END_SPI_COMMUNICATION();
 }
 
 #if !defined(KERNEL_MODULE) && defined(USE_SPI_THREAD)
