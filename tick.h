@@ -4,7 +4,9 @@
 #include <inttypes.h>
 #include <unistd.h>
 
-uint64_t tick(void);
+// Initialized in spi.cpp along with the rest of the BCM2835 peripheral:
+extern volatile uint64_t *systemTimerRegister;
+#define tick() (*systemTimerRegister)
 
 #endif
 
