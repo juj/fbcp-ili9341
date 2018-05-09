@@ -302,7 +302,7 @@ int main()
       if (spiY != i->y)
       {
 //        QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
-        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, DISPLAY_DRAWABLE_HEIGHT-1);
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, displayYOffset + DISPLAY_DRAWABLE_HEIGHT-1);
         spiY = i->y;
       }
 
@@ -337,7 +337,7 @@ int main()
         if (spiX != i->x || spiEndX < i->endX)
         {
 //          QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
-          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, DISPLAY_DRAWABLE_WIDTH-1);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + DISPLAY_DRAWABLE_WIDTH-1);
           spiX = i->x;
           spiEndX = DISPLAY_DRAWABLE_WIDTH - displayXOffset;
         }
