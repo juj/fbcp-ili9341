@@ -197,7 +197,7 @@ int InitSPI()
 #endif
 
   // Estimate how many microseconds transferring a single byte over the SPI bus takes?
-  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR * 9.0/8.0/*BCM2835 SPI master idles for one bit per each byte*/ / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
+  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
 
 #if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
