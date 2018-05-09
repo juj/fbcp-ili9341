@@ -39,6 +39,12 @@ void DumpSPICS(uint32_t reg)
   PRINT_FLAG(BCM2835_SPI0_CS_RXF);
 }
 
+// Errata to BCM2835 behavior: documentation states that the SPI0 DLEN register is only used for DMA. However, even when DMA is not being utilized, setting it from
+// a value != 0 or 1 gets rid of an excess idle clock cycle that is present when transmitting each byte. (by default in Polled SPI Mode each 8 bits transfer in 9 clocks)
+// With DLEN=2 each byte is clocked to the bus in 8 cycles, observed to improve max throughput from 56.8mbps to 63.3mbps (+11.4%, quite close to the theoretical +12.5%)
+// https://www.raspberrypi.org/forums/viewtopic.php?f=44&t=181154
+#define UNLOCK_FAST_8_CLOCKS_SPI() (spi->dlen = 2)
+
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
 {
@@ -67,8 +73,13 @@ void RunSPITask(SPITask *task)
 #define DMA_IS_FASTER_THAN_POLLED_SPI 240
   // Do a DMA transfer if this task is suitable in size for DMA to handle
 #ifdef USE_DMA_TRANSFERS
-  if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)// && tEnd - tStart <= 4090)
+  if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)
+  {
     SPIDMATransfer(task);
+
+    // After having done a DMA transfer, the SPI0 DLEN register has reset to zero, so restore it to fast mode.
+    UNLOCK_FAST_8_CLOCKS_SPI();
+  }
   else
 #endif
   {
@@ -239,6 +250,9 @@ int InitSPI()
 #ifdef USE_DMA_TRANSFERS
   InitDMA();
 #endif
+
+  // Enable fast 8 clocks per byte transfer mode, instead of slower 9 clocks per byte.
+  UNLOCK_FAST_8_CLOCKS_SPI();
 
 #if !defined(KERNEL_MODULE) && (!defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES))
   printf("Initializing display\n");
