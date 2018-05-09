@@ -419,7 +419,22 @@ void SPIDMATransfer(SPITask *task)
   txcb->debug = 0;
   txcb->reserved = 0;
 
-  WaitForDMAFinished();
+  static int pendingTaskBytes = 1;
+//  WaitForDMAFinished();
+  double pendingTaskUSecs = pendingTaskBytes * 0.12 /*usecs/byte*/;
+  if (pendingTaskUSecs > 10)
+    usleep(pendingTaskUSecs);
+
+//  uint64_t t0 = tick();
+    while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+      ;
+    while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+      ;
+    dmaSendTail = 0;
+
+ // uint64_t t1 = tick();
+ // printf("%d data bytes took %llu usecs, %f usecs/byte\n", pendingTaskBytes, t1-t0, (double)(t1-t0)/pendingTaskBytes);
+  pendingTaskBytes = task->size;
 
   rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
