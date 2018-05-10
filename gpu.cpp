@@ -273,7 +273,7 @@ void InitGPU()
   // TODO: Make this dynamic somehow?
 
 #ifdef FREEPLAYTECH_WAVESHARE32B
-  /* In /opt/retropie/configs/nes/retroarch.cfg put:
+  /* In /opt/retropie/configs/nes/retroarch.cfg, if running fceumm NES emulator, put:
       aspect_ratio_index = "22"
       custom_viewport_width = "256"
       custom_viewport_height = "224"
@@ -281,6 +281,14 @@ void InitGPU()
       custom_viewport_y = "8"
       (see https://github.com/RetroPie/RetroPie-Setup/wiki/Smaller-RetroArch-Screen)
     and configure /boot/config.txt to 320x240 HDMI mode to get pixel perfect rendering without blurring scaling.
+
+    Curiously, if using quicknes emulator instead, it seems to render to a horizontally 16 pixels smaller resolution. Therefore put in
+      aspect_ratio_index = "22"
+      custom_viewport_width = "240"
+      custom_viewport_height = "224"
+      custom_viewport_x = "40"
+      custom_viewport_y = "8"
+    instead for pixel perfect rendering.
   */
   // NES:
   double overscanLeft = 9.0/320;
