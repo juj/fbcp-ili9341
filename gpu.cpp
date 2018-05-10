@@ -81,6 +81,12 @@ void SnapshotFramebuffer(uint16_t *destination)
 
 void VsyncCallback(DISPMANX_UPDATE_HANDLE_T u, void *arg)
 {
+  // If TARGET_FRAME_RATE is e.g. 30 or 20, decimate only every second or third vsync callback to be processed.
+  static int frameSkipCounter = 0;
+  frameSkipCounter += TARGET_FRAME_RATE;
+  if (frameSkipCounter < 60) return;
+  frameSkipCounter -= 60;
+
   SnapshotFramebuffer(videoCoreFramebuffer[0]);
   memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
   __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);

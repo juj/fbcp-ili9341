@@ -2,7 +2,7 @@
 
 #include "config.h"
 
-// Configures the desired display update rate. Use 120 for max performance/minimized latency, and 60/50/30/24 etc. for regular content, or to save battery.
+// Configure the desired display update rate. Use 120 for max performance/minimized latency, and 60/50/30/24 etc. for regular content, or to save battery.
 #if defined(PI_ZERO) || defined(USE_GPU_VSYNC)
 #define TARGET_FRAME_RATE 60
 #else

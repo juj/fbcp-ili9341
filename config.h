@@ -28,11 +28,22 @@
 // is known to run at native 60Hz.
 // #define USE_GPU_VSYNC
 
+// Always enable GPU VSync on the Pi. Even though it is suboptimal and can cause stuttering, it saves battery.
+#if defined(PI_ZERO) && !defined(USE_GPU_VSYNC)
+#define USE_GPU_VSYNC
+#endif
+
+#ifndef PI_ZERO
+// If defined, communication with the SPI bus is handled with a dedicated thread. On the Pi Zero, this doesn
+// not gain much, since it only has one hardware thread.
+#define USE_SPI_THREAD
+#endif
+
 // If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's
 // too much for the display to handle)
 // #define NO_INTERLACING
 
-#if defined(FREEPLAYTECH_WAVESHARE32B) && USE_DMA_TRANSFERS && !defined(NO_INTERLACING)
+#if defined(FREEPLAYTECH_WAVESHARE32B) && USE_DMA_TRANSFERS && !defined(NO_INTERLACING) && !defined(PI_ZERO)
 // The Freeplaytech CM3/Zero displays actually only have a visible display resolution of 302x202, instead of
 // 320x240, and this is enough to give them full progressive 320x240x60fps without ever resorting to
 // interlacing.

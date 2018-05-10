@@ -171,7 +171,12 @@ int main()
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
-    const double tooMuchToUpdateUsecs = 1500000 / desiredTargetFps; // If updating the current and new frame takes more than 1.5 frames worth of allotted time, drop to interlacing.
+#ifdef PI_ZERO
+    const double timesliceToUseForScreenUpdates = 250000;
+#else
+    const double timesliceToUseForScreenUpdates = 1500000;
+#endif
+    const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
     if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
 #ifdef NO_INTERLACING
     interlacedUpdate = false;
@@ -352,6 +357,10 @@ int main()
       prevFrameEnd = curFrameEnd;
       curFrameEnd = spiTaskMemory->queueTail;
     }
+
+#ifndef USE_SPI_THREAD
+    ExecuteSPITasks();
+#endif
 
 #ifdef STATISTICS
     if (bytesTransferred > 0 && frameTimeHistorySize < FRAME_HISTORY_MAX_SIZE)
