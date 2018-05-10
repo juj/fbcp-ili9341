@@ -40,14 +40,51 @@ int excessPixelsRight = 0;
 int excessPixelsTop = 0;
 int excessPixelsBottom = 0;
 
-#ifdef USE_GPU_VSYNC
+// Tests if the pixels on the given new captured frame actually contain new image data from the previous frame
+bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer)
+{
+  for(uint32_t *newfb = (uint32_t*)possiblyNewFramebuffer, *oldfb = (uint32_t*)oldFramebuffer, *endfb = (uint32_t*)oldFramebuffer + gpuFramebufferSizeBytes/4; oldfb < endfb;)
+    if (*newfb++ != *oldfb++)
+      return true;
+  return false;
+}
 
-volatile /*bool*/uint32_t gpuFrameAvailable = 0;
+void SnapshotFramebuffer(uint16_t *destination)
+{
+  // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
+  // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
+  // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
+  // without any concept of "finished frames". If this is the case, it's possible that this could grab the same
+  // frame twice, and then potentially missing, or displaying the later appearing new frame at a very last moment.
+  // Profiling, the following two lines take around ~1msec of time.
+  int failed = vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
+  if (failed)
+  {
+    printf("vc_dispmanx_snapshot() failed with return code %d!\n", failed);
+    exit(failed);
+  }
+  // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
+  // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
+  // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
+  // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
+  // to randomly fail and then subsequently hang if called a second time)
+  uint16_t *destPtr = destination - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft;
+  failed = vc_dispmanx_resource_read_data(screen_resource, &rect, destPtr, gpuFramebufferScanlineStrideBytes);
+  if (failed)
+  {
+    printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
+    exit(failed);
+  }
+}
+
+#ifdef USE_GPU_VSYNC
 
 void VsyncCallback(DISPMANX_UPDATE_HANDLE_T u, void *arg)
 {
-  __atomic_store_n(&gpuFrameAvailable, 1, __ATOMIC_SEQ_CST);
-  syscall(SYS_futex, &gpuFrameAvailable, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread to process a new frame
+  SnapshotFramebuffer(videoCoreFramebuffer[0]);
+  memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
+  __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
+  syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
 }
 
 uint64_t EstimateFrameRateInterval()
@@ -132,8 +169,6 @@ uint64_t PredictNextFrameArrivalTime()
   else return nextFrameArrivalTime;
 }
 
-#endif // ~USE_GPU_VSYNC
-
 void *gpu_polling_thread(void*)
 {
   uint64_t lastNewFrameReceivedTime = tick();
@@ -179,30 +214,7 @@ void *gpu_polling_thread(void*)
       newfb += gpuFramebufferScanlineStrideBytes>>2;
     }
 #else
-    // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
-    // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
-    // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
-    // without any concept of "finished frames". If this is the case, it's possible that this could grab the same
-    // frame twice, and then potentially missing, or displaying the later appearing new frame at a very last moment.
-    // Profiling, the following two lines take around ~1msec of time.
-    int failed = vc_dispmanx_snapshot(display, screen_resource, (DISPMANX_TRANSFORM_T)0);
-    if (failed)
-    {
-      printf("vc_dispmanx_snapshot() failed with return code %d!\n", failed);
-      exit(failed);
-    }
-    // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
-    // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
-    // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
-    // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
-    // to randomly fail and then subsequently hang if called a second time)
-    uint16_t *destPtr = videoCoreFramebuffer[0] - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft;
-    failed = vc_dispmanx_resource_read_data(screen_resource, &rect, destPtr, gpuFramebufferScanlineStrideBytes);
-    if (failed)
-    {
-      printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
-      exit(failed);
-    }
+    SnapshotFramebuffer(videoCoreFramebuffer[0]);
 #endif
 
 #ifndef USE_GPU_VSYNC
@@ -210,14 +222,9 @@ void *gpu_polling_thread(void*)
 #endif
 
     // Check the pixel contents of the snapshot to see if we actually received a new frame to render
-    bool gotNewFramebuffer = false;
-    for(uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0], *oldfb = (uint32_t*)videoCoreFramebuffer[1], *endfb = (uint32_t*)videoCoreFramebuffer[1] + gpuFramebufferSizeBytes/4; oldfb < endfb;)
-      if (*newfb++ != *oldfb++)
-      {
-        gotNewFramebuffer = true;
-        lastNewFrameReceivedTime = t0;
-        break;
-      }
+    bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
+    if (gotNewFramebuffer)
+      lastNewFrameReceivedTime = t0;
 
     uint64_t t1 = tick();
     if (!gotNewFramebuffer)
@@ -235,6 +242,8 @@ void *gpu_polling_thread(void*)
     }
   }
 }
+
+#endif // ~USE_GPU_VSYNC
 
 int RoundUpToMultipleOf(int val, int multiple)
 {
@@ -361,13 +370,13 @@ void InitGPU()
   printf("GPU grab rectangle is offset x=%d,y=%d, size w=%dxh=%d, aspect ratio=%f\n", excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight, (double)scaledWidth / scaledHeight);
   vc_dispmanx_rect_set(&rect, excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
 
-  pthread_t gpuPollingThread;
-  int rc = pthread_create(&gpuPollingThread, NULL, gpu_polling_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
-  if (rc != 0) FATAL_ERROR("Failed to create GPU polling thread!");
-
 #ifdef USE_GPU_VSYNC
   // Register to receive vsync notifications. This is a heuristic, since the application might not be locked at vsync, and even
   // if it was, this signal is not a guaranteed edge trigger for availability of new frames.
   vc_dispmanx_vsync_callback(display, VsyncCallback, 0);
+#else
+  pthread_t gpuPollingThread;
+  int rc = pthread_create(&gpuPollingThread, NULL, gpu_polling_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
+  if (rc != 0) FATAL_ERROR("Failed to create GPU polling thread!");
 #endif
 }

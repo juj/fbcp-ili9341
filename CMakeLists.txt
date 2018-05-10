@@ -14,6 +14,7 @@ endif()
 
 if (PI_ZERO)
   message(STATUS "Targeting Raspberry Pi Zero (W)")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DPI_ZERO=1")
 elseif ()
   message(STATUS "Enabling optimization flags that target Raspberry Pi 3 Model B hardware. Pass -DPI_ZERO=ON to target Raspberry Pi Zero (W) instead.")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -march=armv8-a+crc -mcpu=cortex-a53 -mtune=cortex-a53 -mfpu=neon-fp-armv8 -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")

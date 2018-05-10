@@ -147,7 +147,9 @@ int main()
     {
       RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
+#ifndef USE_GPU_VSYNC
       AddHistogramSample();
+#endif
       memcpy(gpuFramebuffer, framebuffer[0], gpuFramebufferSizeBytes);
     }
 
