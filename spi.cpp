@@ -66,9 +66,9 @@ void RunSPITask(SPITask *task)
   // Do a DMA transfer if this task is suitable in size for DMA to handle
 #ifdef USE_DMA_TRANSFERS
   //if (tEnd - tStart >= 4 && /*DMA_IS_FASTER_THAN_POLLED_SPI*/ (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y/* && previousTaskWasSPI*/))// || task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_Y || task->cmd == DISPLAY_SET_CURSOR_X)//DMA_IS_FASTER_THAN_POLLED_SPI)// && tEnd - tStart <= 4090)
-  if (task->size > 32 && task->size % 4 == 0 && task->cmd == DISPLAY_WRITE_PIXELS)
+  if (task->size >= 4/* && task->size % 4 == 0*/ && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
   {
-    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
+//    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
     SPIDMATransfer(task);
     previousTaskWasSPI = false;
   }

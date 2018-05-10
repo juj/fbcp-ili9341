@@ -357,14 +357,6 @@ int main()
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
       }
       CommitTask(task);
-      /*
-      int yAdvance = task->size / (spiEndX - spiX);
-      int xAdvance = task->size - yAdvance * (spiEndX - spiX);
-      spiX += xAdvance;
-      spiY += yAdvance;
-      */
-      spiX = -1;
-      spiY = -1;
     }
 
 #ifdef KERNEL_MODULE_CLIENT

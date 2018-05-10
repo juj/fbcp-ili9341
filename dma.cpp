@@ -346,9 +346,6 @@ void WaitForDMAFinished()
 
 void SPIDMATransfer(SPITask *task)
 {
-  while (!(spi->cs & BCM2835_SPI0_CS_DONE))
-    ;
-
   // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
   // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
   // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to an intermediate 'dmaSourceMemory' memory area to perform
@@ -444,7 +441,6 @@ void SPIDMATransfer(SPITask *task)
 
   static uint64_t taskStartTime = 0;
   static int pendingTaskBytes = 1;
-//  WaitForDMAFinished();
   const double spiSpeedUSecsPerByte = SPI_BUS_CLOCK_DIVISOR /*CDIV*/ * 8.0/*bits-to-bytes*/ / 400/*mbits/sec*/;
   double pendingTaskUSecs = pendingTaskBytes * spiSpeedUSecsPerByte;
   pendingTaskUSecs -= tick() - taskStartTime;
@@ -473,35 +469,18 @@ void SPIDMATransfer(SPITask *task)
     dmaRecvTail->next = VIRT_TO_BUS(dmaCb, rxcb); 
   dmaRecvTail = rxcb;
 
+  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
   spi->fifo = task->cmd;
   while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
   spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
 
-//        DumpTI(dmaTx->cb.ti);
-//  printf("Running DMA of %d bytes\n", task->size);
   __sync_synchronize();
   dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
   dmaRx->cs = BCM2835_DMA_CS_ACTIVE;
   __sync_synchronize();
-//        DumpTI(dmaTx->cb.ti);
   taskStartTime = tick();
-//  printf("Started DMA, waiting\n");
-  WaitForDMAFinished();
-  /*
-  printf("Wait done\n");
-        DumpCS(dmaTx->cs);
-        DumpSPICS(spi->cs);
-        DumpTI(dmaTx->cb.ti);
-        DumpDebug(dmaTx->cb.debug);
-        printf("DMATX cbAddr: %p\n", dmaTx->cbAddr);
-        DumpCS(dmaRx->cs);
-        DumpSPICS(spi->cs);
-        DumpTI(dmaRx->cb.ti);
-        DumpDebug(dmaRx->cb.debug);
-        printf("DMARX cbAddr: %p\n", dmaRx->cbAddr);
-        */
 }
 
 #endif
