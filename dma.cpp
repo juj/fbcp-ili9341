@@ -130,6 +130,7 @@ struct MailboxMessage
 
 // Memory allocation flags
 #define MEM_ALLOC_FLAG_DIRECT (1 << 2) // Allocate uncached memory that bypasses L1 and L2 cache on loads and stores
+#define MEM_ALLOC_FLAG_COHERENT (1 << 3) // Non-allocating in L2 but coherent
 
 // Sends a mailbox message with 1xuint32 payload
 uint32_t Mailbox(uint32_t messageId, uint32_t payload0)
@@ -162,7 +163,12 @@ GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes)
 {
   GpuMemory mem;
   mem.sizeBytes = ALIGN_UP(numBytes, PAGE_SIZE);
-  mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/MEM_ALLOC_FLAG_DIRECT);
+#ifdef PI_ZERO
+  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT | MEM_ALLOC_FLAG_COHERENT;
+#else
+  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT;
+#endif
+  mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/allocationFlags);
   mem.busAddress = Mailbox(MEM_LOCK_MESSAGE, mem.allocationHandle);
   mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, BUS_TO_PHYS(mem.busAddress));
   if (mem.virtualAddr == MAP_FAILED) FATAL_ERROR("Failed to mmap GPU memory!");
