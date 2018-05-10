@@ -49,9 +49,6 @@ int main()
   memset(framebuffer[0], 0, gpuFramebufferSizeBytes); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, gpuFramebufferSizeBytes); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
 
-  uint16_t *gpuFramebuffer = (uint16_t *)malloc(gpuFramebufferSizeBytes);
-  memset(gpuFramebuffer, 0, gpuFramebufferSizeBytes); // third buffer contains last seen GPU memory contents, used to compare polled frames to whether they actually have changed.
-
   InitStatistics();
 
   uint32_t curFrameEnd = spiTaskMemory->queueTail;
@@ -153,7 +150,6 @@ int main()
 #ifndef USE_GPU_VSYNC
       AddHistogramSample();
 #endif
-      memcpy(gpuFramebuffer, framebuffer[0], gpuFramebufferSizeBytes);
     }
 
     // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
