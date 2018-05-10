@@ -28,13 +28,13 @@
 // is known to run at native 60Hz.
 // #define USE_GPU_VSYNC
 
-// Always enable GPU VSync on the Pi. Even though it is suboptimal and can cause stuttering, it saves battery.
+// Always enable GPU VSync on the Pi Zero. Even though it is suboptimal and can cause stuttering, it saves battery.
 #if defined(PI_ZERO) && !defined(USE_GPU_VSYNC)
 #define USE_GPU_VSYNC
 #endif
 
 #ifndef PI_ZERO
-// If defined, communication with the SPI bus is handled with a dedicated thread. On the Pi Zero, this doesn
+// If defined, communication with the SPI bus is handled with a dedicated thread. On the Pi Zero, this does
 // not gain much, since it only has one hardware thread.
 #define USE_SPI_THREAD
 #endif

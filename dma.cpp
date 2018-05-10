@@ -365,7 +365,7 @@ void SPIDMATransfer(SPITask *task)
 //  volatile DMAControlBlock *rxcb = &cb[6];
   volatile DMAControlBlock *rxcb = (volatile DMAControlBlock *)dmaRecvCb.virtualAddr;
 
-  startSend->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
+  startSend->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   startSend->src = VIRT_TO_BUS(dmaSourceBuffer, disableTA);
   startSend->dst = DMA_SPI_CS_PHYS_ADDRESS; // Send SPI command
   startSend->len = sizeof(uint32_t);
@@ -374,7 +374,7 @@ void SPIDMATransfer(SPITask *task)
   startSend->debug = 0;
   startSend->reserved = 0;
 
-  clear_dc_gpio_line->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
+  clear_dc_gpio_line->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   clear_dc_gpio_line->src = VIRT_TO_BUS(dmaSourceBuffer, set_gpio);
   clear_dc_gpio_line->dst = DMA_GPIO_CLEAR_PHYS_ADDRESS; // Set GPIO pin low
   clear_dc_gpio_line->len = 4;
@@ -383,7 +383,7 @@ void SPIDMATransfer(SPITask *task)
   clear_dc_gpio_line->debug = 0;
   clear_dc_gpio_line->reserved = 0;
 
-  datacb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(1);
+  datacb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(1);
   datacb->src = VIRT_TO_BUS(dmaSourceBuffer, sendCmd);
   datacb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Send SPI command
   datacb->len = sizeof(uint8_t) + sizeof(uint32_t);
@@ -392,7 +392,7 @@ void SPIDMATransfer(SPITask *task)
   datacb->debug = 0;
   datacb->reserved = 0;
 
-  ta_disable->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
+  ta_disable->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   ta_disable->src = VIRT_TO_BUS(dmaSourceBuffer, disableTA);
   ta_disable->dst = DMA_SPI_CS_PHYS_ADDRESS; // Send SPI command
   ta_disable->len = sizeof(uint32_t);
@@ -401,7 +401,7 @@ void SPIDMATransfer(SPITask *task)
   ta_disable->debug = 0;
   ta_disable->reserved = 0;
 
-  set_dc_gpio_line->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
+  set_dc_gpio_line->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(4);
   set_dc_gpio_line->src = VIRT_TO_BUS(dmaSourceBuffer, set_gpio);
   set_dc_gpio_line->dst = DMA_GPIO_SET_PHYS_ADDRESS; // Set GPIO pin high
   set_dc_gpio_line->len = 4;
@@ -410,7 +410,7 @@ void SPIDMATransfer(SPITask *task)
   set_dc_gpio_line->debug = 0;
   set_dc_gpio_line->reserved = 0;
 
-  txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP | BCM2835_DMA_TI_NO_WIDE_BURSTS;
+  txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS;
   txcb->src = VIRT_TO_BUS(dmaSourceBuffer, sendPixels);
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
   txcb->len = task->size + sizeof(uint32_t);
@@ -419,21 +419,20 @@ void SPIDMATransfer(SPITask *task)
   txcb->debug = 0;
   txcb->reserved = 0;
 
+  static uint64_t taskStartTime = 0;
   static int pendingTaskBytes = 1;
 //  WaitForDMAFinished();
-  double pendingTaskUSecs = pendingTaskBytes * 0.12 /*usecs/byte*/;
-  if (pendingTaskUSecs > 10)
-    usleep(pendingTaskUSecs);
+  const double spiSpeedUSecsPerByte = SPI_BUS_CLOCK_DIVISOR /*CDIV*/ * 8.0/*bits-to-bytes*/ / 400/*mbits/sec*/;
+  double pendingTaskUSecs = pendingTaskBytes * spiSpeedUSecsPerByte;
+  pendingTaskUSecs -= tick() - taskStartTime;
+  if (pendingTaskUSecs > 100)
+    usleep(MAX(pendingTaskUSecs-70, 0));
 
-//  uint64_t t0 = tick();
-    while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-      ;
-    while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
-      ;
-    dmaSendTail = 0;
-
- // uint64_t t1 = tick();
- // printf("%d data bytes took %llu usecs, %f usecs/byte\n", pendingTaskBytes, t1-t0, (double)(t1-t0)/pendingTaskBytes);
+  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+  dmaSendTail = 0;
   pendingTaskBytes = task->size;
 
   rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
@@ -442,31 +441,18 @@ void SPIDMATransfer(SPITask *task)
   rxcb->len = 1 + task->size;
   rxcb->stride = 0;
   rxcb->next = 0;
-//  rxcb->next = VIRT_TO_BUS(dmaRecvCb, rxcb);
   rxcb->debug = 0;
   rxcb->reserved = 0;
 
-
-//  dmaTx->cs = BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
-//  dmaRx->cs = BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
-  __sync_synchronize();
-  /*
-  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-    ;
-  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
-    ;
-    */
   __sync_synchronize();
 
   if (!dmaTx->cbAddr || !dmaSendTail)
   {
     dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, startSend);
-//    printf("Started new TX\n");
   }
   else
   {
     dmaSendTail->next = VIRT_TO_BUS(dmaCb, startSend);
-//    printf("Queued to existing TX\n");
   }
   dmaSendTail = txcb;
 
@@ -492,9 +478,10 @@ void SPIDMATransfer(SPITask *task)
   }
 */
   __sync_synchronize();
-  dmaTx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
-  dmaRx->cs = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES;
+  dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
+  dmaRx->cs = BCM2835_DMA_CS_ACTIVE;
   __sync_synchronize();
+  taskStartTime = tick();
 }
 
 #endif
