@@ -9,6 +9,7 @@
 #include <sys/mman.h>
 #include <pthread.h>
 #include <errno.h>
+#include <bcm_host.h>
 #endif
 
 #include "config.h"
@@ -198,18 +199,11 @@ int InitSPI()
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835);
 
 #else // Userland version
-  // Find the memory address to the BCM2835 peripherals
-  FILE *fp = fopen("/proc/device-tree/soc/ranges", "rb");
-  if (!fp) FATAL_ERROR("Failed to open /proc/device-tree/soc/ranges!");
-  struct { uint32_t reserved, peripheralsAddress, peripheralsSize; } ranges;
-  int n = fread(&ranges, sizeof(ranges), 1, fp);
-  fclose(fp);
-  if (n != 1) FATAL_ERROR("Failed to read /proc/device-tree/soc/ranges!");
-
   // Memory map GPIO and SPI peripherals for direct access
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
-  bcm2835 = mmap(NULL, be32toh(ranges.peripheralsSize), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, be32toh(ranges.peripheralsAddress));
+  printf("bcm_host_get_peripheral_address: %p, bcm_host_get_peripheral_size: %u, bcm_host_get_sdram_address: %p\n", bcm_host_get_peripheral_address(), bcm_host_get_peripheral_size(), bcm_host_get_sdram_address());
+  bcm2835 = mmap(NULL, bcm_host_get_peripheral_size(), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, bcm_host_get_peripheral_address());
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
