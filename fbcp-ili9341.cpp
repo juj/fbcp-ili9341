@@ -72,6 +72,12 @@ int main()
         syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Start sleeping until we get new tasks
       }
 
+#ifdef USE_GPU_VSYNC
+      // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
+      // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
+      SnapshotFramebuffer(videoCoreFramebuffer[1]);
+#endif
+
     bool spiThreadWasWorkingHardBefore = false;
 
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
@@ -141,10 +147,7 @@ int main()
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 #endif
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
-    }
 
-    if (gotNewFramebuffer)
-    {
       RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
 #ifndef USE_GPU_VSYNC

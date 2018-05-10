@@ -4,6 +4,7 @@
 
 void InitGPU();
 void AddHistogramSample();
+void SnapshotFramebuffer(uint16_t *destination);
 uint64_t EstimateFrameRateInterval();
 uint64_t PredictNextFrameArrivalTime();
 
