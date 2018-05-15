@@ -1,12 +1,27 @@
 #pragma once
 
+#ifdef ILI9341
+
 // Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
 // 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
 // actually work either, and only 6, 8 and 10 were functioning properly.
 #ifndef SPI_BUS_CLOCK_DIVISOR
-#define SPI_BUS_CLOCK_DIVISOR 6
+#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file ili9341.h for details) This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
 #endif
+
+// On Adafruit PiTFT 2.8", the following speed configurations have been observed to work (on a Pi 3B):
+
+// core_freq=400: CDIV=6, results in 66.67MHz
+// core_freq=294: CDIV=4, results in 73.50MHz
+
+// While the following values were seen to not work:
+
+// core_freq=400: CDIV=4, would result in 100.00MHz, but this was too fast for the display
+// core_freq=320: CDIV=4, would result in 80.00MHz, but this was too fast for the display
+// core_freq=300: CDIV=4, would result in 75.00MHz, and would work for ~99% of the time, but develop rare occassional pixel glitches once a minute or so.
+// core_freq=296: CDIV=4, would result in 74.50MHz, would produce tiny individual pixel glitches very rarely, once every few 10 minutes or so.
+
 
 // Data specific to the ILI9341 controller
 #define DISPLAY_BYTESPERPIXEL 2
@@ -39,3 +54,5 @@
 #endif
 
 void InitILI9341(void);
+
+#endif
