@@ -3,6 +3,8 @@
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 
+#define ABS(x) ((x) < 0 ? (-(x)) : (x))
+
 #ifndef ALIGN_UP
 #define ALIGN_UP(ptr, alignment) ((ptr) + ((alignment)-1)) & ~((alignment)-1);
 #endif
