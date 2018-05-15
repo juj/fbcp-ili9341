@@ -16,7 +16,8 @@
 #include "util.h"
 
 volatile uint64_t timeWastedPollingGPU = 0;
-volatile int statsSpiBusSpeed = 0;
+volatile float statsSpiBusSpeed = 0;
+volatile int statsBcmCoreSpeed = 0;
 volatile int statsCpuFrequency = 0;
 volatile double statsCpuTemperature = 0;
 double spiThreadUtilizationRate;
@@ -33,6 +34,7 @@ char spiBusDataRateText[32] = {};
 uint16_t spiUsageColor = 0, fpsColor = 0;
 char statsFrameSkipText[32] = {};
 char spiSpeedText[32] = {};
+char spiSpeedText2[32] = {};
 char cpuTemperatureText[32] = {};
 uint16_t cpuTemperatureColor = 0;
 char gpuPollingWastedText[32] = {};
@@ -56,7 +58,9 @@ void *poll_thread(void *unused)
     char *s = t;
     while(*s && *s != '=') ++s;
     if (*s == '=') ++s;
-    statsSpiBusSpeed = atoi(s)/1000000;
+    int freq = atoi(s);
+    statsBcmCoreSpeed = freq/1000000;
+    statsSpiBusSpeed = (float)freq/(1000000*spi->clk);
 
     // CPU temperature
     handle = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
@@ -92,10 +96,11 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, statsFrameSkipText, strlen(fpsText)*6, 1, RGB565(31,0,0), 0);
 #ifdef USE_SPI_THREAD
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 45, 1, spiUsageColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 50, 1, spiUsageColor, 0);
 #endif
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 75, 1, 0xFFFF, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 80, 1, 0xFFFF, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 140, 1, RGB565(31,14,20), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText2, 140, 10, RGB565(10,24,31), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 210, 1, cpuTemperatureColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 242, 1, gpuPollingWastedColor, 0);
 }
@@ -135,8 +140,11 @@ void RefreshStatisticsOverlayText()
 
   statsBytesTransferred = 0;
 
-  if (statsSpiBusSpeed > 0 && statsCpuFrequency > 0) sprintf(spiSpeedText, "%d/%dMHz", statsCpuFrequency, statsSpiBusSpeed);
+  if (statsBcmCoreSpeed > 0 && statsCpuFrequency > 0) sprintf(spiSpeedText, "%d/%dMHz", statsCpuFrequency, statsBcmCoreSpeed);
   else spiSpeedText[0] = '\0';
+
+  if (statsSpiBusSpeed > 0) sprintf(spiSpeedText2, "SPI:%.3fMHz (/%d)", statsSpiBusSpeed, spi->clk);
+  else spiSpeedText2[0] = '\0';
 
   if (statsCpuTemperature > 0)
   {

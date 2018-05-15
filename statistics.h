@@ -11,7 +11,8 @@ void DrawStatisticsOverlay(uint16_t *framebuffer);
 #ifdef STATISTICS
 
 extern volatile uint64_t timeWastedPollingGPU;
-extern volatile int statsSpiBusSpeed;
+extern volatile float statsSpiBusSpeed;
+extern volatile int statsBcmCoreSpeed;
 extern volatile int statsCpuFrequency;
 extern volatile double statsCpuTemperature;
 extern double spiThreadUtilizationRate;
