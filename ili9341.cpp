@@ -1,4 +1,7 @@
 #include "config.h"
+
+#ifdef ILI9341
+
 #include "spi.h"
 
 #include <memory.h>
@@ -54,8 +57,11 @@ void InitILI9341()
     SPI_TRANSFER(0xC5/*VCOM Control 1*/, 0x3e/*VCOMH=4.250V*/, 0x28/*VCOML=-1.500V*/); // Adjusting VCOM 1 and 2 can control display brightness
     SPI_TRANSFER(0xC7/*VCOM Control 2*/, 0x86/*VCOMH=VMH-58,VCOML=VML-58*/);
 
-#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
 #define MADCTL_BGR_PIXEL_ORDER (1<<3)
+#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
+#define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
+#define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
+
 #define MADCTL_ROTATE_180_DEGREES 0xC0
     uint8_t madctl = MADCTL_BGR_PIXEL_ORDER;
 #ifdef DISPLAY_ROTATE_180_DEGREES
@@ -87,3 +93,5 @@ void InitILI9341()
   }
   END_SPI_COMMUNICATION();
 }
+
+#endif
