@@ -204,7 +204,10 @@ void *gpu_polling_thread(void*)
 
 #ifdef RANDOM_TEST_PATTERN
     // Generate random noise that updates each frame
-    uint32_t randomColor = rand() % 65536;
+    // uint32_t randomColor = rand() % 65536;
+    static int col = 0;
+    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
+    col = (col + 2) & 31;
     randomColor = randomColor | (randomColor << 16);
     uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
     for(int y = 0; y < gpuFrameHeight; ++y)
