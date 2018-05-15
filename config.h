@@ -37,6 +37,11 @@
 // If defined, communication with the SPI bus is handled with a dedicated thread. On the Pi Zero, this doesn
 // not gain much, since it only has one hardware thread.
 #define USE_SPI_THREAD
+
+// If enabled, spins up a separate background thread to poll infrequent hardware statistics. If STATISTICS
+// is not enabled, then this option has not effect.
+#define USE_STATISTICS_THREAD
+
 #endif
 
 // If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's

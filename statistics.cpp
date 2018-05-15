@@ -86,9 +86,11 @@ void *poll_thread(void *unused)
 
 int InitStatistics()
 {
+#ifdef USE_STATISTICS_THREAD
   pthread_t thread;
   int rc = pthread_create(&thread, NULL, poll_thread, NULL);
   if (rc != 0) FATAL_ERROR("Failed to create Statistics polling thread!");
+#endif
 }
 
 void DrawStatisticsOverlay(uint16_t *framebuffer)
