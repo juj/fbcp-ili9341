@@ -71,12 +71,6 @@
 // to detect if an application uses a non-60Hz update rate, and synchronizes to that instead.
 #define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
 
-// Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
-// values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
-// 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
-// actually work either, and only 6, 8 and 10 were functioning properly.
-#define SPI_BUS_CLOCK_DIVISOR 6
-
 // If defined, rotates the display 180 degrees
 // #define DISPLAY_ROTATE_180_DEGREES
 

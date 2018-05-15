@@ -1,5 +1,13 @@
 #pragma once
 
+// Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
+// values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
+// 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
+// actually work either, and only 6, 8 and 10 were functioning properly.
+#ifndef SPI_BUS_CLOCK_DIVISOR
+#define SPI_BUS_CLOCK_DIVISOR 6
+#endif
+
 // Data specific to the ILI9341 controller
 #define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x2A

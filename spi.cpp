@@ -62,12 +62,22 @@ void RunSPITask(SPITask *task)
 
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
+#ifdef ILI9486
+  // On the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
+  spi->fifo = 0x00;
+#endif
   spi->fifo = task->cmd;
 
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
   uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
+#ifdef ILI9486
+  while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
+  spi->fifo;
+  spi->fifo;
+#else
   while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
+#endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
 

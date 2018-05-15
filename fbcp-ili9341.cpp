@@ -205,7 +205,11 @@ int main()
     // +1 byte to wait for that FIFO to flush,
     // after which the communication is ready to start pushing pixels. This totals to 8 bytes, or 4 pixels, meaning that if there are 4 unchanged pixels or less between two adjacent dirty
     // spans, it is all the same to just update through those pixels as well to not have to wait to flush the FIFO.
+#ifdef ILI9486
+#define SPAN_MERGE_THRESHOLD 10
+#else
 #define SPAN_MERGE_THRESHOLD 4
+#endif
 
     // Collect all spans in this image
     int numSpans = 0;
@@ -293,7 +297,11 @@ int main()
       // Update the write cursor if needed
       if (spiY != i->y)
       {
+#ifdef ILI9486
+        QUEUE_SET_Y_WINDOW_TASK(displayYOffset + i->y, DISPLAY_HEIGHT-1);
+#else
         QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
+#endif
         spiY = i->y;
       }
 
@@ -322,7 +330,11 @@ int main()
         }
         else if (spiX != i->x)
         {
+#ifdef ILI9486
+          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + spiEndX - 1);
+#else
           QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
+#endif
           spiX = i->x;
         }
       }

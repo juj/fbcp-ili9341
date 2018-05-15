@@ -22,6 +22,7 @@ endif()
 
 option(ADAFRUIT_ILI9341_PITFT "Target Adafruit's ILI9341-based PiTFT display" OFF)
 option(FREEPLAYTECH_WAVESHARE32B "Target WaveShare32B ILI9341 display on Freeplaytech's CM3/Zero devices)" OFF)
+option(WAVESHARE35B_ILI9486 "Target Waveshare's ILI9486-based Waveshare Wavepear 3.5 inch (B) display" OFF)
 
 option(GPIO_TFT_DATA_CONTROL "Explicitly specify the Data/Control GPIO pin (sometimes also called Register Select)" 0)
 option(GPIO_TFT_RESET_PIN "Explicitly specify the Reset GPIO pin (leave out if there is no Reset line)" 0)
@@ -29,6 +30,8 @@ option(GPIO_TFT_RESET_PIN "Explicitly specify the Reset GPIO pin (leave out if t
 option(KERNEL_MODULE_CLIENT "If enabled, run fbcp-ili9341 userland program against the kernel module found in kernel/ subdirectory (must be started before the userland program)" OFF)
 
 option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" ON)
+
+option(SPI_BUS_CLOCK_DIVISOR "Specify the SPI0 CDIV register value that defines the SPI0 bus speed" 0)
 
 if (GPIO_TFT_DATA_CONTROL)
 	message(STATUS "Using GPIO pin ${GPIO_TFT_DATA_CONTROL} for Data/Control line")
@@ -38,6 +41,11 @@ endif()
 if (GPIO_TFT_RESET_PIN)
 	message(STATUS "Using GPIO pin ${GPIO_TFT_RESET_PIN} for Reset line")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_RESET_PIN=${GPIO_TFT_RESET_PIN}")
+endif()
+
+if (SPI_BUS_CLOCK_DIVISOR)
+	message(STATUS "SPI_BUS_CLOCK_DIVISOR set to ${SPI_BUS_CLOCK_DIVISOR}.")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPI_BUS_CLOCK_DIVISOR=${SPI_BUS_CLOCK_DIVISOR}")
 endif()
 
 if (KERNEL_MODULE_CLIENT)
@@ -58,6 +66,10 @@ elseif(FREEPLAYTECH_WAVESHARE32B)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DILI9341 -DFREEPLAYTECH_WAVESHARE32B")
 elseif(ILI9341)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DILI9341")
+elseif(WAVESHARE35B_ILI9486)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DILI9486 -DWAVESHARE35B_ILI9486")
+elseif(ILI9486)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DILI9486")
 else()
 	message(FATAL_ERROR "Please specify either -DADAFRUIT_ILI9341_PITFT=ON or -DFREEPLAYTECH_WAVESHARE32B=ON on command line to CMake! (or contribute ports to more displays yourself)")
 endif()
