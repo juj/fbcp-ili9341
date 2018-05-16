@@ -124,6 +124,8 @@ uint32_t Mailbox(uint32_t messageId, uint32_t payload0, uint32_t payload1, uint3
 
 #define BUS_TO_PHYS(x) ((x) & ~0xC0000000)
 
+#define VIRT_TO_BUS(block, x) ((uintptr_t)(x) - (uintptr_t)((block).virtualAddr) + (block).busAddress)
+
 // Allocates the given number of bytes in GPU side memory, and returns the virtual address and physical bus address of the allocated memory block.
 // The virtual address holds an uncached view to the allocated memory, so writes and reads to that memory address bypass the L1 and L2 caches. Use
 // this kind of memory to pass data blocks over to the DMA controller to process.
