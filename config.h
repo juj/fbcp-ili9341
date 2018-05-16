@@ -13,6 +13,10 @@
 // values can make the display fluctuate a bit erratically.
 #define FRAMERATE_HISTORY_LENGTH 400000
 
+#ifdef USE_DMA_TRANSFERS
+#define ALIGN_TASKS_FOR_DMA_TRANSFERS
+#endif
+
 // If defined, no sleeps are specified and the code runs as fast as possible. This should not improve
 // performance, as the code has been developed with the mindset that sleeping should only occur at
 // times when there is no work to do, rather than sleeping to reduce power usage. The only expected
