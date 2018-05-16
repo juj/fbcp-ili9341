@@ -250,6 +250,7 @@ void DumpTI(uint32_t reg)
   PRINT_FLAG(BCM2835_DMA_TI_INTEN);
 }
 
+#define DMA_SPI_CS_PHYS_ADDRESS 0x7E204000
 #define DMA_SPI_FIFO_PHYS_ADDRESS 0x7E204004
 
 void SPIDMATransfer(SPITask *task)
