@@ -98,6 +98,11 @@ uint64_t EstimateFrameRateInterval()
   return 1000000/60;
 }
 
+uint64_t PredictNextFrameArrivalTime()
+{
+  return tick() + EstimateFrameRateInterval();
+}
+
 #else // !USE_GPU_VSYNC
 
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
