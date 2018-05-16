@@ -141,10 +141,7 @@ int main()
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 #endif
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
-    }
 
-    if (gotNewFramebuffer)
-    {
       RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
 #ifndef USE_GPU_VSYNC
