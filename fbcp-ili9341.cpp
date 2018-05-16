@@ -240,7 +240,7 @@ int main()
 #ifdef ILI9486
 #define SPAN_MERGE_THRESHOLD 10
 #else
-#define SPAN_MERGE_THRESHOLD 4
+#define SPAN_MERGE_THRESHOLD 320
 #endif
 
     // Collect all spans in this image

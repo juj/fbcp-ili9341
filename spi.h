@@ -82,7 +82,9 @@ extern volatile SPIRegisterFile *spi;
 // been implemented with the assumption that an individual task in the buffer is considerably smaller than the size of the ring
 // buffer itself. Also, MAX_SPI_TASK_SIZE >= SCANLINE_SIZE should hold, scanline merging assumes that it can always fit one full
 // scanline bytes of data in one task.
-#define MAX_SPI_TASK_SIZE (DISPLAY_WIDTH*32)
+// In a LITE DMA engine, 65535 is max task size, and task may need to be aligned to 4 bytes, and there are +4 bytes for  SPI
+// header needed, so 65528 is the largest possible size.
+#define MAX_SPI_TASK_SIZE 65528
 
 // Defines the size of the SPI task memory buffer in bytes. This memory buffer can contain two frames worth of tasks at maximum,
 // so for best performance, should be at least ~DISPLAY_WIDTH*DISPLAY_HEIGHT*BYTES_PER_PIXEL*2 bytes in size, plus some small

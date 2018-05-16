@@ -91,7 +91,7 @@ void InitILI9341()
 
     ILI9341ClearScreen();
   }
-  END_SPI_COMMUNICATION();
+//  END_SPI_COMMUNICATION();
 }
 
 #endif
