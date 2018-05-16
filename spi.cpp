@@ -210,8 +210,16 @@ int InitSPI()
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 
+  // TODO: XXX Refactor this to be read dynamically like in statistics.cpp
+#if defined(ILI9486)
+  int bcmCoreSpeed = 256;
+#else
+  int bcmCoreSpeed = 294;
+#endif
+
+
   // Estimate how many microseconds transferring a single byte over the SPI bus takes?
-  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR / 400/*Approx BCM2835 SPI clock (250MHz is lowest, turbo is at 400MHz)*/;
+  spiUsecsPerByte = 8.0/*bits/byte*/ * SPI_BUS_CLOCK_DIVISOR / bcmCoreSpeed;
 
 #if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
