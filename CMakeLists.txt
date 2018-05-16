@@ -50,6 +50,8 @@ endif()
 if (SPI_BUS_CLOCK_DIVISOR)
 	message(STATUS "SPI_BUS_CLOCK_DIVISOR set to ${SPI_BUS_CLOCK_DIVISOR}. Try setting this to a higher value (must be an even number) if this causes problems. Display update speed = core_freq/divisor. (on Pi3B, by default core_freq=400)")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPI_BUS_CLOCK_DIVISOR=${SPI_BUS_CLOCK_DIVISOR}")
+else()
+	message(FATAL_ERROR "Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see files ili9341.h/waveshare35b.h for details) This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed. Smaller divisor number=faster speed, higher number=slower.")
 endif()
 
 if (KERNEL_MODULE_CLIENT)
