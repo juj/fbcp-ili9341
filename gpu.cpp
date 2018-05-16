@@ -87,8 +87,6 @@ void VsyncCallback(DISPMANX_UPDATE_HANDLE_T u, void *arg)
   if (frameSkipCounter < 60) return;
   frameSkipCounter -= 60;
 
-  SnapshotFramebuffer(videoCoreFramebuffer[0]);
-  memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
   __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
   syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
 }
