@@ -137,9 +137,9 @@ typedef struct __attribute__((packed)) SPITask
     CommitTask(task); \
   } while(0)
 
-#define QUEUE_SET_X_WINDOW_TASK(x, endX) do { \
+#define QUEUE_SET_WRITE_WINDOW_TASK(cursor, x, endX) do { \
     SPITask *task = AllocTask(8); \
-    task->cmd = DISPLAY_SET_CURSOR_X; \
+    task->cmd = (cursor); \
     task->data[0] = 0; \
     task->data[1] = (x) >> 8; \
     task->data[2] = 0; \
@@ -151,21 +151,6 @@ typedef struct __attribute__((packed)) SPITask
     bytesTransferred += 10; \
     CommitTask(task); \
   } while(0)
-
-#define QUEUE_SET_Y_WINDOW_TASK(y, endY) do { \
-    SPITask *task = AllocTask(8); \
-    task->cmd = DISPLAY_SET_CURSOR_Y; \
-    task->data[0] = 0; \
-    task->data[1] = (y) >> 8; \
-    task->data[2] = 0; \
-    task->data[3] = (y) & 0xFF; \
-    task->data[4] = 0; \
-    task->data[5] = (endY) >> 8; \
-    task->data[6] = 0; \
-    task->data[7] = (endY) & 0xFF; \
-    bytesTransferred += 10; \
-    CommitTask(task); \
-   } while(0)
 
 #else
 // 8-bit interface
@@ -186,9 +171,9 @@ typedef struct __attribute__((packed)) SPITask
     CommitTask(task); \
   } while(0)
 
-#define QUEUE_SET_X_WINDOW_TASK(x, endX) do { \
+#define QUEUE_SET_WRITE_WINDOW_TASK(cursor, x, endX) do { \
     SPITask *task = AllocTask(4); \
-    task->cmd = DISPLAY_SET_CURSOR_X; \
+    task->cmd = (cursor); \
     task->data[0] = (x) >> 8; \
     task->data[1] = (x) & 0xFF; \
     task->data[2] = (endX) >> 8; \

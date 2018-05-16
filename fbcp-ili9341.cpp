@@ -306,7 +306,7 @@ int main()
 
       if (i->endY > i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
       {
-        QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + i->endX - 1);
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, i->x + displayXOffset, displayXOffset + i->endX - 1);
         spiX = i->x;
         spiEndX = i->endX;
       }
@@ -323,7 +323,7 @@ int main()
               if (j->endX >= i->endX) nextEndX = j->endX;
               break;
             }
-          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + nextEndX - 1);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, i->x + displayXOffset, displayXOffset + nextEndX - 1);
           spiX = i->x;
           spiEndX = nextEndX;
         }
