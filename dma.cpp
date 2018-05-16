@@ -49,7 +49,12 @@ static int AllocateDMAChannel(int *dmaChannel, int *irq)
   // Right now, use channels 1 and 4 which seem to be free.
   // Note: The send channel could be a lite channel, but receive channel cannot, since receiving uses the IGNORE flag
   // that lite DMA engines don't have.
+#ifdef FREEPLAYTECH_WAVESHARE32B
+  // On FreePlayTech Zero, DMA channel 4 seen to be taken by SD HOST (peripheral mapping 13).
+  const int freeChannels[] = { 5, 1 };
+#else
   const int freeChannels[] = { 1, 7 };
+#endif
   static int nextFreeChannel = 0;
   if (nextFreeChannel >= sizeof(freeChannels) / sizeof(freeChannels[0])) FATAL_ERROR("No free DMA channels");
 
