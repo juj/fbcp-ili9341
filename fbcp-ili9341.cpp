@@ -293,11 +293,21 @@ int main()
     // Submit spans
     for(Span *i = head; i; i = i->next)
     {
+#ifdef ALIGN_TASKS_FOR_DMA_TRANSFERS
+      // DMA transfers smaller than 4 bytes are causing trouble, so in order to ensure smooth DMA operation,
+      // make sure each message is at least 4 bytes in size, hence one pixel spans are forbidden:
+      if (i->size == 1)
+      {
+        if (i->endX < DISPLAY_DRAWABLE_WIDTH) { ++i->endX; ++i->lastScanEndX; }
+        else --i->x;
+        ++i->size;
+      }
+#endif
       // Update the write cursor if needed
       if (spiY != i->y)
       {
-#ifdef ILI9486
-        QUEUE_SET_Y_WINDOW_TASK(displayYOffset + i->y, DISPLAY_HEIGHT-1);
+#if defined(ILI9486) || defined(ALIGN_TASKS_FOR_DMA_TRANSFERS)
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, displayYOffset + DISPLAY_DRAWABLE_HEIGHT - 1);
 #else
         QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
 #endif
@@ -312,6 +322,14 @@ int main()
       }
       else // Singleline span
       {
+#ifdef ALIGN_TASKS_FOR_DMA_TRANSFERS
+        if (spiX != i->x || spiEndX < i->endX)
+        {
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + DISPLAY_DRAWABLE_WIDTH - 1);
+          spiX = i->x;
+          spiEndX = DISPLAY_DRAWABLE_WIDTH;
+        }
+#else
         if (spiEndX < i->endX) // Need to push the X end window?
         {
           // We are doing a single line span and need to increase the X window. If possible,
@@ -330,12 +348,13 @@ int main()
         else if (spiX != i->x)
         {
 #ifdef ILI9486
-          QUEUE_SET_X_WINDOW_TASK(i->x + displayXOffset, displayXOffset + spiEndX - 1);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + spiEndX - 1);
 #else
           QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
 #endif
           spiX = i->x;
         }
+#endif
       }
 
       // Submit the span pixels
