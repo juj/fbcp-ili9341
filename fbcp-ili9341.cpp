@@ -48,9 +48,23 @@ int main()
   InitGPU();
 
   spans = (Span*)malloc((gpuFrameWidth * gpuFrameHeight / 2) * sizeof(Span));
-  uint16_t *framebuffer[2] = { (uint16_t *)malloc(gpuFramebufferSizeBytes), (uint16_t *)malloc(gpuFramebufferSizeBytes) };
-  memset(framebuffer[0], 0, gpuFramebufferSizeBytes); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
+  int size = gpuFramebufferSizeBytes;
+#ifdef USE_GPU_VSYNC
+  // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
+  // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
+  // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
+  // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
+  // to randomly fail and then subsequently hang if called a second time)
+  size *= 2;
+#endif
+  uint16_t *framebuffer[2] = { (uint16_t *)malloc(size), (uint16_t *)malloc(gpuFramebufferSizeBytes) };
+  memset(framebuffer[0], 0, size); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, gpuFramebufferSizeBytes); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
+#ifdef USE_GPU_VSYNC
+  // Due to the above bug. In USE_GPU_VSYNC mode, we directly snapshot to framebuffer[0], so it has to be prepared specially to work around the
+  // dispmanx bug.
+  framebuffer[0] += (gpuFramebufferSizeBytes>>1);
+#endif
 
   InitStatistics();
 
@@ -152,10 +166,11 @@ int main()
 #ifdef USE_GPU_VSYNC
       // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
       // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
-      SnapshotFramebuffer(videoCoreFramebuffer[1]);
+      SnapshotFramebuffer(framebuffer[0]);
+#else
+      memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
 
-      memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #ifdef STATISTICS
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
