@@ -137,7 +137,7 @@ int main()
 
 #ifdef STATISTICS
     int expiredSkippedFrames = 0;
-    while(expiredSkippedFrames < frameSkipTimeHistorySize && now - frameSkipTimeHistory[expiredSkippedFrames] >= FRAMERATE_HISTORY_LENGTH) ++expiredSkippedFrames;
+    while(expiredSkippedFrames < frameSkipTimeHistorySize && now - frameSkipTimeHistory[expiredSkippedFrames] >= 1000000/*FRAMERATE_HISTORY_LENGTH*/) ++expiredSkippedFrames;
     if (expiredSkippedFrames > 0)
     {
       frameSkipTimeHistorySize -= expiredSkippedFrames;
@@ -194,7 +194,7 @@ int main()
     const double timesliceToUseForScreenUpdates = 1500000;
 #endif
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
-    if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
+    //if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
 #ifdef NO_INTERLACING
     interlacedUpdate = false;
 #elif defined(ALWAYS_INTERLACING)

@@ -98,7 +98,7 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, statsFrameSkipText, strlen(fpsText)*6, 1, RGB565(31,0,0), 0);
 #ifdef USE_SPI_THREAD
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 55, 1, spiUsageColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 80, 10, spiUsageColor, 0);
 #endif
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 80, 1, 0xFFFF, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 140, 1, RGB565(31,14,20), 0);
@@ -167,15 +167,17 @@ void RefreshStatisticsOverlayText()
 
   if (frameTimeHistorySize >= 3)
   {
-    int numInterlacedFramesInHistory = false;
+    int numInterlacedFramesInHistory = 0;
+    int numProgressiveFramesInHistory = 0;
     for(int i = 0; i < frameTimeHistorySize; ++i)
       if (frameTimeHistory[i].interlaced)
         ++numInterlacedFramesInHistory;
+      else
+        ++numProgressiveFramesInHistory;
 
     int frames = frameTimeHistorySize;
     if (numInterlacedFramesInHistory)
-      for(int i = 0; i < frameTimeHistorySize; ++i)
-        if (!frameTimeHistory[i].interlaced) ++frames; // Progressive frames count twice
+      frames += numProgressiveFramesInHistory; // Progressive frames count twice as interlaced
     int fps = (0.5 + (frames - 1) * 1000000.0 / (frameTimeHistory[frameTimeHistorySize-1].time - frameTimeHistory[0].time));
 #ifdef NO_INTERLACING
     sprintf(fpsText, "%d", fps);
@@ -183,7 +185,8 @@ void RefreshStatisticsOverlayText()
 #else
     if (numInterlacedFramesInHistory > 0)
     {
-      sprintf(fpsText, "%di/%d", fps, numInterlacedFramesInHistory);
+      if (numProgressiveFramesInHistory > 0) sprintf(fpsText, "%di/%d", fps, numProgressiveFramesInHistory);
+      else sprintf(fpsText, "%di", fps);
       fpsColor = RGB565(31, 30, 11);
     }
     else
