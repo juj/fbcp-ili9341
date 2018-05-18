@@ -67,6 +67,12 @@
 // remaining other field half of the image will never be uploaded.
 // #define THROTTLE_INTERLACING
 
+// The ILI9486 has to resort to interlacing as a rule rather than exception, and it works much smoother
+// when applying throttling to interlacing, so enable it by default there.
+#ifdef WAVESHARE35B_ILI9486
+#define THROTTLE_INTERLACING
+#endif
+
 // If defined, the GPU polling thread will be put to sleep for 1/TARGET_FRAMERATE seconds after receiving
 // each new GPU frame, to wait for the earliest moment that the next frame could arrive.
 #define SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
