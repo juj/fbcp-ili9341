@@ -33,7 +33,7 @@ option(GPIO_TFT_RESET_PIN "Explicitly specify the Reset GPIO pin (leave out if t
 
 option(KERNEL_MODULE_CLIENT "If enabled, run fbcp-ili9341 userland program against the kernel module found in kernel/ subdirectory (must be started before the userland program)" OFF)
 
-option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" ON)
+option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" OFF)
 
 option(SPI_BUS_CLOCK_DIVISOR "Specify the SPI0 CDIV register value that defines the SPI0 bus speed" 0)
 
@@ -61,7 +61,7 @@ if (USE_DMA_TRANSFERS)
 	message(STATUS "USE_DMA_TRANSFERS enabled, this improves performance. Try running CMake with -DUSE_DMA_TRANSFERS=OFF it this causes problems.")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_DMA_TRANSFERS=1")
 else()
-	message(STATUS "USE_DMA_TRANSFERS is disabled, this is not the most efficient mode. Try running CMake with -DUSE_DMA_TRANSFERS=ON to improve performance.")
+	message(STATUS "USE_DMA_TRANSFERS is disabled, this is not the most efficient mode. Try running CMake with -DUSE_DMA_TRANSFERS=ON to improve performance. (though DMA might currently not work on all systems, it is experimental)")
 endif()
 
 if (ADAFRUIT_ILI9341_PITFT)
