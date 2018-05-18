@@ -61,13 +61,27 @@ int main()
   {
     prevFrameWasInterlacedUpdate = interlacedUpdate;
 
-#ifndef THROTTLE_INTERLACING
-    if (!prevFrameWasInterlacedUpdate)
+    // If last update was interlaced, it means we still have half of the image pending to be updated. In such a case,
+    // sleep only until when we expect the next new frame of data to appear, and then continue independent of whether
+    // a new frame was produced or not - if not, then we will submit the rest of the unsubmitted fields. If yes, then
+    // the half fields of the new frame will be sent (or full, if the new frame has very little content)
+    if (prevFrameWasInterlacedUpdate)
+    {
+#ifdef THROTTLE_INTERLACING
+      timespec timeout = {};
+      timeout.tv_nsec = 1000 * MIN(1000000, MAX(1, 750/*0.75ms extra sleep so we know we should likely sleep long enough to see the next frame*/ + PredictNextFrameArrivalTime() - tick()));
+      syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
 #endif
+      // If THROTTLE_INTERLACING is not defined, we'll fall right through and immediately submit the rest of the remaining content on screen to attempt to minimize the visual
+      // observable effect of interlacing, although at the expense of smooth animation (falling through here causes jitter)
+    }
+    else
+    {
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
-        syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Start sleeping until we get new tasks
+        syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
       }
+    }
 
     bool spiThreadWasWorkingHardBefore = false;
 
@@ -165,7 +179,6 @@ int main()
       scanline += gpuFramebufferScanlineStrideBytes >> 1;
       prevScanline += gpuFramebufferScanlineStrideBytes >> 1;
     }
-
 
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
