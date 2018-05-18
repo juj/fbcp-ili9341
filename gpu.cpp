@@ -16,6 +16,7 @@
 // display content. Used to debug/measure performance.
 // #define RANDOM_TEST_PATTERN
 // #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
+// #define RANDOM_TEST_PATTERN_FRAME_RATE 60
 
 DISPMANX_DISPLAY_HANDLE_T display;
 DISPMANX_RESOURCE_HANDLE_T screen_resource;
@@ -209,8 +210,14 @@ void *gpu_polling_thread(void*)
     // Generate random noise that updates each frame
     // uint32_t randomColor = rand() % 65536;
     static int col = 0;
+    static uint64_t lastTestImage = tick();
     uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
-    col = (col + 2) & 31;
+    now = tick();
+    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
+    {
+      col = (col + 2) & 31;
+      lastTestImage = now;
+    }
     randomColor = randomColor | (randomColor << 16);
     uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
     for(int y = 0; y < gpuFrameHeight; ++y)
