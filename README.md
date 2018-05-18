@@ -68,9 +68,11 @@ Check the following topics to set up the driver.
 
 ##### Boot configuration
 
-This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) framebuffer driver, so that can be disabled if active. That is, if your `/boot/config.txt` file has a line that starts with `dtoverlay=pitft28r, ...`, it can be removed. There is no harm in keeping it though if you plan on e.g. being able to switch back and forth between `fbcp` and `fbcp-ili9341`.
+This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) framebuffer driver, so that needs to be disabled if active. That is, if your `/boot/config.txt` file has a line that looks something like `dtoverlay=pitft28r, ...`, `dtoverlay=waveshare32b, ...` or `dtoverlay=flexfb, ...`, it should be removed.
 
-This program neither needs the default SPI driver enabled, so a line such as `dtparam=spi=on` in `/boot/config.txt` can likewise be removed. (In the tested kernel version of this program, that line would conflict since the program would then register the hardware SPI interrupts for itself)
+This program neither needs the default SPI driver enabled, so a line such as `dtparam=spi=on` in `/boot/config.txt` should also be removed.
+
+This is because `fbcp-ili9341` manages the SPI0 bus fully on its own, so other SPI-utilizing driver will cause conflicts.
 
 ##### Building and running
 
@@ -81,16 +83,32 @@ git clone https://github.com/juj/fbcp-ili9341.git
 cd fbcp-ili9341
 mkdir build
 cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
+cmake [options] ..
 make -j
 sudo ./fbcp-ili9341
 ```
 
-If you have been running existing `fbcp` driver, make sure to remove that e.g. via a `sudo pkill fbcp` first (while running in SSH prompt or connected to a HDMI display), these two cannot run at the same time.
+See the next section to see what to input under **[options]**.
+
+If you have been running existing `fbcp` driver, make sure to remove that e.g. via a `sudo pkill fbcp` first (while running in SSH prompt or connected to a HDMI display), these two cannot run at the same time. If `/etc/rc.local` or `/etc/init.d` contains an entry to start up `fbcp` at boot, that directive should be deleted.
 
 ##### Configuring build options
 
-Edit the file [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h) directly to customize different build options. In particular the option `#define STATISTICS` can be interesting to try to enable.
+There are generally two ways to configure build options, at CMake command line, and in the file [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h).
+
+On the CMake command line, the following options can be configured:
+
+- `-DPI_ZERO=ON`: Pass this option if you are running on a Pi Zero. If not present, Pi 3 Model B is assumed.
+- `-DADAFRUIT_ILI9341_PITFT=ON`: If you are running on the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display, pass this flag.
+- `-DFREEPLAYTECH_WAVESHARE32B=ON`: If you are running on the [Freeplay CM3 or Zero](https://www.freeplaytech.com/product/freeplay-cm3-diy-kit/) device, pass this flag.
+- `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag. When this flag is passed, you must also specify the flags `-DGPIO_TFT_DATA_CONTROL=number` and `-DGPIO_TFT_DATA_CONTROL=number` below.
+- `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers.
+- `-DGPIO_TFT_RESET_PIN=number`: Specifies/overrides which GPIO pin to use for the display Reset line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a Reset pin, and is always on.
+- `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a Waveshare 3.5" 480x320 display, or possibly any other generic ILI9486 controller. This support is experimental.
+- `-DUSE_DMA_TRANSFERS=ON`: If specified, enables using DMA transfers to improve performance and possibly also save battery. This support is currently experimental.
+- `-DSPI_BUS_CLOCK_DIVISOR=even_number`: Sets the clock divisor number which along with the Pi [core_freq=](https://www.raspberrypi.org/documentation/configuration/config-txt/overclocking.md) option in `/boot/config.txt` specifies the overall speed that the display SPI communication bus is driven at. `SPI_frequency = core_freq/divisor`. `SPI_BUS_CLOCK_DIVISOR` must be an even number. Default Pi 3B and Zero W `core_freq` is 400MHz, and generally a value `-DSPI_BUS_CLOCK_DIVISOR=6` seems to be good safe and performant baseline for ILI9341 displays. Try a larger value if the display shows corrupt output, or a smaller value to get higher bandwidth. See [ili9341.h](https://github.com/juj/fbcp-ili9341/blob/master/ili9341.h#L13) and [waveshare35b.h](https://github.com/juj/fbcp-ili9341/blob/master/waveshare35b.h#L10) for data points on tuning the maximum SPI performance.
+
+In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to remove the `#define STATISTICS` line in `config.h`.
 
 ##### Launching the display driver at startup
 
@@ -119,7 +137,7 @@ These lines hint native applications about the default display mode, and let the
 
 There are three ways to configure the throughput performance of the display driver.
 
-1. The main configuration is the SPI bus `CDIV` (Clock DIVider) setting which controls the MHz rate of the SPI0 controller. By default this is set to value `CDIV=6`. To adjust this value, edit the line `#define SPI_BUS_CLOCK_DIVISOR 6` in the file `config.h`. Possible values are even numbers `2`, `4`, `6`, `8`, `...`. Smaller values result in higher bus speeds.
+1. The main configuration is the SPI bus `CDIV` (Clock DIVider) setting which controls the MHz rate of the SPI0 controller. By default this is set to value `CDIV=6`. To adjust this value, pass the directive `-DSPI_BUS_CLOCK_DIVISOR=even_number` in CMake command line. Possible values are even numbers `2`, `4`, `6`, `8`, `...`. Smaller values result in higher bus speeds. Usually for ILI9341, `CDIV=6` seems good, but if one underclocks `core_freq` to around 300MHz, it looks like `CDIV=4` can also be used. On ILI9486, it seems that `CDIV=14` or `CDIV=16` are good starting values.
 
 2. Ensure turbo speed. This is critical for good frame rates. On the Raspberry Pi 3 Model B, the SPI bus runs at 400MHz (divided by `CDIV`) **if** there is enough power provided to the Pi, and if the CPU temperature does not exceed thermal limits. Run the terminal command `vcgencmd measure_clock core` to show the current SPI bus speed, or build `fbcp-ili9341` with `#define STATISTICS` to display the bus speed on the screen (see next section below). If for some reason under-voltage protection is kicking in even when enough power should be fed, you can [force-enable turbo when low voltage is present](https://www.raspberrypi.org/forums/viewtopic.php?f=29&t=82373) by setting the value `avoid_warnings=2` in the file `/boot/config.txt`. The effect of turbo speed on performance is significant, 400MHz vs non-turbo 250MHz, which comes out to +60% of more bandwidth. Getting 60fps in Quake, Sonic or Tyrian requires this turbo frequency, but NES and C64 emulators can often reach 60fps even with the stock 250MHz.
 
