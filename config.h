@@ -44,6 +44,9 @@
 
 #endif
 
+// If enabled, the main thread and SPI thread are executed with realtime priority
+// #define RUN_WITH_REALTIME_THREAD_PRIORITY
+
 // If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's
 // too much for the display to handle)
 // #define NO_INTERLACING

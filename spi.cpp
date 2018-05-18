@@ -44,6 +44,29 @@ void DumpSPICS(uint32_t reg)
   PRINT_FLAG(BCM2835_SPI0_CS_RXF);
 }
 
+#ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
+
+#include <pthread.h>
+#include <sched.h>
+
+void SetRealtimeThreadPriority()
+{
+  sched_param params;
+  params.sched_priority = sched_get_priority_max(SCHED_FIFO);
+
+  int failed = pthread_setschedparam(pthread_self(), SCHED_FIFO, &params);
+  if (failed) FATAL_ERROR("pthread_setschedparam() failed!");
+
+  int policy = 0;
+  failed = pthread_getschedparam(pthread_self(), &policy, &params);
+  if (failed) FATAL_ERROR("pthread_getschedparam() failed!");
+
+  if (policy != SCHED_FIFO) FATAL_ERROR("Failed to set realtime thread policy!");
+  printf("Set fbcp-ili9341 thread scheduling priority to maximum (%d)\n", sched_get_priority_max(SCHED_FIFO));
+}
+
+#endif
+
 // Errata to BCM2835 behavior: documentation states that the SPI0 DLEN register is only used for DMA. However, even when DMA is not being utilized, setting it from
 // a value != 0 or 1 gets rid of an excess idle clock cycle that is present when transmitting each byte. (by default in Polled SPI Mode each 8 bits transfer in 9 clocks)
 // With DLEN=2 each byte is clocked to the bus in 8 cycles, observed to improve max throughput from 56.8mbps to 63.3mbps (+11.4%, quite close to the theoretical +12.5%)
@@ -159,6 +182,9 @@ void ExecuteSPITasks()
 // A worker thread that keeps the SPI bus filled at all times
 void *spi_thread(void *unused)
 {
+#ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
+  SetRealtimeThreadPriority();
+#endif
   for(;;)
   {
     if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)

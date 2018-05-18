@@ -288,3 +288,6 @@ void RunSPITask(SPITask *task);
 SPITask *GetTask(void);
 void DoneTask(SPITask *task);
 void DumpSPICS(uint32_t reg);
+#ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
+void SetRealtimeThreadPriority();
+#endif

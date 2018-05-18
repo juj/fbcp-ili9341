@@ -35,6 +35,9 @@ Span *spans = 0;
 
 int main()
 {
+#ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
+  SetRealtimeThreadPriority();
+#endif
   InitSPI();
 
   // Track current SPI display controller write X and Y cursors.
