@@ -74,6 +74,8 @@ int main()
   bool prevFrameWasInterlacedUpdate = false;
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
+
+  uint64_t prevSnapshotTime = 0;
   for(;;)
   {
     prevFrameWasInterlacedUpdate = interlacedUpdate;
@@ -159,6 +161,8 @@ int main()
     }
 #endif
 
+    static uint64_t lastTimeGotNewFramebuffer = 0;
+    uint64_t snapshottedTime = 0;
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
     if (gotNewFramebuffer)
@@ -167,6 +171,7 @@ int main()
       // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
       // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
       SnapshotFramebuffer(framebuffer[0]);
+      snapshottedTime = tick();
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
@@ -184,18 +189,37 @@ int main()
 #endif
     }
 
-    // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
+    int changedPixels = 0;
     uint16_t *scanline = framebuffer[0];
     uint16_t *prevScanline = framebuffer[1];
-    int changedPixels = 0;
-    for(int y = 0; y < gpuFrameHeight; ++y)
+    int tryNumber = 0;
+    uint64_t nnow = tick();
+    for(int numSnapshotRetries = 0; numSnapshotRetries < 3 && changedPixels == 0; ++numSnapshotRetries)
     {
-      for(int x = 0; x < gpuFrameWidth; ++x)
-        if (scanline[x] != prevScanline[x])
-          ++changedPixels;
+      ++tryNumber;
+      // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
+      changedPixels = 0;
+      for(int y = 0; y < gpuFrameHeight; ++y)
+      {
+        for(int x = 0; x < gpuFrameWidth; ++x)
+          if (scanline[x] != prevScanline[x])
+            ++changedPixels;
 
-      scanline += gpuFramebufferScanlineStrideBytes >> 1;
-      prevScanline += gpuFramebufferScanlineStrideBytes >> 1;
+        scanline += gpuFramebufferScanlineStrideBytes >> 1;
+        prevScanline += gpuFramebufferScanlineStrideBytes >> 1;
+      }
+//      printf("Try %d at t=%llu, changed pixels %d\n", tryNumber, tick()-nnow, changedPixels);
+      if (changedPixels == 0)
+      {
+        SnapshotFramebuffer(framebuffer[0]);
+        snapshottedTime = tick();
+        DrawStatisticsOverlay(framebuffer[0]);
+      }
+      else
+      {
+  //      printf("Time since last new frame: %llu\n", snapshottedTime - lastTimeGotNewFramebuffer);
+        lastTimeGotNewFramebuffer = snapshottedTime;
+      }
     }
 
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.

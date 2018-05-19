@@ -93,7 +93,12 @@ void RunSPITask(SPITask *task)
   if (task->size >= 4/* && task->size % 4 == 0*/ && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
   {
 //    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
-    SPIDMATransfer(task);
+    if (previousTaskWasSPI)
+    {
+      spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_DMAEN;
+    }
+
+      SPIDMATransfer(task);
     previousTaskWasSPI = false;
   }
   else
