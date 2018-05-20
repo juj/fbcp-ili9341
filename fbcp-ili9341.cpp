@@ -243,49 +243,94 @@ int main()
 #define SPAN_MERGE_THRESHOLD 4
 #endif
 
-    // Collect all spans in this image
+    // If doing an interlaced update, skip over every second scanline.
+    int scanlineInc = interlacedUpdate ? gpuFramebufferScanlineStrideBytes : (gpuFramebufferScanlineStrideBytes>>1);
+    int yInc = interlacedUpdate ? 2 : 1;
+
+    int scanlineEndInc = scanlineInc - gpuFrameWidth;
+
     int numSpans = 0;
     Span *head = 0;
-    for(;y < gpuFrameHeight; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
+
+    // Collect all spans in this image
+    while(y < gpuFrameHeight)
     {
-      for(int x = 0; x < gpuFrameWidth;)
+      uint16_t *scanlineStart = scanline;
+      uint16_t *scanlineEnd = scanline + gpuFrameWidth;
+      while(scanline < scanlineEnd)
       {
-        if (scanline[x] == prevScanline[x])
-        {
-          ++x;
-          continue;
-        }
-        int endX = x+1;
-        int spanEndX = endX;
+        uint32_t diff;
+        uint16_t *spanStart;
+        uint16_t *spanEnd;
         int numConsecutiveUnchangedPixels = 0;
-        // Find where this span ends; potentially merge adjacent spans if they only have a few changed pixels in between
-        while(endX < gpuFrameWidth)
+
+        if (scanline + 1 < scanlineEnd)
         {
-          if (scanline[endX] != prevScanline[endX])
+          diff = (*(uint32_t *)scanline) ^ (*(uint32_t *)prevScanline);
+          scanline += 2;
+          prevScanline += 2;
+
+          if (diff == 0) // Both 1st and 2nd pixels are the same
+            continue;
+
+          if (diff & 0xFFFF == 0) // 1st pixels are the same, 2nd pixels are not
           {
-            spanEndX = ++endX;
+            spanStart = scanline - 1;
+            spanEnd = scanline;
+          }
+          else // 1st pixels are different
+          {
+            spanStart = scanline - 2;
+            if ((diff & 0xFFFF0000u) != 0) // 2nd pixels are different?
+            {
+              spanEnd = scanline;
+            }
+            else
+            {
+              spanEnd = scanline - 1;
+              ++numConsecutiveUnchangedPixels;
+            }
+          }
+        }
+        else
+        {
+          if (*scanline++ == *prevScanline++)
+            continue;
+
+          spanStart = scanline - 1;
+          spanEnd = scanline;
+        }
+
+        // We've found a start of a span of different pixels on this scanline, now find where this span ends
+        while(scanline < scanlineEnd)
+        {
+          if (*scanline++ != *prevScanline++)
+          {
+            spanEnd = scanline;
             numConsecutiveUnchangedPixels = 0;
           }
           else
           {
-            ++endX;
             if (++numConsecutiveUnchangedPixels > SPAN_MERGE_THRESHOLD)
               break;
           }
         }
-        spans[numSpans].x = x;
-        spans[numSpans].endX = spans[numSpans].lastScanEndX = spanEndX;
-        spans[numSpans].y = y;
-        spans[numSpans].endY = y+1;
-        spans[numSpans].size = spanEndX - x;
-        if (numSpans > 0) spans[numSpans-1].next = &spans[numSpans];
-        else head = &spans[0];
-        spans[numSpans++].next = 0;
-        x = endX;
-      }
 
-      // If doing an interlaced update, skip over every second scanline.
-      if (interlacedUpdate) ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1;
+        // Submit the span update task
+        Span *span = spans + numSpans;
+        span->x = spanStart - scanlineStart;
+        span->endX = span->lastScanEndX = spanEnd - scanlineStart;
+        span->y = y;
+        span->endY = y+1;
+        span->size = spanEnd - spanStart;
+        if (numSpans > 0) span[-1].next = span;
+        else head = span;
+        span->next = 0;
+        ++numSpans;
+      }
+      y += yInc;
+      scanline += scanlineEndInc;
+      prevScanline += scanlineEndInc;
     }
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
