@@ -116,6 +116,8 @@ extern volatile DMAChannelRegisterFile *dmaRx; // DMA channel allocated to readi
 #define BCM2835_DMA_TI_TDMODE_SHIFT                         1
 #define BCM2835_DMA_TI_INTEN_SHIFT                          0
 
+void WaitForDMAFinished(void);
+
 // Reserves and enables a DMA channel for SPI transfers.
 int InitDMA(void);
 

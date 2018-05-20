@@ -286,7 +286,9 @@ int main()
     // +1 byte to wait for that FIFO to flush,
     // after which the communication is ready to start pushing pixels. This totals to 8 bytes, or 4 pixels, meaning that if there are 4 unchanged pixels or less between two adjacent dirty
     // spans, it is all the same to just update through those pixels as well to not have to wait to flush the FIFO.
-#ifdef ILI9486
+#if defined(PREFER_TO_SAVE_BATTERY_WITH_DMA)
+#define SPAN_MERGE_THRESHOLD 320
+#elif defined(ILI9486)
 #define SPAN_MERGE_THRESHOLD 10
 #else
 #define SPAN_MERGE_THRESHOLD 4

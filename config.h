@@ -70,6 +70,20 @@
 #define THROTTLE_INTERLACING
 #endif
 
+// If defined, DMA usage is foremost used to save power consumption and CPU usage. If not defined,
+// DMA usage is tailored towards maximum performance.
+// #define PREFER_TO_SAVE_BATTERY_WITH_DMA
+
+#if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS) && !defined(PREFER_TO_SAVE_BATTERY_WITH_DMA)
+// This is a prerequisite for good performance on Pi Zero
+#define PREFER_TO_SAVE_BATTERY_WITH_DMA
+#endif
+
+#if defined(PREFER_TO_SAVE_BATTERY_WITH_DMA)
+// This makes all submitted tasks go through DMA, and not use a hybrid Polled SPI + DMA approach.
+#define ALIGN_TASKS_FOR_DMA_TRANSFERS
+#endif
+
 // If defined, the GPU polling thread will be put to sleep for 1/TARGET_FRAMERATE seconds after receiving
 // each new GPU frame, to wait for the earliest moment that the next frame could arrive.
 #define SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME

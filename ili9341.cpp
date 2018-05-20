@@ -91,7 +91,9 @@ void InitILI9341()
 
     ILI9341ClearScreen();
   }
+#ifndef USE_DMA_TRANSFERS // For DMA transfers, keep SPI CS & TA active.
   END_SPI_COMMUNICATION();
+#endif
 }
 
 #endif
