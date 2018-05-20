@@ -64,14 +64,7 @@ void *poll_thread(void *unused)
     statsCpuTemperature = atoi(t2)/1000.0;
 
     // Raspberry pi main CPU core speed
-    handle = fopen("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq", "r");
-    char t3[32] = {};
-    if (handle)
-    {
-      fread(t3, 1, sizeof(t3)-1, handle);
-      fclose(handle);
-    }
-    statsCpuFrequency = atoi(t3) / 1000;
+    statsCpuFrequency = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x3/*ARM*/) / 1000000;
   }
 }
 
