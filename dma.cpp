@@ -397,8 +397,7 @@ void SPIDMATransfer(SPITask *task)
 
   static uint64_t taskStartTime = 0;
   static int pendingTaskBytes = 1;
-  const double spiSpeedUSecsPerByte = SPI_BUS_CLOCK_DIVISOR /*CDIV*/ * 8.0/*bits-to-bytes*/ / 400/*mbits/sec*/;
-  double pendingTaskUSecs = pendingTaskBytes * spiSpeedUSecsPerByte;
+  double pendingTaskUSecs = pendingTaskBytes * spiUsecsPerByte;
   pendingTaskUSecs -= tick() - taskStartTime;
   if (pendingTaskUSecs > 100)
     usleep(MAX(pendingTaskUSecs-70, 0));
