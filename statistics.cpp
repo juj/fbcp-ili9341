@@ -49,21 +49,15 @@ void *poll_thread(void *unused)
   {
     usleep(1000000);
 
+    // BCM core and SPI bus speed
     int freq = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
     statsBcmCoreSpeed = freq/1000000;
     statsSpiBusSpeed = (float)freq/(1000000*spi->clk);
 
     // CPU temperature
-    FILE *handle = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
-    char t2[32] = {};
-    if (handle)
-    {
-      fread(t2, 1, sizeof(t2)-1, handle);
-      fclose(handle);
-    }
-    statsCpuTemperature = atoi(t2)/1000.0;
+    statsCpuTemperature = MailboxRet2(0x00030006/*Get Temperature*/, 0)/1000.0;
 
-    // Raspberry pi main CPU core speed
+    // Raspberry pi main CPU speed
     statsCpuFrequency = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x3/*ARM*/) / 1000000;
   }
 }
