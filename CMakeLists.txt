@@ -9,12 +9,25 @@ link_directories(/opt/vc/lib)
 
 file(GLOB sourceFiles *.cpp)
 
-option(PI_ZERO "Target Raspberry Pi Zero (W)" OFF)
-
 message(STATUS "Doing a ${CMAKE_BUILD_TYPE} build")
 if ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
   message(STATUS "Pass -DCMAKE_BUILD_TYPE=Release to do a fast optimized build.")
 endif()
+
+# Detect if current hardware is Raspberry Pi Zero/Zero W, and enable targeting Zero with -DPI_ZERO=ON if so.
+execute_process(COMMAND cat /proc/cpuinfo OUTPUT_VARIABLE CPU_INFO)
+STRING(REGEX MATCH "Revision[\t ]*:[\t ]*([0-9a-f]+)" BOARD_REVISION ${CPU_INFO})
+set(BOARD_REVISION "${CMAKE_MATCH_1}")
+message(STATUS "Board revision: ${CMAKE_MATCH_1}")
+
+# http://ozzmaker.com/check-raspberry-software-hardware-version-command-line/
+if (BOARD_REVISION STREQUAL "9000c1" OR BOARD_REVISION STREQUAL "900092" OR BOARD_REVISION STREQUAL "900093")
+	set(DEFAULT_TO_PI_ZERO ON)
+else()
+	set(DEFAULT_TO_PI_ZERO OFF)
+endif()
+
+option(PI_ZERO "Target Raspberry Pi Zero (W)" ${DEFAULT_TO_PI_ZERO})
 
 if (PI_ZERO)
   message(STATUS "Targeting Raspberry Pi Zero (W)")
