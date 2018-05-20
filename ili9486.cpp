@@ -61,7 +61,9 @@ void InitILI9486()
 
     ILI9486ClearScreen();
   }
+#ifndef USE_DMA_TRANSFERS // For DMA transfers, keep SPI CS & TA active.
   END_SPI_COMMUNICATION();
+#endif
 
   // And speed up to the desired operation speed finally after init is done.
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
