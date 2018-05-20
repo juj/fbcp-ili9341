@@ -22,6 +22,7 @@
 #include "tick.h"
 #include "display.h"
 #include "util.h"
+#include "mailbox.h"
 
 #include <math.h>
 
@@ -38,6 +39,7 @@ int main()
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
+  OpenMailbox();
   InitSPI();
 
   // Track current SPI display controller write X and Y cursors.

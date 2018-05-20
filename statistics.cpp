@@ -14,6 +14,7 @@
 #include "text.h"
 #include "spi.h"
 #include "util.h"
+#include "mailbox.h"
 
 volatile uint64_t timeWastedPollingGPU = 0;
 volatile float statsSpiBusSpeed = 0;
@@ -47,23 +48,13 @@ void *poll_thread(void *unused)
   for(;;)
   {
     usleep(1000000);
-    // SPI bus speed
-    FILE *handle = popen("vcgencmd measure_clock core", "r");
-    char t[64] = {};
-    if (handle)
-    {
-      int ret = fread(t, 1, sizeof(t)-1, handle);
-      pclose(handle);
-    }
-    char *s = t;
-    while(*s && *s != '=') ++s;
-    if (*s == '=') ++s;
-    int freq = atoi(s);
+
+    int freq = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
     statsBcmCoreSpeed = freq/1000000;
     statsSpiBusSpeed = (float)freq/(1000000*spi->clk);
 
     // CPU temperature
-    handle = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
+    FILE *handle = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
     char t2[32] = {};
     if (handle)
     {
