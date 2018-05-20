@@ -34,6 +34,21 @@ struct Span
 };
 Span *spans = 0;
 
+int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
+{
+  int changedPixels = 0;
+  for(int y = 0; y < gpuFrameHeight; ++y)
+  {
+    for(int x = 0; x < gpuFrameWidth; ++x)
+      if (framebuffer[x] != prevFramebuffer[x])
+        ++changedPixels;
+
+    framebuffer += gpuFramebufferScanlineStrideBytes >> 1;
+    prevFramebuffer += gpuFramebufferScanlineStrideBytes >> 1;
+  }
+  return changedPixels;
+}
+
 int main()
 {
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
@@ -184,20 +199,6 @@ int main()
 #endif
     }
 
-    // Count how many pixels overall have changed on the new GPU frame, compared to what is being displayed on the SPI screen.
-    uint16_t *scanline = framebuffer[0];
-    uint16_t *prevScanline = framebuffer[1];
-    int changedPixels = 0;
-    for(int y = 0; y < gpuFrameHeight; ++y)
-    {
-      for(int x = 0; x < gpuFrameWidth; ++x)
-        if (scanline[x] != prevScanline[x])
-          ++changedPixels;
-
-      scanline += gpuFramebufferScanlineStrideBytes >> 1;
-      prevScanline += gpuFramebufferScanlineStrideBytes >> 1;
-    }
-
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
@@ -213,16 +214,16 @@ int main()
 #ifdef NO_INTERLACING
     interlacedUpdate = false;
 #elif defined(ALWAYS_INTERLACING)
-    interlacedUpdate = (changedPixels > 0);
+    interlacedUpdate = (CountNumChangedPixels(framebuffer[0], framebuffer[1]) > 0);
 #else
-    uint32_t bytesToSend = changedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
+    uint32_t bytesToSend = CountNumChangedPixels(framebuffer[0], framebuffer[1]) * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
     int y = interlacedUpdate ? frameParity : 0;
-    scanline = framebuffer[0] + y*(gpuFramebufferScanlineStrideBytes>>1);
-    prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1); // (same scanline from previous frame, not preceding scanline)
+    uint16_t *scanline = framebuffer[0] + y*(gpuFramebufferScanlineStrideBytes>>1);
+    uint16_t *prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1); // (same scanline from previous frame, not preceding scanline)
 
     int bytesTransferred = 0;
 
