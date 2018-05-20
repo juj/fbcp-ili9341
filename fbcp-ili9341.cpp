@@ -179,8 +179,21 @@ int main()
     if (gotNewFramebuffer)
     {
 #ifdef USE_GPU_VSYNC
+      static uint64_t lastFrameObtainedTime = 0;
+      // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
+      uint64_t earliestNextFrameArrivalTime = lastFrameObtainedTime + 1000000/60;
+      uint64_t now = tick();
+      uint64_t framePollingStartTime = now;
+      while(now < earliestNextFrameArrivalTime)
+      {
+        if (earliestNextFrameArrivalTime - now > 70)
+          usleep(earliestNextFrameArrivalTime - now - 70);
+        now = tick();
+      }
       // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
       // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
+
+      uint64_t frameObtainedTime = tick();
       SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
@@ -194,8 +207,43 @@ int main()
 
       RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
+
+#ifdef USE_GPU_VSYNC
+
+#ifdef STATISTICS
+      uint64_t completelyUnnecessaryTimeWastedPollingGPUStart = tick();
+#endif
+
+      // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
+      // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
+      // we must keep polling for frames until we find one that it has produced.
+      uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
+      while(!IsNewFramebuffer(framebuffer[0], framebuffer[1]) && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
+      {
+        usleep(200);
+        frameObtainedTime = tick();
+        SnapshotFramebuffer(framebuffer[0]);
+        DrawStatisticsOverlay(framebuffer[0]);
+      }
+
+      numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
+#ifdef STATISTICS
+      for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
+        frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
+#endif
+      __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
+
+#ifdef STATISTICS
+      uint64_t completelyUnnecessaryTimeWastedPollingGPUStop = tick();
+      __atomic_fetch_add(&timeWastedPollingGPU, completelyUnnecessaryTimeWastedPollingGPUStop-completelyUnnecessaryTimeWastedPollingGPUStart, __ATOMIC_RELAXED);
+#endif
+
+#endif
+
 #ifndef USE_GPU_VSYNC
       AddHistogramSample();
+#else
+      lastFrameObtainedTime = frameObtainedTime;
 #endif
     }
 

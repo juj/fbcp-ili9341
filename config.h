@@ -2,7 +2,7 @@
 
 // Build options: Uncomment any of these, or set at the command line to configure:
 
-// If defined, prints out performance logs to stdout every second
+// If defined, renders a performance overlay on top of the screen
 #define STATISTICS
 
 // How often the on-screen statistics is refreshed (in usecs)
