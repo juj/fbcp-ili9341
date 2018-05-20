@@ -39,6 +39,8 @@ void InitILI9486()
   usleep(120 * 1000);
 #endif
 
+  // Do the initialization with a very low SPI bus speed, so that it will succeed even if the bus speed chosen by the user is too high.
+  spi->clk = 34;
   BEGIN_SPI_COMMUNICATION();
   {
     SPI_TRANSFER(0xb0, 0x00, 0x00);
@@ -60,6 +62,9 @@ void InitILI9486()
     ILI9486ClearScreen();
   }
   END_SPI_COMMUNICATION();
+
+  // And speed up to the desired operation speed finally after init is done.
+  spi->clk = SPI_BUS_CLOCK_DIVISOR;
 }
 
 #endif
