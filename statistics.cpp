@@ -43,22 +43,26 @@ uint16_t gpuPollingWastedColor = 0;
 
 uint64_t statsLastPrint = 0;
 
+void UpdateStatisticsNumbers()
+{
+  // BCM core and SPI bus speed
+  int freq = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
+  statsBcmCoreSpeed = freq/1000000;
+  statsSpiBusSpeed = (float)freq/(1000000*spi->clk);
+
+  // CPU temperature
+  statsCpuTemperature = MailboxRet2(0x00030006/*Get Temperature*/, 0)/1000.0;
+
+  // Raspberry pi main CPU speed
+  statsCpuFrequency = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x3/*ARM*/) / 1000000;
+}
+
 void *poll_thread(void *unused)
 {
   for(;;)
   {
     usleep(1000000);
-
-    // BCM core and SPI bus speed
-    int freq = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
-    statsBcmCoreSpeed = freq/1000000;
-    statsSpiBusSpeed = (float)freq/(1000000*spi->clk);
-
-    // CPU temperature
-    statsCpuTemperature = MailboxRet2(0x00030006/*Get Temperature*/, 0)/1000.0;
-
-    // Raspberry pi main CPU speed
-    statsCpuFrequency = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x3/*ARM*/) / 1000000;
+    UpdateStatisticsNumbers();
   }
 }
 
@@ -90,6 +94,14 @@ void RefreshStatisticsOverlayText()
   uint64_t now = tick();
   uint64_t elapsed = now - statsLastPrint;
   if (elapsed < STATISTICS_REFRESH_INTERVAL) return;
+#ifndef USE_STATISTICS_THREAD
+  static uint64_t lastUpdate = 0;
+  if (now - lastUpdate > 1000000)
+  {
+    UpdateStatisticsNumbers();
+    lastUpdate = now;
+  }
+#endif
 
 #ifdef KERNEL_MODULE_CLIENT
   spiThreadUtilizationRate = 0; // TODO
