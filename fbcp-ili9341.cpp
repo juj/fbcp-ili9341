@@ -68,8 +68,6 @@ int main()
   framebuffer[0] += (gpuFramebufferSizeBytes>>1);
 #endif
 
-  InitStatistics();
-
   uint32_t curFrameEnd = spiTaskMemory->queueTail;
   uint32_t prevFrameEnd = spiTaskMemory->queueTail;
 

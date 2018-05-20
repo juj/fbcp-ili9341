@@ -4,7 +4,6 @@
 
 #include "gpu.h"
 
-int InitStatistics(void);
 void RefreshStatisticsOverlayText(void);
 void DrawStatisticsOverlay(uint16_t *framebuffer);
 

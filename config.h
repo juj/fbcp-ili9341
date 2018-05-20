@@ -38,10 +38,6 @@
 // not gain much, since it only has one hardware thread.
 #define USE_SPI_THREAD
 
-// If enabled, spins up a separate background thread to poll infrequent hardware statistics. If STATISTICS
-// is not enabled, then this option has not effect.
-#define USE_STATISTICS_THREAD
-
 #endif
 
 // If enabled, the main thread and SPI thread are executed with realtime priority

@@ -57,24 +57,6 @@ void UpdateStatisticsNumbers()
   statsCpuFrequency = (int)MailboxRet2(0x00030002/*Get Clock Rate*/, 0x3/*ARM*/) / 1000000;
 }
 
-void *poll_thread(void *unused)
-{
-  for(;;)
-  {
-    usleep(1000000);
-    UpdateStatisticsNumbers();
-  }
-}
-
-int InitStatistics()
-{
-#ifdef USE_STATISTICS_THREAD
-  pthread_t thread;
-  int rc = pthread_create(&thread, NULL, poll_thread, NULL);
-  if (rc != 0) FATAL_ERROR("Failed to create Statistics polling thread!");
-#endif
-}
-
 void DrawStatisticsOverlay(uint16_t *framebuffer)
 {
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
@@ -94,14 +76,8 @@ void RefreshStatisticsOverlayText()
   uint64_t now = tick();
   uint64_t elapsed = now - statsLastPrint;
   if (elapsed < STATISTICS_REFRESH_INTERVAL) return;
-#ifndef USE_STATISTICS_THREAD
-  static uint64_t lastUpdate = 0;
-  if (now - lastUpdate > 1000000)
-  {
-    UpdateStatisticsNumbers();
-    lastUpdate = now;
-  }
-#endif
+
+  UpdateStatisticsNumbers();
 
 #ifdef KERNEL_MODULE_CLIENT
   spiThreadUtilizationRate = 0; // TODO
