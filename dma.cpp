@@ -431,7 +431,15 @@ void SPIDMATransfer(SPITask *task)
 
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
+#ifdef ILI9486
+  spi->fifo = 0;
+#endif
   spi->fifo = task->cmd;
+#ifdef ILI9486
+    while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
+    spi->fifo;
+    spi->fifo;
+#endif
 //  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
 //  SET_GPIO(GPIO_TFT_DATA_CONTROL);
 //  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR_RX;
