@@ -14,9 +14,9 @@
 
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
-// #define RANDOM_TEST_PATTERN
-// #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
-// #define RANDOM_TEST_PATTERN_FRAME_RATE 60
+ #define RANDOM_TEST_PATTERN
+ #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
+ #define RANDOM_TEST_PATTERN_FRAME_RATE 120
 
 DISPMANX_DISPLAY_HANDLE_T display;
 DISPMANX_RESOURCE_HANDLE_T screen_resource;

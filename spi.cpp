@@ -74,7 +74,7 @@ void SetRealtimeThreadPriority()
 // https://www.raspberrypi.org/forums/viewtopic.php?f=44&t=181154
 #define UNLOCK_FAST_8_CLOCKS_SPI() (spi->dlen = 2)
 
-#ifdef USE_DMA_TRANSFERS
+#ifdef ALL_TASKS_SHOULD_DMA
 bool previousTaskWasSPI = true;
 #endif
 
@@ -88,6 +88,8 @@ void WaitForPolledSPITransferToFinish()
   if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
 }
 
+#ifdef ALL_TASKS_SHOULD_DMA
+
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
 {
@@ -95,17 +97,8 @@ void RunSPITask(SPITask *task)
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
 
-#ifdef PREFER_TO_SAVE_BATTERY_WITH_DMA
 #define TASK_SIZE_TO_USE_DMA 4
-#else
-// For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
-// For larger transfers though that are more than this amount of bytes, using DMA is faster.
-// This cutoff number was experimentally tested to find where Polled SPI and DMA are as fast.
-#define TASK_SIZE_TO_USE_DMA 240
-#endif
-
   // Do a DMA transfer if this task is suitable in size for DMA to handle
-#ifdef USE_DMA_TRANSFERS
   if (task->size >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
   {
     if (previousTaskWasSPI)
@@ -115,9 +108,7 @@ void RunSPITask(SPITask *task)
     previousTaskWasSPI = false;
   }
   else
-#endif
   {
-#ifdef USE_DMA_TRANSFERS
     if (!previousTaskWasSPI)
     {
       WaitForDMAFinished();
@@ -126,7 +117,6 @@ void RunSPITask(SPITask *task)
       UNLOCK_FAST_8_CLOCKS_SPI();
     }
     else
-#endif
       WaitForPolledSPITransferToFinish();
 
 //    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
@@ -158,11 +148,64 @@ void RunSPITask(SPITask *task)
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
     }
 
-#ifdef USE_DMA_TRANSFERS
     previousTaskWasSPI = true;
-#endif
   }
 }
+#else
+void RunSPITask(SPITask *task)
+{
+  WaitForPolledSPITransferToFinish();
+
+  // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
+  CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
+
+#ifdef ILI9486
+  // On the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
+  spi->fifo = 0x00;
+#endif
+  spi->fifo = task->cmd;
+
+  uint8_t *tStart = task->data;
+  uint8_t *tEnd = task->data + task->size;
+  uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
+#ifdef ILI9486
+  while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
+  spi->fifo;
+  spi->fifo;
+#else
+  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
+#endif
+
+  SET_GPIO(GPIO_TFT_DATA_CONTROL);
+
+// For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
+// For larger transfers though that are more than this amount of bytes, using DMA is faster.
+// This cutoff number was experimentally tested to find where Polled SPI and DMA are as fast.
+#define DMA_IS_FASTER_THAN_POLLED_SPI 240
+  // Do a DMA transfer if this task is suitable in size for DMA to handle
+#ifdef USE_DMA_TRANSFERS
+  if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)
+  {
+    SPIDMATransfer(task);
+
+    // After having done a DMA transfer, the SPI0 DLEN register has reset to zero, so restore it to fast mode.
+    UNLOCK_FAST_8_CLOCKS_SPI();
+  }
+  else
+#endif
+  {
+    while(tStart < tPrefillEnd) spi->fifo = *tStart++;
+    while(tStart < tEnd)
+    {
+      uint32_t cs = spi->cs;
+      if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+// TODO:      else asm volatile("yield");
+      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+    }
+  }
+}
+#endif
+
 
 SharedMemory *spiTaskMemory = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;

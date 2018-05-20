@@ -291,11 +291,7 @@ void WaitForDMAFinished()
   dmaRecvTail = 0;
 }
 
-#ifdef PREFER_TO_SAVE_BATTERY_WITH_DMA
-#define PERHAPS_SLEEP(usecs) (usleep((usecs)))
-#else
-#define PERHAPS_SLEEP(usecs) ((void)0)
-#endif
+#ifdef ALL_TASKS_SHOULD_DMA
 
 void SPIDMATransfer(SPITask *task)
 {
@@ -408,10 +404,10 @@ void SPIDMATransfer(SPITask *task)
     usleep(pendingTaskUSecs-70);
 
   while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-    PERHAPS_SLEEP(250);
+    usleep(250);
 
   while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
-    PERHAPS_SLEEP(250);
+    usleep(250);
 
   dmaSendTail = 0;
   dmaRecvTail = 0;
@@ -440,9 +436,6 @@ void SPIDMATransfer(SPITask *task)
     spi->fifo;
     spi->fifo;
 #endif
-//  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
-//  SET_GPIO(GPIO_TFT_DATA_CONTROL);
-//  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR_RX;
 
   __sync_synchronize();
   dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
@@ -450,4 +443,64 @@ void SPIDMATransfer(SPITask *task)
   taskStartTime = tick();
 }
 
+#else
+
+void SPIDMATransfer(SPITask *task)
+{
+  // Transition the SPI peripheral to enable the use of DMA
+  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
+  task->dmaSpiHeader = BCM2835_SPI0_CS_TA | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+
+  // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
+  // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
+  // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to an intermediate 'dmaSourceMemory' memory area to perform
+  // the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
+  memcpy(dmaSourceBuffer.virtualAddr, (void*)&task->dmaSpiHeader, task->size + 4);
+
+  volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+  volatile DMAControlBlock *txcb = &cb[0];
+  txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
+  txcb->src = dmaSourceBuffer.busAddress;
+  txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
+  txcb->len = task->size + 4;
+  txcb->stride = 0;
+  txcb->next = 0;
+  txcb->debug = 0;
+  txcb->reserved = 0;
+  dmaTx->cbAddr = dmaCb.busAddress;
+
+  volatile DMAControlBlock *rxcb = &cb[1];
+  rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE;
+  rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
+  rxcb->dst = 0;
+  rxcb->len = task->size;
+  rxcb->stride = 0;
+  rxcb->next = 0;
+  rxcb->debug = 0;
+  rxcb->reserved = 0;
+  dmaRx->cbAddr = dmaCb.busAddress + sizeof(DMAControlBlock);
+
+  __sync_synchronize();
+  dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
+  dmaRx->cs = BCM2835_DMA_CS_ACTIVE;
+  __sync_synchronize();
+
+  double pendingTaskUSecs = task->size * spiUsecsPerByte;
+  if (pendingTaskUSecs > 70)
+    usleep(pendingTaskUSecs-70);
+
+  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+    ;
+
+  __sync_synchronize();
+  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
+  __sync_synchronize();
+}
+
 #endif
+
+
+
+#endif // ~USE_DMA_TRANSFERS
