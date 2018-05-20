@@ -79,10 +79,18 @@ static int AllocateDMAChannel(int *dmaChannel, int *irq)
   // that lite DMA engines don't have.
 #ifdef FREEPLAYTECH_WAVESHARE32B
   // On FreePlayTech Zero, DMA channel 4 seen to be taken by SD HOST (peripheral mapping 13).
-  const int freeChannels[] = { 5, 1 };
+  int freeChannels[] = { 5, 1 };
 #else
-  const int freeChannels[] = { 1, 7 };
+  int freeChannels[] = { 7, 1 };
 #endif
+#if defined(DMA_TX_CHANNEL)
+  freeChannels[0] = DMA_TX_CHANNEL;
+#endif
+#if defined(DMA_RX_CHANNEL)
+  freeChannels[1] = DMA_RX_CHANNEL;
+#endif
+  if (freeChannels[0] == freeChannels[1]) FATAL_ERROR("DMA TX and RX channels cannot be the same channel!");
+
   static int nextFreeChannel = 0;
   if (nextFreeChannel >= sizeof(freeChannels) / sizeof(freeChannels[0])) FATAL_ERROR("No free DMA channels");
 

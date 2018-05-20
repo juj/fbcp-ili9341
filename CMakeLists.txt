@@ -48,6 +48,9 @@ option(KERNEL_MODULE_CLIENT "If enabled, run fbcp-ili9341 userland program again
 
 option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" OFF)
 
+option(DMA_TX_CHANNEL "Specifies the DMA send channel to use" 0)
+option(DMA_RX_CHANNEL "Specifies the DMA receive channel to use" 0)
+
 option(SPI_BUS_CLOCK_DIVISOR "Specify the SPI0 CDIV register value that defines the SPI0 bus speed" 0)
 
 if (GPIO_TFT_DATA_CONTROL)
@@ -73,10 +76,20 @@ if (KERNEL_MODULE_CLIENT)
 endif()
 
 if (USE_DMA_TRANSFERS)
-	message(STATUS "USE_DMA_TRANSFERS enabled, this improves performance. Try running CMake with -DUSE_DMA_TRANSFERS=OFF it this causes problems.")
+	message(STATUS "USE_DMA_TRANSFERS enabled, this improves performance. Try running CMake with -DUSE_DMA_TRANSFERS=OFF it this causes problems, or try adjusting the DMA channels to use with -DDMA_TX_CHANNEL=<num> -DDMA_RX_CHANNEL=<num>.")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_DMA_TRANSFERS=1")
 else()
 	message(STATUS "USE_DMA_TRANSFERS is disabled, this is not the most efficient mode. Try running CMake with -DUSE_DMA_TRANSFERS=ON to improve performance. (though DMA might currently not work on all systems, it is experimental)")
+endif()
+
+if (DMA_TX_CHANNEL)
+	message(STATUS "DMA_TX_CHANNEL=${DMA_TX_CHANNEL}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDMA_TX_CHANNEL=${DMA_TX_CHANNEL}")
+endif()
+
+if (DMA_RX_CHANNEL)
+	message(STATUS "DMA_RX_CHANNEL=${DMA_RX_CHANNEL}")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDMA_RX_CHANNEL=${DMA_RX_CHANNEL}")
 endif()
 
 if (ADAFRUIT_ILI9341_PITFT)
