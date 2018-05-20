@@ -389,12 +389,14 @@ int main()
 #else
         QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
 #endif
+        IN_SINGLE_THREADED_MODE_RUN_TASK();
         spiY = i->y;
       }
 
       if (i->endY > i->y + 1 && (spiX != i->x || spiEndX != i->endX)) // Multiline span?
       {
         QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + i->endX - 1);
+        IN_SINGLE_THREADED_MODE_RUN_TASK();
         spiX = i->x;
         spiEndX = i->endX;
       }
@@ -404,6 +406,7 @@ int main()
         if (spiX != i->x || spiEndX < i->endX)
         {
           QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + DISPLAY_DRAWABLE_WIDTH - 1);
+          IN_SINGLE_THREADED_MODE_RUN_TASK();
           spiX = i->x;
           spiEndX = DISPLAY_DRAWABLE_WIDTH;
         }
@@ -420,6 +423,7 @@ int main()
               break;
             }
           QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + nextEndX - 1);
+          IN_SINGLE_THREADED_MODE_RUN_TASK();
           spiX = i->x;
           spiEndX = nextEndX;
         }
@@ -430,6 +434,7 @@ int main()
 #else
           QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
 #endif
+          IN_SINGLE_THREADED_MODE_RUN_TASK();
           spiX = i->x;
         }
 #endif
@@ -450,6 +455,7 @@ int main()
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
       }
       CommitTask(task);
+      IN_SINGLE_THREADED_MODE_RUN_TASK();
     }
 
 #ifdef KERNEL_MODULE_CLIENT
@@ -465,10 +471,6 @@ int main()
       prevFrameEnd = curFrameEnd;
       curFrameEnd = spiTaskMemory->queueTail;
     }
-
-#ifndef USE_SPI_THREAD
-    ExecuteSPITasks();
-#endif
 
 #ifdef STATISTICS
     if (bytesTransferred > 0 && frameTimeHistorySize < FRAME_HISTORY_MAX_SIZE)
