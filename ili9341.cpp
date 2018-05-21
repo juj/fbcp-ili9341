@@ -67,7 +67,7 @@ void InitILI9341()
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl |= MADCTL_ROTATE_180_DEGREES;
 #endif
-#ifdef DISPLAY_OUTPUT_LANDSCAPE
+#if defined(DISPLAY_OUTPUT_LANDSCAPE) && !defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE)
     madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
 #endif
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);

@@ -15,8 +15,13 @@
 #define GPIO_TFT_DATA_CONTROL 25  /*!< Version 1, Pin P1-22, PiTFT 2.8 resistive Data/Control pin */
 #endif
 
+#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
+#define DISPLAY_WIDTH 240
+#define DISPLAY_HEIGHT 320
+#else
 #define DISPLAY_WIDTH 320
 #define DISPLAY_HEIGHT 240
+#endif
 
 #define DISPLAY_COVERED_LEFT_SIDE 0
 #define DISPLAY_COVERED_TOP_SIDE 0

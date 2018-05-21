@@ -5,6 +5,8 @@
 
 #define ABS(x) ((x) < 0 ? (-(x)) : (x))
 
+#define SWAPU32(x, y) { uint32_t tmp = x; x = y; y = tmp; }
+
 #ifndef ALIGN_UP
 #define ALIGN_UP(ptr, alignment) ((ptr) + ((alignment)-1)) & ~((alignment)-1);
 #endif

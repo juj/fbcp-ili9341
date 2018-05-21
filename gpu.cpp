@@ -69,13 +69,28 @@ void SnapshotFramebuffer(uint16_t *destination)
   // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
   // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
   // to randomly fail and then subsequently hang if called a second time)
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+  static uint16_t *tempTransposeBuffer; // Allocate as static here to keep the number of #ifdefs down a bit
+  if (!tempTransposeBuffer)
+    tempTransposeBuffer = (uint16_t *)malloc(gpuFrameWidth * gpuFrameHeight * sizeof(uint16_t));
+  uint16_t *destPtr = tempTransposeBuffer;
+  const int stride = gpuFrameHeight*2;
+#else
   uint16_t *destPtr = destination - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft;
-  failed = vc_dispmanx_resource_read_data(screen_resource, &rect, destPtr, gpuFramebufferScanlineStrideBytes);
+  const int stride = gpuFramebufferScanlineStrideBytes;
+#endif
+  failed = vc_dispmanx_resource_read_data(screen_resource, &rect, destPtr, stride);
   if (failed)
   {
     printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
     exit(failed);
   }
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+  // Transpose the snapshotted frame from landscape to portrait
+  for(int y = 0; y < gpuFrameHeight; ++y)
+    for(int x = 0; x < gpuFrameWidth; ++x)
+      destination[y*(gpuFramebufferScanlineStrideBytes>>1)+x] = destPtr[x*(stride>>1)+y];
+#endif
 }
 
 #ifdef USE_GPU_VSYNC
@@ -282,6 +297,12 @@ void InitGPU()
   int ret = vc_dispmanx_display_get_info(display, &display_info);
   if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
 
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+  // Pretend that the display framebuffer would be in portrait mode for the purposes of size computation etc.
+  // Snapshotting code transposes the obtained framebuffer immediately after capture from landscape to portrait to make it so.
+  SWAPU32(display_info.width, display_info.height);
+  printf("DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE: Swapping width/height to update display in portrait mode to minimize tearing.\n");
+#endif
   // We may need to scale the main framebuffer to fit the native pixel size of the display. Always want to do such scaling in aspect ratio fixed mode to not stretch the image.
   // (For non-square pixels or similar, could apply a correction factor here to fix aspect ratio)
 
@@ -387,10 +408,15 @@ void InitGPU()
 
   uint32_t image_prt;
   printf("Creating dispmanX resource of size %dx%d (aspect ratio=%f).\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, (double)(scaledWidth + excessPixelsLeft + excessPixelsRight) / (scaledHeight + excessPixelsTop + excessPixelsBottom));
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+  screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledHeight + excessPixelsTop + excessPixelsBottom, scaledWidth + excessPixelsLeft + excessPixelsRight, &image_prt);
+  vc_dispmanx_rect_set(&rect, excessPixelsTop, excessPixelsLeft, scaledHeight, scaledWidth);
+#else
   screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, &image_prt);
+  vc_dispmanx_rect_set(&rect, excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
+#endif
   if (!screen_resource) FATAL_ERROR("vc_dispmanx_resource_create failed!");
   printf("GPU grab rectangle is offset x=%d,y=%d, size w=%dxh=%d, aspect ratio=%f\n", excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight, (double)scaledWidth / scaledHeight);
-  vc_dispmanx_rect_set(&rect, excessPixelsLeft, excessPixelsTop, scaledWidth, scaledHeight);
 
 #ifdef USE_GPU_VSYNC
   // Register to receive vsync notifications. This is a heuristic, since the application might not be locked at vsync, and even

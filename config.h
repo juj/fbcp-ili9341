@@ -100,8 +100,16 @@
 // #define DISPLAY_ROTATE_180_DEGREES
 
 // If defined, displays in landscape. Undefine to display in portrait. When changing this, swap
-// values of  DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
+// values of DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
 #define DISPLAY_OUTPUT_LANDSCAPE
+
+// If defined, flipping the display between portrait<->landscape is done in software, rather than
+// asking the display controller to adjust its RAM write direction.
+// Doing the flip in software reduces tearing, since neither the ILI9341 nor ILI9486 displays (and
+// probably no other displays in existence?) allow one to adjust the direction that the scanline refresh
+// cycle runs in, but the scanline refresh always runs in portrait mode in these displays. Not having
+// this defined reduces CPU usage at the expense of more tearing.
+// #define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
 
 // If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling
 // writes will be performed (possibly with interrupts, if using kernel side driver module)
