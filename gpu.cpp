@@ -127,6 +127,9 @@ int cmp(const void *e1, const void *e2) { return *(uint64_t*)e1 > *(uint64_t*)e2
 
 uint64_t EstimateFrameRateInterval()
 {
+#ifdef RANDOM_TEST_PATTERN
+  return 1000000/RANDOM_TEST_PATTERN_FRAME_RATE;
+#endif
   if (histogramSize == 0) return 1000000/TARGET_FRAME_RATE;
   uint64_t mostRecentFrame = GET_HISTOGRAM(0);
 
