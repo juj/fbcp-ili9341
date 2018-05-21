@@ -9,8 +9,8 @@ void DrawText(uint16_t *framebuffer, int framebufferWidth, int framebufferStride
   const int H = framebufferWidth;
 #define AT(x, y) x*framebufferStrideBytes+y
 #else
-  const int W = framebufferHeight;
-  const int H = framebufferWidth;
+  const int W = framebufferWidth;
+  const int H = framebufferHeight;
 #define AT(x, y) y*framebufferStrideBytes+x
 #endif
 

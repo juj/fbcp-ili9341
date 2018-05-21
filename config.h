@@ -108,8 +108,14 @@
 // Doing the flip in software reduces tearing, since neither the ILI9341 nor ILI9486 displays (and
 // probably no other displays in existence?) allow one to adjust the direction that the scanline refresh
 // cycle runs in, but the scanline refresh always runs in portrait mode in these displays. Not having
-// this defined reduces CPU usage at the expense of more tearing.
-// #define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+// this defined reduces CPU usage at the expense of more tearing, although it is debatable which
+// effect is better - this can be subjective. Impact is around 0.5-1.0msec of extra CPU time.
+// DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE disabled: diagonal tearing
+// DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
+// i.e. narrow direction)
+#ifndef PI_ZERO
+#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#endif
 
 // If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling
 // writes will be performed (possibly with interrupts, if using kernel side driver module)

@@ -41,6 +41,11 @@ int excessPixelsRight = 0;
 int excessPixelsTop = 0;
 int excessPixelsBottom = 0;
 
+int RoundUpToMultipleOf(int val, int multiple)
+{
+  return ((val + multiple - 1) / multiple) * multiple;
+}
+
 // Tests if the pixels on the given new captured frame actually contain new image data from the previous frame
 bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer)
 {
@@ -70,11 +75,16 @@ void SnapshotFramebuffer(uint16_t *destination)
   // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
   // to randomly fail and then subsequently hang if called a second time)
 #ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
-  static uint16_t *tempTransposeBuffer; // Allocate as static here to keep the number of #ifdefs down a bit
+  static uint16_t *tempTransposeBuffer = 0; // Allocate as static here to keep the number of #ifdefs down a bit
+  const int pixelWidth = gpuFrameHeight+excessPixelsTop+excessPixelsBottom;
+  const int pixelHeight = gpuFrameWidth + excessPixelsLeft + excessPixelsRight;
+  const int stride = RoundUpToMultipleOf(pixelWidth*sizeof(uint16_t), 32);
   if (!tempTransposeBuffer)
-    tempTransposeBuffer = (uint16_t *)malloc(gpuFrameWidth * gpuFrameHeight * sizeof(uint16_t));
-  uint16_t *destPtr = tempTransposeBuffer;
-  const int stride = gpuFrameHeight*2;
+  {
+    tempTransposeBuffer = (uint16_t *)malloc(pixelHeight * stride * 2);
+    tempTransposeBuffer += pixelHeight * (stride>>1);
+  }
+  uint16_t *destPtr = tempTransposeBuffer - excessPixelsLeft * (stride >> 1) - excessPixelsTop;
 #else
   uint16_t *destPtr = destination - excessPixelsTop*(gpuFramebufferScanlineStrideBytes>>1) - excessPixelsLeft;
   const int stride = gpuFramebufferScanlineStrideBytes;
@@ -86,10 +96,12 @@ void SnapshotFramebuffer(uint16_t *destination)
     exit(failed);
   }
 #ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
-  // Transpose the snapshotted frame from landscape to portrait
+  // Transpose the snapshotted frame from landscape to portrait. The following takes around 0.5-1.0 msec
+  // of extra CPU time, so while this improves tearing to be perhaps a bit nicer visually, it probably
+  // is not good on the Pi Zero.
   for(int y = 0; y < gpuFrameHeight; ++y)
     for(int x = 0; x < gpuFrameWidth; ++x)
-      destination[y*(gpuFramebufferScanlineStrideBytes>>1)+x] = destPtr[x*(stride>>1)+y];
+      destination[y*(gpuFramebufferScanlineStrideBytes>>1)+x] = tempTransposeBuffer[x*(stride>>1)+y];
 #endif
 }
 
@@ -282,11 +294,6 @@ void *gpu_polling_thread(void*)
 
 #endif // ~USE_GPU_VSYNC
 
-int RoundUpToMultipleOf(int val, int multiple)
-{
-  return ((val + multiple - 1) / multiple) * multiple;
-}
-
 void InitGPU()
 {
   // Initialize GPU frame grabbing subsystem
@@ -343,10 +350,17 @@ void InitGPU()
     instead for pixel perfect rendering.
   */
   // NES:
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+  double overscanLeft = 19.0/240;
+  double overscanRight = 19.0/240;
+  double overscanTop = 9.0/320;
+  double overscanBottom = 9.0/320;
+#else
   double overscanLeft = 9.0/320;
   double overscanRight = 9.0/320;
   double overscanTop = 19.0/240;
   double overscanBottom = 19.0/240;
+#endif
 #else
   // No overscan (e.g. Quake):
   double overscanLeft = 0.00;
