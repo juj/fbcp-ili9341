@@ -125,4 +125,7 @@ typedef struct SPITask SPITask;
 
 void SPIDMATransfer(SPITask *task);
 
+extern int dmaTxChannel;
+extern int dmaRxChannel;
+
 #endif

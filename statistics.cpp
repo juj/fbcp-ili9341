@@ -29,6 +29,7 @@ uint64_t statsBytesTransferred = 0;
 int frameSkipTimeHistorySize = 0;
 uint64_t frameSkipTimeHistory[FRAME_HISTORY_MAX_SIZE] = {};
 
+char dmaChannelsText[32] = {};
 char fpsText[32] = {};
 char spiUsagePercentageText[32] = {};
 char spiBusDataRateText[32] = {};
@@ -60,6 +61,9 @@ void UpdateStatisticsNumbers()
 void DrawStatisticsOverlay(uint16_t *framebuffer)
 {
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
+#ifdef USE_DMA_TRANSFERS
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, dmaChannelsText, 1, 10, RGB565(31, 44, 8), 0);
+#endif
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, statsFrameSkipText, strlen(fpsText)*6, 1, RGB565(31,0,0), 0);
 #ifdef USE_SPI_THREAD
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 80, 10, spiUsageColor, 0);
@@ -79,6 +83,9 @@ void RefreshStatisticsOverlayText()
 
   UpdateStatisticsNumbers();
 
+#ifdef USE_DMA_TRANSFERS
+  sprintf(dmaChannelsText, "DMA:%d,%d", dmaTxChannel, dmaRxChannel);
+#endif
 #ifdef KERNEL_MODULE_CLIENT
   spiThreadUtilizationRate = 0; // TODO
   int spiRate = 0;
