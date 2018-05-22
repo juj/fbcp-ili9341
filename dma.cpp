@@ -440,9 +440,12 @@ void SPIDMATransfer(SPITask *task)
 #endif
   spi->fifo = task->cmd;
 #ifdef ILI9486
-    while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
-    spi->fifo;
-    spi->fifo;
+  while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
+  // spi->fifo; // Currently no need to flush these, the disableTA DMA task clears rx queue.
+  // spi->fifo;
+#else
+  while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
+  // spi->fifo;
 #endif
 
   __sync_synchronize();

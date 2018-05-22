@@ -84,7 +84,7 @@ void RefreshStatisticsOverlayText()
   UpdateStatisticsNumbers();
 
 #ifdef USE_DMA_TRANSFERS
-  sprintf(dmaChannelsText, "DMA:%d,%d", dmaTxChannel, dmaRxChannel);
+  sprintf(dmaChannelsText, "DMATx=%d,Rx=%d", dmaTxChannel, dmaRxChannel);
 #endif
 #ifdef KERNEL_MODULE_CLIENT
   spiThreadUtilizationRate = 0; // TODO
