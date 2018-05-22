@@ -13,7 +13,7 @@ static void ILI9341ClearScreen()
   for(int y = 0; y < DISPLAY_HEIGHT; ++y)
   {
     SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, (uint8_t)(y >> 8), y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
+    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, (uint8_t)(y >> 8), (uint8_t)(y & 0xFF), DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
     SPITask *clearLine = AllocTask(DISPLAY_WIDTH*2);
     clearLine->cmd = DISPLAY_WRITE_PIXELS;
     memset(clearLine->data, 0, clearLine->size);
@@ -120,7 +120,7 @@ void TurnDisplayOff()
   QUEUE_SPI_TRANSFER(0x10/*Enter Sleep Mode*/);
   usleep(120*1000); // Sleep off can be sent 120msecs after entering sleep mode the earliest, so synchronously sleep here for that duration to be safe.
 #endif
-  printf("Turned display OFF\n");
+//  printf("Turned display OFF\n");
 }
 
 void TurnDisplayOn()
@@ -134,7 +134,7 @@ void TurnDisplayOn()
   SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
   SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
 #endif
-  printf("Turned display ON\n");
+//  printf("Turned display ON\n");
 }
 
 #endif

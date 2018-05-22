@@ -227,7 +227,6 @@ int main()
 #endif
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
-      RefreshStatisticsOverlayText();
       DrawStatisticsOverlay(framebuffer[0]);
 
 #ifdef USE_GPU_VSYNC
@@ -239,14 +238,19 @@ int main()
       // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
+      bool isNewFramebuffer = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
-      while(!IsNewFramebuffer(framebuffer[0], framebuffer[1]) && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
+      while(!isNewFramebuffer && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
       {
         usleep(200);
         frameObtainedTime = tick();
         SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
+        isNewFramebuffer = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
+
+      if (isNewFramebuffer && !displayOff)
+        RefreshStatisticsOverlayText();
 
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
 #ifdef STATISTICS
@@ -553,7 +557,7 @@ int main()
 
 #ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
     double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
-    if (percentageOfScreenChanged > 0.05)
+    if (percentageOfScreenChanged > DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE)
     {
       displayContentsLastChanged = tick();
       if (displayOff)

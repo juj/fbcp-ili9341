@@ -121,12 +121,17 @@
 // writes will be performed (possibly with interrupts, if using kernel side driver module)
 // #define USE_DMA_TRANSFERS
 
-#ifdef GPIO_TFT_BACKLIGHT
+#ifdef ADAFRUIT_ILI9341_PITFT
 
 // If enabled, the display backlight will be turned off after this many usecs of no activity on screen.
 #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY (1 * 60 * 1000000)
 
 #endif
+
+// If less than this much % of the screen changes per frame, the screen is considered to be inactive, and
+// the display backlight can automatically turn off, if TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY is 
+// defined.
+#define DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE (0.5 / 100.0)
 
 #ifndef KERNEL_MODULE
 
