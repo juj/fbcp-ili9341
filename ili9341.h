@@ -59,4 +59,7 @@
 
 void InitILI9341(void);
 
+void TurnDisplayOn(void);
+void TurnDisplayOff(void);
+
 #endif

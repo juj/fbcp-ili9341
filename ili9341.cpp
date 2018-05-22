@@ -87,6 +87,12 @@ void InitILI9341()
     usleep(120 * 1000);
     SPI_TRANSFER(/*Display ON*/0x29);
 
+#ifdef GPIO_TFT_BACKLIGHT
+    printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
+    SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
+    SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
+#endif
+
     // Some wonky effects to try out:
 //    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
 //    SPI_TRANSFER(0x21/*Display Inversion ON*/);
@@ -101,6 +107,34 @@ void InitILI9341()
 
   // And speed up to the desired operation speed finally after init is done.
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
+}
+
+void TurnDisplayOff()
+{
+#ifdef GPIO_TFT_BACKLIGHT
+  SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
+  CLEAR_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight off.
+#endif
+#if 0
+  QUEUE_SPI_TRANSFER(0x28/*Display OFF*/);
+  QUEUE_SPI_TRANSFER(0x10/*Enter Sleep Mode*/);
+  usleep(120*1000); // Sleep off can be sent 120msecs after entering sleep mode the earliest, so synchronously sleep here for that duration to be safe.
+#endif
+  printf("Turned display OFF\n");
+}
+
+void TurnDisplayOn()
+{
+#if 0
+  QUEUE_SPI_TRANSFER(0x11/*Sleep Out*/);
+  usleep(120 * 1000);
+  QUEUE_SPI_TRANSFER(0x29/*Display ON*/);
+#endif
+#ifdef GPIO_TFT_BACKLIGHT
+  SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
+  SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
+#endif
+  printf("Turned display ON\n");
 }
 
 #endif

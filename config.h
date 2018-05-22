@@ -121,6 +121,9 @@
 // writes will be performed (possibly with interrupts, if using kernel side driver module)
 // #define USE_DMA_TRANSFERS
 
+// If enabled, the display backlight will be turned off after this many usecs of no activity on screen.
+// #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY 5000000
+
 #ifndef KERNEL_MODULE
 
 // Define this if building the client side program to run against the kernel driver module, rather than

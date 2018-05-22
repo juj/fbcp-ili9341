@@ -49,6 +49,9 @@ int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
   return changedPixels;
 }
 
+uint64_t displayContentsLastChanged = 0;
+bool displayOff = false;
+
 int main()
 {
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
@@ -56,6 +59,8 @@ int main()
 #endif
   OpenMailbox();
   InitSPI();
+  displayContentsLastChanged = tick();
+  displayOff = false;
 
   // Track current SPI display controller write X and Y cursors.
   int spiX = -1;
@@ -259,12 +264,17 @@ int main()
 #endif
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
     //if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
+
+#if !defined(NO_INTERLACING) || defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
+    int numChangedPixels = CountNumChangedPixels(framebuffer[0], framebuffer[1]);
+#endif
+
 #ifdef NO_INTERLACING
     interlacedUpdate = false;
 #elif defined(ALWAYS_INTERLACING)
-    interlacedUpdate = (CountNumChangedPixels(framebuffer[0], framebuffer[1]) > 0);
+    interlacedUpdate = (numChangedPixels > 0);
 #else
-    uint32_t bytesToSend = CountNumChangedPixels(framebuffer[0], framebuffer[1]) * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
+    uint32_t bytesToSend = numChangedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
@@ -420,6 +430,7 @@ int main()
       }
 
     // Submit spans
+    if (!displayOff)
     for(Span *i = head; i; i = i->next)
     {
 #ifdef ALIGN_TASKS_FOR_DMA_TRANSFERS
@@ -522,6 +533,24 @@ int main()
       prevFrameEnd = curFrameEnd;
       curFrameEnd = spiTaskMemory->queueTail;
     }
+
+#ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
+    double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
+    if (percentageOfScreenChanged > 0.10)
+    {
+      displayContentsLastChanged = tick();
+      if (displayOff)
+      {
+        TurnDisplayOn();
+        displayOff = false;
+      }
+    }
+    else if (!displayOff && tick() - displayContentsLastChanged > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
+    {
+      TurnDisplayOff();
+      displayOff = true;
+    }
+#endif
 
 #ifdef STATISTICS
     if (bytesTransferred > 0 && frameTimeHistorySize < FRAME_HISTORY_MAX_SIZE)
