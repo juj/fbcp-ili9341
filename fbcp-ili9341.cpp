@@ -114,9 +114,26 @@ int main()
     }
     else
     {
+      uint64_t waitStart = tick();
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
-        syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
+#ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
+        if (!displayOff && tick() - waitStart > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
+        {
+          TurnDisplayOff();
+          displayOff = true;
+        }
+
+        if (!displayOff)
+        {
+          timespec timeout = {};
+          timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
+          timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
+          syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+        }
+        else
+#endif
+          syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
       }
     }
 
@@ -536,7 +553,7 @@ int main()
 
 #ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
     double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
-    if (percentageOfScreenChanged > 0.10)
+    if (percentageOfScreenChanged > 0.05)
     {
       displayContentsLastChanged = tick();
       if (displayOff)

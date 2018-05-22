@@ -122,7 +122,7 @@
 // #define USE_DMA_TRANSFERS
 
 // If enabled, the display backlight will be turned off after this many usecs of no activity on screen.
-// #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY 5000000
+// #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY (1 * 60 * 1000000)
 
 #ifndef KERNEL_MODULE
 
