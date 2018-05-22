@@ -181,13 +181,24 @@ int InitDMA()
   if ((dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != 0 && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_TX && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_RX)
   {
     LOG("DMA TX channel %d was assigned another peripheral map %d!", dmaTxChannel, (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    for(int i = 0; i < 15; ++i)
+    {
+      volatile DMAChannelRegisterFile *channel = dma + i;
+      printf("DMA channel %d has peripheral map %d\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    }
     FATAL_ERROR("DMA TX channel was assigned another peripheral map!");
   }
   if (dmaTx->cbAddr != 0 && (dmaTx->cs & BCM2835_DMA_CS_ACTIVE) && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) == 0)
     FATAL_ERROR("DMA TX channel was in use!");
+
   if ((dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != 0 && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_TX && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_RX)
   {
     LOG("DMA RX channel %d was assigned another peripheral map %d!", dmaRxChannel, (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    for(int i = 0; i < 15; ++i)
+    {
+      volatile DMAChannelRegisterFile *channel = dma + i;
+      printf("DMA channel %d has peripheral map %d\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    }
     FATAL_ERROR("DMA RX channel was assigned another peripheral map!");
   }
   if (dmaRx->cbAddr != 0 && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE) && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) == 0)
