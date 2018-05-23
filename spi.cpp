@@ -181,7 +181,7 @@ void RunSPITask(SPITask *task)
 // For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
 // For larger transfers though that are more than this amount of bytes, using DMA is faster.
 // This cutoff number was experimentally tested to find where Polled SPI and DMA are as fast.
-#define DMA_IS_FASTER_THAN_POLLED_SPI 240
+#define DMA_IS_FASTER_THAN_POLLED_SPI 140
   // Do a DMA transfer if this task is suitable in size for DMA to handle
 #ifdef USE_DMA_TRANSFERS
   if (tEnd - tStart > DMA_IS_FASTER_THAN_POLLED_SPI)
