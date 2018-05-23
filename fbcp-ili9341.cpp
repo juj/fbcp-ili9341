@@ -249,8 +249,12 @@ int main()
         isNewFramebuffer = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
 
-      if (isNewFramebuffer && !displayOff)
-        RefreshStatisticsOverlayText();
+      if (isNewFramebuffer)
+      {
+        lastFrameObtainedTime = frameObtainedTime;
+        if (!displayOff)
+          RefreshStatisticsOverlayText();
+      }
 
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
 #ifdef STATISTICS
@@ -264,12 +268,10 @@ int main()
       __atomic_fetch_add(&timeWastedPollingGPU, completelyUnnecessaryTimeWastedPollingGPUStop-completelyUnnecessaryTimeWastedPollingGPUStart, __ATOMIC_RELAXED);
 #endif
 
-#endif
-
-#ifndef USE_GPU_VSYNC
+#else // !USE_GPU_VSYNC
+      if (!displayOff)
+        RefreshStatisticsOverlayText();
       AddHistogramSample();
-#else
-      lastFrameObtainedTime = frameObtainedTime;
 #endif
     }
 
