@@ -22,7 +22,9 @@
 #define BCM2835_PERI_BASE               0x3F000000
 
 SharedMemory *dmaSourceMemory = 0;
-volatile DMAChannelRegisterFile *dma = 0;
+volatile DMAChannelRegisterFile *dma0 = 0;
+volatile DMAChannelRegisterFile *dma15 = 0;
+
 volatile DMAChannelRegisterFile *dmaTx = 0;
 volatile DMAChannelRegisterFile *dmaRx = 0;
 int dmaTxChannel = 0;
@@ -140,21 +142,33 @@ void FreeUncachedGpuMemory(GpuMemory mem)
   Mailbox(MEM_FREE_MESSAGE, mem.allocationHandle);
 }
 
+volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber)
+{
+  if (channelNumber < 0 || channelNumber >= BCM2835_NUM_DMA_CHANNELS)
+  {
+    printf("Invalid DMA channel %d specified!\n", channelNumber);
+    FATAL_ERROR("Invalid DMA channel specified!");
+  }
+  return (channelNumber < 15) ? (dma0 + channelNumber) : dma15;
+}
+
 void DumpDMAPeripheralMap()
 {
-  for(int i = 0; i < 15; ++i)
+  for(int i = 0; i < BCM2835_NUM_DMA_CHANNELS; ++i)
   {
-    volatile DMAChannelRegisterFile *channel = dma + i;
-    printf("DMA channel %d has peripheral map %d (currently active: %d)\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    volatile DMAChannelRegisterFile *channel = GetDMAChannel(i);
+    printf("DMA channel %d has peripheral map %d (is lite channel: %d, currently active: %d, current control block: %p)\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT, (channel->cb.debug & BCM2835_DMA_DEBUG_LITE) ? 1 : 0, (channel->cs & BCM2835_DMA_CS_ACTIVE) ? 1 : 0, channel->cbAddr);
   }
 }
 
 int InitDMA()
 {
 #if defined(KERNEL_MODULE)
-  dma = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA_BASE, 0x1000);
+  dma0 = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA0_OFFSET, 15*0x100);
+  dma15 = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA15_OFFSET, 0x100);
 #else
-  dma = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA_BASE);
+  dma0 = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA0_OFFSET);
+  dma15 = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA15_OFFSET);
 #endif
 
 #ifdef KERNEL_MODULE_CLIENT
@@ -167,7 +181,7 @@ int InitDMA()
   if (ret != 0) FATAL_ERROR("Unable to allocate RX DMA channel!");
 
   printf("Enabling DMA channels Tx:%d and Rx:%d\n", dmaTxChannel, dmaRxChannel);
-  volatile uint32_t *dmaEnableRegister = (volatile uint32_t *)((uintptr_t)dma + BCM2835_DMAENABLE_REGISTER_OFFSET);
+  volatile uint32_t *dmaEnableRegister = (volatile uint32_t *)((uintptr_t)dma0 + BCM2835_DMAENABLE_REGISTER_OFFSET);
 
   // Enable the allocated DMA channels
   *dmaEnableRegister |= (1 << dmaTxChannel);
@@ -181,11 +195,11 @@ int InitDMA()
   firstFreeCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
 #endif
 
-  LOG("DMA hardware register file is at ptr: %p, using DMA TX channel: %d and DMA RX channel: %d", dma, dmaTxChannel, dmaRxChannel);
-  if (!dma) FATAL_ERROR("Failed to map DMA!");
+  LOG("DMA hardware register file is at ptr: %p (dma15=%p), using DMA TX channel: %d and DMA RX channel: %d", dma0, dma15, dmaTxChannel, dmaRxChannel);
+  if (!dma0 || !dma15) FATAL_ERROR("Failed to map DMA!");
 
-  dmaTx = dma + dmaTxChannel;
-  dmaRx = dma + dmaRxChannel;
+  dmaTx = GetDMAChannel(dmaTxChannel);
+  dmaRx = GetDMAChannel(dmaRxChannel);
   LOG("DMA hardware TX channel register file is at ptr: %p, DMA RX channel register file is at ptr: %p", dmaTx, dmaRx);
   if ((dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != 0 && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_TX && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_RX)
   {

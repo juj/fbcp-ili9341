@@ -2,7 +2,9 @@
 
 #ifdef USE_DMA_TRANSFERS
 
-#define BCM2835_DMA_BASE                  0x7000
+#define BCM2835_DMA0_OFFSET  0x7000   // DMA channels 0-14 live at 0x7E007000, offset of 0x7000 of BCM2835 peripherals base address
+#define BCM2835_DMA15_OFFSET 0xE05000 // DMA channel 15 is physically separate at 0x7EE05000, offset of 0xE05000 of BCM2835 peripherals base address
+
 #define BCM2835_DMAENABLE_REGISTER_OFFSET 0xff0
 
 typedef struct __attribute__ ((packed, aligned(4))) DMAControlBlock
@@ -25,11 +27,12 @@ typedef struct __attribute__ ((packed, aligned(4))) DMAChannelRegisterFile
   volatile uint8_t padding[216]; // Pad this structure to 256 bytes in size total for easy indexing into DMA channels.
 } DMAChannelRegisterFile;
 
-extern volatile DMAChannelRegisterFile *dma; // Points to the base of the DMA channel array
 extern int dmaTxChannel, dmaTxIrq;
 extern volatile DMAChannelRegisterFile *dmaTx; // DMA channel allocated to sending to SPI
 extern int dmaRxChannel, dmaRxIrq;
 extern volatile DMAChannelRegisterFile *dmaRx; // DMA channel allocated to reading from SPI
+
+volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber);
 
 #define BCM2835_DMA_CS_RESET                         (1<<31)
 #define BCM2835_DMA_CS_ABORT                         (1<<30)
@@ -115,6 +118,8 @@ extern volatile DMAChannelRegisterFile *dmaRx; // DMA channel allocated to readi
 #define BCM2835_DMA_TI_WAIT_RESP_SHIFT                      3
 #define BCM2835_DMA_TI_TDMODE_SHIFT                         1
 #define BCM2835_DMA_TI_INTEN_SHIFT                          0
+
+#define BCM2835_NUM_DMA_CHANNELS 16
 
 void WaitForDMAFinished(void);
 
