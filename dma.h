@@ -3,7 +3,6 @@
 #ifdef USE_DMA_TRANSFERS
 
 #define BCM2835_DMA0_OFFSET  0x7000   // DMA channels 0-14 live at 0x7E007000, offset of 0x7000 of BCM2835 peripherals base address
-#define BCM2835_DMA15_OFFSET 0xE05000 // DMA channel 15 is physically separate at 0x7EE05000, offset of 0xE05000 of BCM2835 peripherals base address
 
 #define BCM2835_DMAENABLE_REGISTER_OFFSET 0xff0
 
@@ -119,7 +118,10 @@ volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber);
 #define BCM2835_DMA_TI_TDMODE_SHIFT                         1
 #define BCM2835_DMA_TI_INTEN_SHIFT                          0
 
-#define BCM2835_NUM_DMA_CHANNELS 16
+// Spec sheet says there's 16 channels, but last channel is unusable:
+// https://www.raspberrypi.org/forums/viewtopic.php?t=170957
+// So just behave as if there are only 15 channels
+#define BCM2835_NUM_DMA_CHANNELS 15
 
 void WaitForDMAFinished(void);
 

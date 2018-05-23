@@ -23,7 +23,6 @@
 
 SharedMemory *dmaSourceMemory = 0;
 volatile DMAChannelRegisterFile *dma0 = 0;
-volatile DMAChannelRegisterFile *dma15 = 0;
 
 volatile DMAChannelRegisterFile *dmaTx = 0;
 volatile DMAChannelRegisterFile *dmaRx = 0;
@@ -149,7 +148,7 @@ volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber)
     printf("Invalid DMA channel %d specified!\n", channelNumber);
     FATAL_ERROR("Invalid DMA channel specified!");
   }
-  return (channelNumber < 15) ? (dma0 + channelNumber) : dma15;
+  return dma0 + channelNumber;
 }
 
 void DumpDMAPeripheralMap()
@@ -164,11 +163,9 @@ void DumpDMAPeripheralMap()
 int InitDMA()
 {
 #if defined(KERNEL_MODULE)
-  dma0 = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA0_OFFSET, 15*0x100);
-  dma15 = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA15_OFFSET, 0x100);
+  dma0 = (volatile DMAChannelRegisterFile*)ioremap(BCM2835_PERI_BASE+BCM2835_DMA0_OFFSET, BCM2835_NUM_DMA_CHANNELS*0x100);
 #else
   dma0 = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA0_OFFSET);
-  dma15 = (volatile DMAChannelRegisterFile*)((uintptr_t)bcm2835 + BCM2835_DMA15_OFFSET);
 #endif
 
 #ifdef KERNEL_MODULE_CLIENT
@@ -195,8 +192,8 @@ int InitDMA()
   firstFreeCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
 #endif
 
-  LOG("DMA hardware register file is at ptr: %p (dma15=%p), using DMA TX channel: %d and DMA RX channel: %d", dma0, dma15, dmaTxChannel, dmaRxChannel);
-  if (!dma0 || !dma15) FATAL_ERROR("Failed to map DMA!");
+  LOG("DMA hardware register file is at ptr: %p, using DMA TX channel: %d and DMA RX channel: %d", dma0, dmaTxChannel, dmaRxChannel);
+  if (!dma0) FATAL_ERROR("Failed to map DMA!");
 
   dmaTx = GetDMAChannel(dmaTxChannel);
   dmaRx = GetDMAChannel(dmaRxChannel);
