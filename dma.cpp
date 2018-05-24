@@ -156,8 +156,34 @@ void DumpDMAPeripheralMap()
   for(int i = 0; i < BCM2835_NUM_DMA_CHANNELS; ++i)
   {
     volatile DMAChannelRegisterFile *channel = GetDMAChannel(i);
-    printf("DMA channel %d has peripheral map %d (is lite channel: %d, currently active: %d, current control block: %p)\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT, (channel->cb.debug & BCM2835_DMA_DEBUG_LITE) ? 1 : 0, (channel->cs & BCM2835_DMA_CS_ACTIVE) ? 1 : 0, channel->cbAddr);
+    printf("DMA channel %d has peripheral map %d (is lite channel: %d, currently active: %d, current control block: %p)\n", i, (channel->cb.ti & BCM2835_DMA_TI_PERMAP_MASK) >> BCM2835_DMA_TI_PERMAP_SHIFT, (channel->cb.debug & BCM2835_DMA_DEBUG_LITE) ? 1 : 0, (channel->cs & BCM2835_DMA_CS_ACTIVE) ? 1 : 0, channel->cbAddr);
   }
+}
+
+// Verifies that no other program has stomped on the DMA channel that we are using.
+void CheckDMAChannelNotStolen(int channelNumber, int expectedPeripheralMap)
+{
+  volatile DMAChannelRegisterFile *channel = GetDMAChannel(channelNumber);
+  uint32_t peripheralMap = ((channel->cb.ti & BCM2835_DMA_TI_PERMAP_MASK) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+  if (peripheralMap != expectedPeripheralMap && peripheralMap != 0)
+  {
+    DumpDMAPeripheralMap();
+    printf("DMA channel collision! DMA channel %d was expected to be assigned to our peripheral %d, but something else has assigned it to peripheral %d!\n", channelNumber, expectedPeripheralMap, peripheralMap);
+    FATAL_ERROR("System is likely unstable now, rebooting is advised.");
+  }
+  uint32_t cbAddr = channel->cbAddr;
+  if (cbAddr && (cbAddr < dmaCb.busAddress || cbAddr >= dmaCb.busAddress + dmaCb.sizeBytes))
+  {
+    DumpDMAPeripheralMap();
+    printf("DMA channel collision! Some other program has submitted a DMA task to our DMA channel %d! (DMA task at unknown control block address %p)\n", channelNumber, cbAddr);
+    FATAL_ERROR("System is likely unstable now, rebooting is advised.");
+  }
+}
+
+void CheckSPIDMAChannelsNotStolen()
+{
+  CheckDMAChannelNotStolen(dmaTxChannel, BCM2835_DMA_TI_PERMAP_SPI_TX);
+  CheckDMAChannelNotStolen(dmaRxChannel, BCM2835_DMA_TI_PERMAP_SPI_RX);
 }
 
 int InitDMA()
@@ -198,22 +224,24 @@ int InitDMA()
   dmaTx = GetDMAChannel(dmaTxChannel);
   dmaRx = GetDMAChannel(dmaRxChannel);
   LOG("DMA hardware TX channel register file is at ptr: %p, DMA RX channel register file is at ptr: %p", dmaTx, dmaRx);
-  if ((dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != 0 && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_TX && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_RX)
+  int dmaTxPeripheralMap = (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP_MASK) >> BCM2835_DMA_TI_PERMAP_SHIFT;
+  if (dmaTxPeripheralMap != 0 && dmaTxPeripheralMap != BCM2835_DMA_TI_PERMAP_SPI_TX)
   {
-    LOG("DMA TX channel %d was assigned another peripheral map %d!", dmaTxChannel, (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
     DumpDMAPeripheralMap();
+    LOG("DMA TX channel %d was assigned another peripheral map %d!", dmaTxChannel, dmaTxPeripheralMap);
     FATAL_ERROR("DMA TX channel was assigned another peripheral map!");
   }
-  if (dmaTx->cbAddr != 0 && (dmaTx->cs & BCM2835_DMA_CS_ACTIVE) && (dmaTx->cb.ti & BCM2835_DMA_TI_PERMAP) == 0)
+  if (dmaTx->cbAddr != 0 && (dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
     FATAL_ERROR("DMA TX channel was in use!");
 
-  if ((dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != 0 && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_TX && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) != BCM2835_DMA_TI_PERMAP_SPI_RX)
+  int dmaRxPeripheralMap = (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP_MASK) >> BCM2835_DMA_TI_PERMAP_SHIFT;
+  if (dmaRxPeripheralMap != 0 && dmaRxPeripheralMap != BCM2835_DMA_TI_PERMAP_SPI_RX)
   {
-    LOG("DMA RX channel %d was assigned another peripheral map %d!", dmaRxChannel, (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) >> BCM2835_DMA_TI_PERMAP_SHIFT);
+    LOG("DMA RX channel %d was assigned another peripheral map %d!", dmaRxChannel, dmaRxPeripheralMap);
     DumpDMAPeripheralMap();
     FATAL_ERROR("DMA RX channel was assigned another peripheral map!");
   }
-  if (dmaRx->cbAddr != 0 && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE) && (dmaRx->cb.ti & BCM2835_DMA_TI_PERMAP) == 0)
+  if (dmaRx->cbAddr != 0 && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
     FATAL_ERROR("DMA RX channel was in use!");
 
   // Reset the DMA channels
@@ -264,7 +292,8 @@ void DumpTI(uint32_t reg)
 {
   PRINT_FLAG(BCM2835_DMA_TI_NO_WIDE_BURSTS);
   PRINT_FLAG(BCM2835_DMA_TI_WAITS);
-  PRINT_FLAG(BCM2835_DMA_TI_PERMAP);
+#define BCM2835_DMA_TI_PERMAP_MASK_SHIFT                    16
+  PRINT_FLAG(BCM2835_DMA_TI_PERMAP_MASK);
 //  PRINT_FLAG(BCM2835_DMA_TI_BURST_LENGTH);
   PRINT_FLAG(BCM2835_DMA_TI_SRC_IGNORE);
   PRINT_FLAG(BCM2835_DMA_TI_SRC_DREQ);
@@ -370,7 +399,7 @@ void SPIDMATransfer(SPITask *task)
   clear_dc_gpio_line->debug = 0;
   clear_dc_gpio_line->reserved = 0;
 
-  datacb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(1);
+  datacb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;// | BCM2835_DMA_TI_NO_WIDE_BURSTS | BCM2835_DMA_TI_BURST_LENGTH(1);
   datacb->src = VIRT_TO_BUS(dmaSourceBuffer, sendCmd);
   datacb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Send SPI command
   datacb->len = sizeof(uint8_t) + sizeof(uint32_t);
@@ -382,7 +411,7 @@ void SPIDMATransfer(SPITask *task)
   */
 
   /*
-  read_one->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
+  read_one->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_RX) | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
   read_one->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   read_one->dst = 0;
   read_one->len = 1;
@@ -409,7 +438,7 @@ void SPIDMATransfer(SPITask *task)
   set_dc_gpio_line->debug = 0;
   set_dc_gpio_line->reserved = 0;
 
-  txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
+  txcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
   txcb->src = VIRT_TO_BUS(dmaSourceBuffer, sendPixels);
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
   txcb->len = task->size + sizeof(uint32_t);
@@ -418,7 +447,7 @@ void SPIDMATransfer(SPITask *task)
   txcb->debug = 0;
   txcb->reserved = 0;
 
-  rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
+  rxcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_RX) | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE | BCM2835_DMA_TI_WAIT_RESP;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   rxcb->dst = 0;
   rxcb->len = task->size;
@@ -434,11 +463,23 @@ void SPIDMATransfer(SPITask *task)
   if (pendingTaskUSecs > 70)
     usleep(pendingTaskUSecs-70);
 
-  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-    usleep(250);
+  uint64_t dmaTaskStart = tick();
 
-  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+  CheckSPIDMAChannelsNotStolen();
+  while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
+  {
     usleep(250);
+    CheckSPIDMAChannelsNotStolen();
+    if (tick() - dmaTaskStart > 5000000)
+      FATAL_ERROR("DMA TX channel has stalled!");
+  }
+  while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
+  {
+    usleep(250);
+    CheckSPIDMAChannelsNotStolen();
+    if (tick() - dmaTaskStart > 5000000)
+      FATAL_ERROR("DMA RX channel has stalled!");
+  }
 
   dmaSendTail = 0;
   dmaRecvTail = 0;
@@ -493,7 +534,7 @@ void SPIDMATransfer(SPITask *task)
 
   volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
   volatile DMAControlBlock *txcb = &cb[0];
-  txcb->ti = BCM2835_DMA_TI_PERMAP_SPI_TX | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
+  txcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
   txcb->src = dmaSourceBuffer.busAddress;
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
   txcb->len = task->size + 4;
@@ -504,7 +545,7 @@ void SPIDMATransfer(SPITask *task)
   dmaTx->cbAddr = dmaCb.busAddress;
 
   volatile DMAControlBlock *rxcb = &cb[1];
-  rxcb->ti = BCM2835_DMA_TI_PERMAP_SPI_RX | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE;
+  rxcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_RX) | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   rxcb->dst = 0;
   rxcb->len = task->size;
@@ -523,10 +564,21 @@ void SPIDMATransfer(SPITask *task)
   if (pendingTaskUSecs > 70)
     usleep(pendingTaskUSecs-70);
 
+  uint64_t dmaTaskStart = tick();
+
+  CheckSPIDMAChannelsNotStolen();
   while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
-    ;
+  {
+    CheckSPIDMAChannelsNotStolen();
+    if (tick() - dmaTaskStart > 5000000)
+      FATAL_ERROR("DMA TX channel has stalled!");
+  }
   while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
-    ;
+  {
+    CheckSPIDMAChannelsNotStolen();
+    if (tick() - dmaTaskStart > 5000000)
+      FATAL_ERROR("DMA RX channel has stalled!");
+  }
 
   __sync_synchronize();
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;

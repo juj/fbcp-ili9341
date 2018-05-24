@@ -86,9 +86,10 @@ volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber);
 
 #define BCM2835_DMA_TI_NO_WIDE_BURSTS                       (1<<26)
 #define BCM2835_DMA_TI_WAITS                                (0x1F<<21)
-#define BCM2835_DMA_TI_PERMAP                               (0x1F<<16)
-#define BCM2835_DMA_TI_PERMAP_SPI_TX                        (6<<16)
-#define BCM2835_DMA_TI_PERMAP_SPI_RX                        (7<<16)
+#define BCM2835_DMA_TI_PERMAP(x)                            ((x)<<16)
+#define BCM2835_DMA_TI_PERMAP_MASK                          (0x1F<<16)
+#define BCM2835_DMA_TI_PERMAP_SPI_TX                        6
+#define BCM2835_DMA_TI_PERMAP_SPI_RX                        7
 #define BCM2835_DMA_TI_BURST_LENGTH(x)                      ((x)<<12)
 #define BCM2835_DMA_TI_SRC_IGNORE                           (1<<11)
 #define BCM2835_DMA_TI_SRC_DREQ                             (1<<10)
