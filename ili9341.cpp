@@ -87,7 +87,7 @@ void InitILI9341()
     usleep(120 * 1000);
     SPI_TRANSFER(/*Display ON*/0x29);
 
-#ifdef GPIO_TFT_BACKLIGHT
+#if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
     SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
     SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
@@ -111,7 +111,7 @@ void InitILI9341()
 
 void TurnDisplayOff()
 {
-#ifdef GPIO_TFT_BACKLIGHT
+#if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
   SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
   CLEAR_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight off.
 #endif
@@ -130,7 +130,7 @@ void TurnDisplayOn()
   usleep(120 * 1000);
   QUEUE_SPI_TRANSFER(0x29/*Display ON*/);
 #endif
-#ifdef GPIO_TFT_BACKLIGHT
+#if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
   SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
   SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
 #endif
