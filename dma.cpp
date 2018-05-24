@@ -420,6 +420,7 @@ void SPIDMATransfer(SPITask *task)
   read_one->debug = 0;
   read_one->reserved = 0;
 */
+  /*
   ta_disable->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;
   ta_disable->src = VIRT_TO_BUS(dmaSourceBuffer, disableTA);
   ta_disable->dst = DMA_SPI_CS_PHYS_ADDRESS; // Send SPI command
@@ -437,7 +438,7 @@ void SPIDMATransfer(SPITask *task)
   set_dc_gpio_line->next = VIRT_TO_BUS(dmaCb, txcb);
   set_dc_gpio_line->debug = 0;
   set_dc_gpio_line->reserved = 0;
-
+*/
   txcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
   txcb->src = VIRT_TO_BUS(dmaSourceBuffer, sendPixels);
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
@@ -486,9 +487,9 @@ void SPIDMATransfer(SPITask *task)
   pendingTaskBytes = task->size;
 
   if (!dmaTx->cbAddr || !dmaSendTail)
-    dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, ta_disable);
+    dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, txcb);
   else
-    dmaSendTail->next = VIRT_TO_BUS(dmaCb, ta_disable);
+    dmaSendTail->next = VIRT_TO_BUS(dmaCb, txcb);
   dmaSendTail = txcb;
 
   if (!dmaRx->cbAddr || !dmaRecvTail)
@@ -511,6 +512,9 @@ void SPIDMATransfer(SPITask *task)
   while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
   // spi->fifo;
 #endif
+
+  SET_GPIO(GPIO_TFT_DATA_CONTROL);
+  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
 
   __sync_synchronize();
   dmaTx->cs = BCM2835_DMA_CS_ACTIVE;
