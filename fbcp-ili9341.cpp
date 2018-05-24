@@ -117,7 +117,7 @@ int main()
       uint64_t waitStart = tick();
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
-#ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
+#if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         if (!displayOff && tick() - waitStart > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         {
           TurnDisplayOff();
@@ -198,30 +198,24 @@ int main()
 
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
+    bool framebufferHasNewChangedPixels = true;
     if (gotNewFramebuffer)
     {
 #ifdef USE_GPU_VSYNC
       static uint64_t lastFrameObtainedTime = 0;
       // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
-      uint64_t earliestNextFrameArrivalTime = lastFrameObtainedTime + 1000000/60;
-      uint64_t now = tick();
-      uint64_t framePollingStartTime = now;
-      while(now < earliestNextFrameArrivalTime)
-      {
-        if (earliestNextFrameArrivalTime - now > 70)
-          usleep(earliestNextFrameArrivalTime - now - 70);
-        now = tick();
-      }
       // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
       // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
 
       uint64_t frameObtainedTime = tick();
+      uint64_t framePollingStartTime = frameObtainedTime;
       SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
 
 #ifdef STATISTICS
+      uint64_t now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 #endif
@@ -238,18 +232,18 @@ int main()
       // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
-      bool isNewFramebuffer = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
+      framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
-      while(!isNewFramebuffer && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
+      while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
       {
-        usleep(200);
+        usleep(2000);
         frameObtainedTime = tick();
         SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
-        isNewFramebuffer = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
+        framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
 
-      if (isNewFramebuffer)
+      if (framebufferHasNewChangedPixels)
       {
         lastFrameObtainedTime = frameObtainedTime;
         if (!displayOff)
@@ -258,6 +252,7 @@ int main()
 
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
 #ifdef STATISTICS
+      now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 #endif
@@ -288,8 +283,8 @@ int main()
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
     //if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
 
-#if !defined(NO_INTERLACING) || defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
-    int numChangedPixels = CountNumChangedPixels(framebuffer[0], framebuffer[1]);
+#if !defined(NO_INTERLACING) || (defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY))
+    int numChangedPixels = framebufferHasNewChangedPixels ? CountNumChangedPixels(framebuffer[0], framebuffer[1]) : 0;
 #endif
 
 #ifdef NO_INTERLACING
@@ -337,6 +332,7 @@ int main()
     Span *head = 0;
 
     // Collect all spans in this image
+    if (framebufferHasNewChangedPixels || prevFrameWasInterlacedUpdate)
     while(y < gpuFrameHeight)
     {
       uint16_t *scanlineStart = scanline;
@@ -557,7 +553,7 @@ int main()
       curFrameEnd = spiTaskMemory->queueTail;
     }
 
-#ifdef TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY
+#if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
     double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
     if (percentageOfScreenChanged > DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE)
     {
