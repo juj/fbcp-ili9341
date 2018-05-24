@@ -347,7 +347,10 @@ void InitGPU()
       custom_viewport_height = "224"
       custom_viewport_x = "40"
       custom_viewport_y = "8"
-    instead for pixel perfect rendering.
+    instead for pixel perfect rendering. Also in /opt/retropie/configs/all/retroarch.cfg, set
+
+      video_fullscreen_x = "320"
+      video_fullscreen_y = "240"
   */
   // NES:
 #ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
