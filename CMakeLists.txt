@@ -46,7 +46,7 @@ option(GPIO_TFT_RESET_PIN "Explicitly specify the Reset GPIO pin (leave out if t
 
 option(KERNEL_MODULE_CLIENT "If enabled, run fbcp-ili9341 userland program against the kernel module found in kernel/ subdirectory (must be started before the userland program)" OFF)
 
-option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" OFF)
+option(USE_DMA_TRANSFERS "If enabled, fbcp-ili9341 utilizes DMA to transfer data to the display. Otherwise, Polled SPI mode is used to drive communication with the SPI display" ON)
 
 option(DMA_TX_CHANNEL "Specifies the DMA send channel to use" 0)
 option(DMA_RX_CHANNEL "Specifies the DMA receive channel to use" 0)
