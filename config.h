@@ -66,7 +66,7 @@
 
 // The ILI9486 has to resort to interlacing as a rule rather than exception, and it works much smoother
 // when applying throttling to interlacing, so enable it by default there.
-#ifdef WAVESHARE35B_ILI9486
+#if defined(ILI9486) || defined(HX8357D)
 #define THROTTLE_INTERLACING
 #endif
 

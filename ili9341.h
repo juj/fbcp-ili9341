@@ -45,6 +45,8 @@
 
 #ifdef ADAFRUIT_ILI9341_PITFT
 #include "pitft_28r_ili9341.h"
+#elif defined(ADAFRUIT_HX8357D_PITFT)
+#include "pitft_35r_hx8357d.h"
 #elif defined(FREEPLAYTECH_WAVESHARE32B)
 #include "freeplaytech_waveshare32b.h"
 #elif !defined(ILI9341)

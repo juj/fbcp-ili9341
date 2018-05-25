@@ -465,7 +465,7 @@ int main()
       // Update the write cursor if needed
       if (spiY != i->y)
       {
-#if defined(ILI9486) || defined(ALIGN_TASKS_FOR_DMA_TRANSFERS)
+#if defined(MUST_SEND_FULL_CURSOR_WINDOW) || defined(ALIGN_TASKS_FOR_DMA_TRANSFERS)
         QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, displayYOffset + DISPLAY_DRAWABLE_HEIGHT - 1);
 #else
         QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
@@ -510,7 +510,7 @@ int main()
         }
         else if (spiX != i->x)
         {
-#ifdef ILI9486
+#ifdef MUST_SEND_FULL_CURSOR_WINDOW
           QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + spiEndX - 1);
 #else
           QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x);
