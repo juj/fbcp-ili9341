@@ -11,7 +11,7 @@
 
 // While the following values were seen to not work:
 
-// core_freq=330: CDIV=6, would result in 55.00MHz, which would work for several minutes, but then introduce infrequent single pixel glitches
+// core_freq=315: CDIV=6, would result in 52.50MHz, which would work for several minutes, but then introduce infrequent single pixel glitches
 
 #if !defined(GPIO_TFT_DATA_CONTROL)
 #define GPIO_TFT_DATA_CONTROL 25

@@ -275,13 +275,12 @@ int main()
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
 #ifdef PI_ZERO
     const double timesliceToUseForScreenUpdates = 250000;
-#elif defined(ILI9486)
+#elif defined(ILI9486) || defined(HX8357D)
     const double timesliceToUseForScreenUpdates = 750000;
 #else
     const double timesliceToUseForScreenUpdates = 1500000;
 #endif
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
-    //if (gotNewFramebuffer) prevFrameWasInterlacedUpdate = false; // If we receive a new frame from the GPU, forget that previous frame was interlaced to count this frame as fully progressive in statistics.
 
 #if !defined(NO_INTERLACING) || (defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY))
     int numChangedPixels = framebufferHasNewChangedPixels ? CountNumChangedPixels(framebuffer[0], framebuffer[1]) : 0;
@@ -318,6 +317,8 @@ int main()
 #define SPAN_MERGE_THRESHOLD 320
 #elif defined(ILI9486)
 #define SPAN_MERGE_THRESHOLD 10
+#elif defined(HX8357D)
+#define SPAN_MERGE_THRESHOLD 6
 #else
 #define SPAN_MERGE_THRESHOLD 4
 #endif
