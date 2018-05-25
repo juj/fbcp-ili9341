@@ -7,7 +7,7 @@
 // are 4, 6, 8, 10, 12, ... Smaller values are faster. On my PiTFT 3.5" display, the
 // following values were observed to work (on a Pi 3B):
 
-// core_freq=310: CDIV=6, results in 51.66MHz
+// core_freq=314: CDIV=6, results in 52.333MHz
 
 // While the following values were seen to not work:
 

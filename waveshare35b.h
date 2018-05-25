@@ -8,13 +8,12 @@
 // following values were observed to work (on a Pi 3B):
 
 // core_freq=400: CDIV=14, results in 28.57MHz
-// core_freq=250: CDIV=8, results in 31.25MHz
-// core_freq=256: CDIV=8, results in 32.00MHz
+// core_freq=255: CDIV=8, results in 31.875MHz
 
 // While the following values were seen to not work:
 
 // core_freq=400: CDIV=12, would result in 33.33MHz, but this was too fast for the display
-// core_freq=258: CDIV=8, would result in 32.25MHz, this would work 99% of the time, but full screen fade-ins and fade-outs would start to exhibit occasional incorrect pixel noise
+// core_freq=256: CDIV=8, would result in 32.00MHz, this would work 99% of the time, but occassionally every ~few minutes would glitch a pixel or two
 
 #if !defined(SPI_BUS_CLOCK_DIVISOR)
 #error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file waveshare35b.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
