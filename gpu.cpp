@@ -15,8 +15,14 @@
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
 // #define RANDOM_TEST_PATTERN
-// #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
-// #define RANDOM_TEST_PATTERN_FRAME_RATE 120
+
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_HEIGHT
+#else
+#define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
+#endif
+
+#define RANDOM_TEST_PATTERN_FRAME_RATE 120
 
 DISPMANX_DISPLAY_HANDLE_T display;
 DISPMANX_RESOURCE_HANDLE_T screen_resource;
@@ -240,6 +246,7 @@ void *gpu_polling_thread(void*)
     // Generate random noise that updates each frame
     // uint32_t randomColor = rand() % 65536;
     static int col = 0;
+    static int barY = 0;
     static uint64_t lastTestImage = tick();
     uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
     now = tick();
@@ -254,14 +261,22 @@ void *gpu_polling_thread(void*)
     {
       int x = 0;
       const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
-      while(x + XX <= gpuFrameWidth>>1)
+      while(x <= gpuFrameWidth>>1)
       {
-        for(int X = 0; X < XX; ++X)
-          newfb[x+X] = randomColor;
+        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
+        {
+          if (y == barY)
+            newfb[x+X] = 0xFFFFFFFF;
+          else if (y == barY+1 || y == barY-1)
+            newfb[x+X] = 0;
+          else
+            newfb[x+X] = randomColor;
+        }
         x += XX + 6;
       }
       newfb += gpuFramebufferScanlineStrideBytes>>2;
     }
+    barY = (barY + 1) % gpuFrameHeight;
 #else
     SnapshotFramebuffer(videoCoreFramebuffer[0]);
 #endif
