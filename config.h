@@ -113,7 +113,7 @@
 // DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE disabled: diagonal tearing
 // DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
 // i.e. narrow direction)
-#ifndef PI_ZERO
+#if !defined(PI_ZERO) && !defined(SSD1351)
 #define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
 #endif
 

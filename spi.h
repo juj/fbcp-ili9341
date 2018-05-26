@@ -154,6 +154,25 @@ typedef struct __attribute__((packed)) SPITask
     CommitTask(task); \
   } while(0)
 
+#elif defined(SSD1351)
+
+#define QUEUE_SPI_TRANSFER(command, ...) do { \
+    char data_buffer[] = { __VA_ARGS__ }; \
+    SPITask *t = AllocTask(sizeof(data_buffer)); \
+    t->cmd = (command); \
+    memcpy(t->data, data_buffer, sizeof(data_buffer)); \
+    CommitTask(t); \
+  } while(0)
+
+#define QUEUE_SET_WRITE_WINDOW_TASK(cursor, x, endX) do { \
+    SPITask *task = AllocTask(2); \
+    task->cmd = (cursor); \
+    task->data[0] = (x); \
+    task->data[1] = (endX); \
+    bytesTransferred += 3; \
+    CommitTask(task); \
+  } while(0)
+
 #else
 // 8-bit interface
 #define QUEUE_SPI_TRANSFER(command, ...) do { \
