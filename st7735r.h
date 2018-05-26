@@ -3,7 +3,7 @@
 #ifdef ST7735R
 
 #ifndef SPI_BUS_CLOCK_DIVISOR
-#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file ili9341.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
+#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file st7735r.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
 #endif
 
 // On Arduino "A000096" 160x128 ST7735R LCD Screen, the following speed configurations have been tested (on a Pi 3B):
