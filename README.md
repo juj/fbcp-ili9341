@@ -21,8 +21,10 @@ The `fbcp-ili9341` software is a drop-in replacement for the stock `fbcp` displa
 
 Whereas the original `fbcp` refreshed at fixed 16fps, this updated driver can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
- - First version: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
+ - [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4)
+ - [Quake 60 fps inside Gameboy Advance](https://www.youtube.com/watch?v=xmO8t3XlxVM)
  - Second updated version with statistics overlay: [fbcp-ili9341 SPI display driver on Adafruit PiTFT 2.8"](http://youtu.be/rKSH048XRjA)
+ - Initial proof of concept video: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
 
 ### How It Works
 
