@@ -74,6 +74,149 @@ void ProgramInterruptHandler(int)
   syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0);
 }
 
+void ConvertToGrayscale(uint16_t *framebuffer, int w, int h, int stride)
+{
+  for(int y = 0; y < h; ++y)
+    for(int x = 0; x < w; ++x)
+    {
+      uint16_t c = framebuffer[y*(stride>>1)+x];
+      uint16_t red = c & 31;
+      uint16_t green = (c >> 5) & 63;
+      uint16_t blue = c >> 11;
+      int gray = (red + (green>>1) + blue) / 3;
+      c = (gray << 11) | (gray << 6) | gray;
+      framebuffer[y*(stride>>1)+x] = c;
+    }
+}
+
+void ConvertToMonochrome(uint16_t *framebuffer, int w, int h, int stride)
+{
+  static int16_t *quantizationError = 0;
+  if (!quantizationError)
+    quantizationError = (int16_t*)malloc((stride+3)*h);
+  memset(quantizationError, 0, stride*h);
+
+#if 0
+
+//  const int ditherMatrix[4][4] = { {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
+
+  const int ditherMatrix[8][8] = {
+    {0, 48, 12, 60, 3, 51, 15, 63},
+    {32, 16, 44, 28, 35, 19, 47, 31},
+    {8, 56, 4, 52, 11, 59, 7, 55},
+    {40, 24, 36, 20, 43, 27, 39, 23},
+    {2, 50, 14, 62, 1, 49, 13, 61},
+    {34, 18, 46, 30, 33, 17, 45, 29},
+    {10, 58, 6, 54, 9, 57, 5, 53},
+    {42, 26, 38, 22, 41, 27, 37, 21}
+  };
+
+  for(int y = 0; y < h; ++y)
+  {
+    for(int x = 0; x < w; ++x)
+    {
+      uint16_t c = framebuffer[y*(stride>>1)+x];
+      uint16_t red = c & 31;
+      uint16_t green = (c >> 5) & 63;
+      uint16_t blue = c >> 11;
+//      int gray = (red + (green>>1) + blue) / 3 + ditherMatrix[y&3][x&3] - 8;
+//      int monochrome = (gray >= 16) ? 31 : 0;
+
+      int Y = y&7;
+      int X = x&7;
+//      if (y&8) Y = 8-Y;
+//      if (x&8) X = 8-X;
+      int gray = (red*2 + green + blue*2) / 3 + (ditherMatrix[y&7][x&7] - 32);// * 0.8;
+      int monochrome = (gray >= 32) ? 31 : 0;
+//      int error = gray - monochrome;
+      framebuffer[y*(stride>>1)+x] = (monochrome << 11) | (monochrome << 6) | monochrome;
+/*
+      quantizationError[y*(stride>>1)+x+1] += error * 7 / 16;
+      quantizationError[(y+1)*(stride>>1)+x-1] += error * 3 / 16;
+      quantizationError[(y+1)*(stride>>1)+x] += error * 5 / 16;
+      quantizationError[(y+1)*(stride>>1)+x+1] += error / 16;
+*/
+    }
+  }
+#endif
+
+#if 1
+  for(int y = 0; y < h; ++y)
+  {
+    for(int x = 0; x < w; ++x)
+    {
+      uint16_t c = framebuffer[y*(stride>>1)+x];
+      uint16_t red = c & 31;
+      uint16_t green = (c >> 5) & 63;
+      uint16_t blue = c >> 11;
+      int gray = (red + (green>>1) + blue) / 3 + quantizationError[y*(stride>>1)+x];
+      int monochrome = (gray >= 16) ? 31 : 0;
+      int error = gray - monochrome;
+      framebuffer[y*(stride>>1)+x] = (monochrome << 11) | (monochrome << 6) | monochrome;
+
+#if 0
+      quantizationError[y*(stride>>1)+x+1] += error * 7 / 16;
+      quantizationError[(y+1)*(stride>>1)+x-1] += error * 3 / 16;
+      quantizationError[(y+1)*(stride>>1)+x] += error * 5 / 16;
+      quantizationError[(y+1)*(stride>>1)+x+1] += error / 16;
+#else
+      quantizationError[y*(stride>>1)+x+1] += error * 7 / 48;
+      quantizationError[y*(stride>>1)+x+2] += error * 5 / 48;
+
+      quantizationError[(y+1)*(stride>>1)+x-2] += error * 3 / 48;
+      quantizationError[(y+1)*(stride>>1)+x-1] += error * 5 / 48;
+      quantizationError[(y+1)*(stride>>1)+x] += error * 7 / 48;
+      quantizationError[(y+1)*(stride>>1)+x+1] += error * 5 / 48;
+      quantizationError[(y+1)*(stride>>1)+x+2] += error * 3 / 48;
+
+      quantizationError[(y+2)*(stride>>1)+x-2] += error * 1 / 48;
+      quantizationError[(y+2)*(stride>>1)+x-1] += error * 3 / 48;
+      quantizationError[(y+2)*(stride>>1)+x] += error * 5 / 48;
+      quantizationError[(y+2)*(stride>>1)+x+1] += error * 3 / 48;
+      quantizationError[(y+2)*(stride>>1)+x+2] += error * 1 / 48;
+#endif
+    }
+#if 1
+    ++y;
+    if (y >= h) break;
+    for(int x = w-1; x >= 0; --x)
+    {
+      uint16_t c = framebuffer[y*(stride>>1)+x];
+      uint16_t red = c & 31;
+      uint16_t green = (c >> 5) & 63;
+      uint16_t blue = c >> 11;
+      int gray = (red + (green>>1) + blue) / 3 + quantizationError[y*(stride>>1)+x];
+      int monochrome = (gray >= 16) ? 31 : 0;
+      int error = gray - monochrome;
+      framebuffer[y*(stride>>1)+x] = (monochrome << 11) | (monochrome << 6) | monochrome;
+
+#if 0
+      quantizationError[y*(stride>>1)+x-1] += error * 7 / 16;
+      quantizationError[(y+1)*(stride>>1)+x+1] += error * 3 / 16;
+      quantizationError[(y+1)*(stride>>1)+x] += error * 5 / 16;
+      quantizationError[(y+1)*(stride>>1)+x-1] += error / 16;
+#else
+      quantizationError[y*(stride>>1)+x-1] += error * 7 / 48;
+      quantizationError[y*(stride>>1)+x-2] += error * 5 / 48;
+
+      quantizationError[(y+1)*(stride>>1)+x+2] += error * 3 / 48;
+      quantizationError[(y+1)*(stride>>1)+x+1] += error * 5 / 48;
+      quantizationError[(y+1)*(stride>>1)+x] += error * 7 / 48;
+      quantizationError[(y+1)*(stride>>1)+x-1] += error * 5 / 48;
+      quantizationError[(y+1)*(stride>>1)+x-2] += error * 3 / 48;
+
+      quantizationError[(y+2)*(stride>>1)+x+2] += error * 1 / 48;
+      quantizationError[(y+2)*(stride>>1)+x+1] += error * 3 / 48;
+      quantizationError[(y+2)*(stride>>1)+x] += error * 5 / 48;
+      quantizationError[(y+2)*(stride>>1)+x-1] += error * 3 / 48;
+      quantizationError[(y+2)*(stride>>1)+x-2] += error * 1 / 48;
+#endif
+    }
+#endif
+  }
+#endif
+}
+
 int main()
 {
   signal(SIGINT, ProgramInterruptHandler);
@@ -236,6 +379,7 @@ int main()
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
+      ConvertToMonochrome(framebuffer[0], gpuFrameWidth, gpuFrameHeight, gpuFramebufferScanlineStrideBytes);
 
 #ifdef STATISTICS
       uint64_t now = tick();
@@ -262,6 +406,7 @@ int main()
         usleep(2000);
         frameObtainedTime = tick();
         SnapshotFramebuffer(framebuffer[0]);
+        ConvertToMonochrome(framebuffer[0], gpuFrameWidth, gpuFrameHeight, gpuFramebufferScanlineStrideBytes);
         DrawStatisticsOverlay(framebuffer[0]);
         framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
