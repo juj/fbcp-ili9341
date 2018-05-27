@@ -1,6 +1,6 @@
 # Introduction
 
-This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi.
+This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi 3 and Zero.
 
 ![PiTFT display](/example.jpg "Adafruit PiTFT 2.8 with ILI9341 controller")
 
@@ -9,28 +9,28 @@ The work was motivated by curiosity after seeing this series of videos on the Re
  - [RetroManCave: Waveshare 3.2" vs 3.5" LCD screen gaming test | Raspberry Pi / RetroPie](https://www.youtube.com/watch?v=8bazEcXemiA)
  - [Elecrow 5 Inch LCD Review | RetroPie & Raspberry Pi](https://www.youtube.com/watch?v=8VgNBDMOssg)
 
-In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays update over a single serial data bus, transmitting one bit per clock cycle on the bus. A 320x240x16bpp display hence requires a SPI bus clock rate of 73.728MHz to achieve a full 60fps refresh frequency. Not many SPI LCD controllers can communicate this fast in practice, but are constrained to e.g. a 16-50MHz SPI bus clock speed, capping the maximum update rate significantly. Can we do anything about this?
+In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays update over a serial data bus, transmitting one bit per clock cycle on the bus. A 320x240x16bpp display hence requires a SPI bus clock rate of 73.728MHz to achieve a full 60fps refresh frequency. Not many SPI LCD controllers can communicate this fast in practice, but are constrained to e.g. a 16-50MHz SPI bus clock speed, capping the maximum update rate significantly. Can we do anything about this?
 
-The `fbcp-ili9341` project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, this driver can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
+The `fbcp-ili9341` project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, `fbcp-ili9341` can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
  - [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4)
- - [Quake 60 fps inside Gameboy Advance](https://www.youtube.com/watch?v=xmO8t3XlxVM)
+ - [Quake 60 fps inside Gameboy Advance (ILI9341)](https://www.youtube.com/watch?v=xmO8t3XlxVM)
  - First implementation of a statistics overlay: [fbcp-ili9341 SPI display driver on Adafruit PiTFT 2.8"](http://youtu.be/rKSH048XRjA)
  - Initial proof of concept video: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
 
 ### How It Works
 
-Given the established theoretical update rate ceiling, how come this seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually modified pixels on screen are submitted to the display. This is doable because the ILI9341 controller, as many other popular controllers, have communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
+Given that the SPI bus can be so constrained on bandwidth, how come `fbcp-ili9341` seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually changed pixels on screen are submitted to the display. This is doable because the ILI9341 controller, as many other popular controllers, have communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
 
 Other optimizations are also utilized to squeeze out even more performance:
  - The program directly communicates with the BCM2835 ARM Peripherals controller registers, bypassing the usual Linux software stack.
- - A hybrid of both Polled Mode SPI and DMA transfers are utilized. Long sequential transfer bursts are performed using DMA, and when individual pixels need updating for which DMA would have too much latency, Polled Mode SPI is applied instead.
- - Undocumented BCM2835 features are used to squeeze out maximum bandwidth: SPI CDIV is driven at even numbers (and not just powers of two), and the SPI DLEN register is forced in non-DMA mode to avoid an idle 9th clock cycle for each transferred byte.
- - Good old **interlacing** is added into the mix: if the amount of pixels that needs updating is detected to be too much that the SPI bus cannot handle it, the driver adaptively resorts to doing an interlaced update, uploading even and odd scanlines at subsequent frames. Once the number of pending pixels to write returns to manageable amounts, progressive updating is resumed. This effectively doubles the display update rate.
- - A dedicated SPI communication thread is used in order to keep the SPI communication queue as warm as possible at all times.
- - A number of micro-optimization techniques are used, such as batch updating spans of pixels, merging disjoint-but-close spans of pixels on the same scanline, and latching Column and Page End Addresses to bottom-right corner of the display to be able to cut CASET and PASET messages in mid-communication.
+ - A hybrid of both Polled Mode SPI and DMA based transfers are utilized. Long sequential transfer bursts are performed using DMA, and when DMA would have too much latency, Polled Mode SPI is applied instead.
+ - Undocumented BCM2835 features are used to squeeze out maximum bandwidth: [SPI CDIV is driven at even numbers](https://www.raspberrypi.org/forums/viewtopic.php?t=43442) (and not just powers of two), and the [SPI DLEN register is forced in non-DMA mode](https://www.raspberrypi.org/forums/viewtopic.php?t=181154) to avoid an idle 9th clock cycle for each transferred byte.
+ - Good old **interlacing** is added into the mix: if the amount of pixels that needs updating is detected to be too much that the SPI bus cannot handle it, the driver adaptively resorts to doing an interlaced update, uploading even and odd scanlines at subsequent frames. Once the number of pending pixels to write returns to manageable amounts, progressive updating is resumed. This effectively doubles the maximum display update rate.
+ - A dedicated SPI communication thread is used in order to keep the SPI bus active at all times.
+ - A number of other micro-optimization techniques are used, such as batch updating rectangular spans of pixels, merging disjoint-but-close spans of pixels on the same scanline, and latching Column and Page End Addresses to bottom-right corner of the display to be able to cut CASET and PASET messages in mid-communication.
 
-The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usual, to maximize the utilization rate of the bus, while only transmitting practically minimum number of bytes needed to describe each new frame.
+The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usual, to maximize the utilization rate of the bus, while only transmitting practically the minimum number of bytes needed to describe each new frame.
 
 ### Tested Devices
 
@@ -116,6 +116,14 @@ On the CMake command line, the following options can be configured:
 - `-DSPI_BUS_CLOCK_DIVISOR=even_number`: Sets the clock divisor number which along with the Pi [core_freq=](https://www.raspberrypi.org/documentation/configuration/config-txt/overclocking.md) option in `/boot/config.txt` specifies the overall speed that the display SPI communication bus is driven at. `SPI_frequency = core_freq/divisor`. `SPI_BUS_CLOCK_DIVISOR` must be an even number. Default Pi 3B and Zero W `core_freq` is 400MHz, and generally a value `-DSPI_BUS_CLOCK_DIVISOR=6` seems to be good safe and performant baseline for ILI9341 displays. Try a larger value if the display shows corrupt output, or a smaller value to get higher bandwidth. See [ili9341.h](https://github.com/juj/fbcp-ili9341/blob/master/ili9341.h#L13) and [waveshare35b.h](https://github.com/juj/fbcp-ili9341/blob/master/waveshare35b.h#L10) for data points on tuning the maximum SPI performance.
 
 In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to remove the `#define STATISTICS` line in `config.h`.
+
+##### Tuning CPU Usage
+
+Diffing frames to produce minimal SPI communication task lists takes up some performance, so expect to see a moderate backround CPU load coming from `fbcp-ili9341`. The default build configuration of `fbcp-ili9341` is optimized towards maximum performance on the Pi 3, and towards battery saving on the Pi Zero. Check out the build option `ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling that option in the build optimizes towards saving battery at the expense of performance, whereas building with that option disabled causes `fbcp-ili9341` to strive towards maximum screen refresh rate.
+
+To further reduce power consumption beyond enabling `ALL_TASKS_SHOULD_DMA`, try enabling `USE_GPU_VSYNC`, and/or lowering `TARGET_FRAME_RATE` in `display.h` - set it to e.g. 40 or 30. Currently Pi Zero will not likely reach 60fps except in NES games.
+
+If https://github.com/raspberrypi/userland/issues/440 is resolved in the future, CPU usage on Pi Zero is possible to improve.
 
 ##### Launching the display driver at startup
 
