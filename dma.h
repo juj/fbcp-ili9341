@@ -128,6 +128,7 @@ void WaitForDMAFinished(void);
 
 // Reserves and enables a DMA channel for SPI transfers.
 int InitDMA(void);
+void DeinitDMA(void);
 
 typedef struct SPITask SPITask;
 

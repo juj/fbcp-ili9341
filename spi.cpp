@@ -236,13 +236,15 @@ void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called 
   __sync_synchronize();
 }
 
+extern volatile bool programRunning;
+
 void ExecuteSPITasks()
 {
 #ifndef USE_DMA_TRANSFERS
   BEGIN_SPI_COMMUNICATION();
 #endif
   {
-    while(spiTaskMemory->queueTail != spiTaskMemory->queueHead)
+    while(programRunning && spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
       SPITask *task = GetTask();
       if (task)
@@ -258,13 +260,15 @@ void ExecuteSPITasks()
 }
 
 #if !defined(KERNEL_MODULE) && defined(USE_SPI_THREAD)
+pthread_t spiThread;
+
 // A worker thread that keeps the SPI bus filled at all times
 void *spi_thread(void *unused)
 {
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
-  for(;;)
+  while(programRunning)
   {
     if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
@@ -277,7 +281,7 @@ void *spi_thread(void *unused)
       spiThreadSleepStartTime = t0;
       __atomic_store_n(&spiThreadSleeping, 1, __ATOMIC_RELAXED);
 #endif
-      syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
 #ifdef STATISTICS
       __atomic_store_n(&spiThreadSleeping, 0, __ATOMIC_RELAXED);
       uint64_t t1 = tick();
@@ -385,9 +389,8 @@ int InitSPI()
 #ifdef USE_SPI_THREAD
   // Create a dedicated thread to feed the SPI bus. While this is fast, it consumes a lot of CPU. It would be best to replace
   // this thread with a kernel module that processes the created SPI task queue using interrupts. (while juggling the GPIO D/C line as well)
-  pthread_t thread;
   printf("Creating SPI task thread\n");
-  int rc = pthread_create(&thread, NULL, spi_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
+  int rc = pthread_create(&spiThread, NULL, spi_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
   if (rc != 0) FATAL_ERROR("Failed to create SPI thread!");
 #else
   // We will be running SPI tasks continuously from the main thread, so keep SPI Transfer Active throughout the lifetime of the driver.
@@ -402,6 +405,27 @@ int InitSPI()
 
 void DeinitSPI()
 {
+#ifdef USE_SPI_THREAD
+  pthread_join(spiThread, NULL);
+  spiThread = (pthread_t)0;
+  DeinitSPIDisplay();
+  DeinitDMA();
+#endif
+
+  spi->cs = BCM2835_SPI0_CS_CLEAR;
+
+  if (bcm2835)
+  {
+    munmap((void*)bcm2835, bcm_host_get_peripheral_size());
+    bcm2835 = 0;
+  }
+
+  if (mem_fd >= 0)
+  {
+    close(mem_fd);
+    mem_fd = -1;
+  }
+
 #ifndef KERNEL_MODULE_CLIENT
 
 #ifdef KERNEL_MODULE

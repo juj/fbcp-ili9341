@@ -47,6 +47,8 @@ int excessPixelsRight = 0;
 int excessPixelsTop = 0;
 int excessPixelsBottom = 0;
 
+pthread_t gpuPollingThread;
+
 int RoundUpToMultipleOf(int val, int multiple)
 {
   return ((val + multiple - 1) / multiple) * multiple;
@@ -215,10 +217,12 @@ uint64_t PredictNextFrameArrivalTime()
   else return nextFrameArrivalTime;
 }
 
+extern volatile bool programRunning;
+
 void *gpu_polling_thread(void*)
 {
   uint64_t lastNewFrameReceivedTime = tick();
-  for(;;)
+  while(programRunning)
   {
 #ifdef SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
     const int64_t earlyFramePrediction = 500;
@@ -305,6 +309,7 @@ void *gpu_polling_thread(void*)
       syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
     }
   }
+  pthread_exit(0);
 }
 
 #endif // ~USE_GPU_VSYNC
@@ -455,8 +460,31 @@ void InitGPU()
   // if it was, this signal is not a guaranteed edge trigger for availability of new frames.
   vc_dispmanx_vsync_callback(display, VsyncCallback, 0);
 #else
-  pthread_t gpuPollingThread;
   int rc = pthread_create(&gpuPollingThread, NULL, gpu_polling_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
   if (rc != 0) FATAL_ERROR("Failed to create GPU polling thread!");
 #endif
+}
+
+void DeinitGPU()
+{
+#ifdef USE_GPU_VSYNC
+  if (display) vc_dispmanx_vsync_callback(display, NULL, 0);
+#else
+  pthread_join(gpuPollingThread, NULL);
+  gpuPollingThread = (pthread_t)0;
+#endif
+
+  if (screen_resource)
+  {
+    vc_dispmanx_resource_delete(screen_resource);
+    screen_resource = 0;
+  }
+
+  if (display)
+  {
+    vc_dispmanx_display_close(display);
+    display = 0;
+  }
+
+  bcm_host_deinit();
 }

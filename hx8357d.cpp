@@ -115,4 +115,9 @@ void TurnDisplayOn()
 //  printf("Turned display ON\n");
 }
 
+void DeinitSPIDisplay()
+{
+
+}
+
 #endif

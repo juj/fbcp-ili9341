@@ -26,6 +26,8 @@
 
 #include <math.h>
 
+#include <signal.h>
+
 // Spans track dirty rectangular areas on screen
 struct Span
 {
@@ -52,8 +54,29 @@ int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
 uint64_t displayContentsLastChanged = 0;
 bool displayOff = false;
 
+volatile bool programRunning = true;
+
+void ProgramInterruptHandler(int)
+{
+  printf("Ctrl-C received, quitting\n");
+  programRunning = false;
+  __sync_synchronize();
+  // Wake the SPI thread if it was sleeping so that it can gracefully quit
+  if (spiTaskMemory)
+  {
+    __atomic_fetch_add(&spiTaskMemory->queueHead, 1, __ATOMIC_SEQ_CST);
+    __atomic_fetch_add(&spiTaskMemory->queueTail, 1, __ATOMIC_SEQ_CST);
+    syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAKE, 1, 0, 0, 0); // Wake the SPI thread if it was sleeping to get new tasks
+  }
+
+  // Wake the main thread if it was sleeping for a new frame so that it can gracefully quit
+  __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
+  syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0);
+}
+
 int main()
 {
+  signal(SIGINT, ProgramInterruptHandler);
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
@@ -94,7 +117,7 @@ int main()
   bool prevFrameWasInterlacedUpdate = false;
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
-  for(;;)
+  while(programRunning)
   {
     prevFrameWasInterlacedUpdate = interlacedUpdate;
 
@@ -107,7 +130,7 @@ int main()
 #ifdef THROTTLE_INTERLACING
       timespec timeout = {};
       timeout.tv_nsec = 1000 * MIN(1000000, MAX(1, 750/*0.75ms extra sleep so we know we should likely sleep long enough to see the next frame*/ + PredictNextFrameArrivalTime() - tick()));
-      syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
 #endif
       // If THROTTLE_INTERLACING is not defined, we'll fall right through and immediately submit the rest of the remaining content on screen to attempt to minimize the visual
       // observable effect of interlacing, although at the expense of smooth animation (falling through here causes jitter)
@@ -129,11 +152,11 @@ int main()
           timespec timeout = {};
           timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
           timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
-          syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
         }
         else
 #endif
-          syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
+          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
       }
     }
 
@@ -587,6 +610,8 @@ int main()
 #endif
   }
 
-  // At exit, set all pins back to the default GPIO state (input 0x00) (we never actually reach here, since it's not possible atm to gracefully quit..)
+  DeinitGPU();
   DeinitSPI();
+  CloseMailbox();
+  printf("Ctrl-C, quit.\n");
 }

@@ -22,3 +22,5 @@
 #else
 #error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON or -DFREEPLAYTECH_WAVESHARE32B=ON (or contribute ports to more displays yourself)
 #endif
+
+void DeinitSPIDisplay(void);

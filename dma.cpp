@@ -26,9 +26,9 @@ volatile DMAChannelRegisterFile *dma0 = 0;
 
 volatile DMAChannelRegisterFile *dmaTx = 0;
 volatile DMAChannelRegisterFile *dmaRx = 0;
-int dmaTxChannel = 0;
+int dmaTxChannel = -1;
 int dmaTxIrq = 0;
-int dmaRxChannel = 0;
+int dmaRxChannel = -1;
 int dmaRxIrq = 0;
 
 #define PAGE_SIZE 4096
@@ -99,6 +99,12 @@ static int AllocateDMAChannel(int *dmaChannel, int *irq)
   LOG("Allocated DMA channel %d", *dmaChannel);
   *irq = 0;
   return 0;
+}
+
+void FreeDMAChannel(int channel)
+{
+  volatile DMAChannelRegisterFile *dma = GetDMAChannel(channel);
+  dma->cb.ti = 0; // Clear the SPI TX & RX permaps for this DMA channel so that we don't think some other program is using these for SPI
 }
 
 // Message IDs for different mailbox GPU memory allocation messages
@@ -186,6 +192,14 @@ void CheckSPIDMAChannelsNotStolen()
   CheckDMAChannelNotStolen(dmaRxChannel, BCM2835_DMA_TI_PERMAP_SPI_RX);
 }
 
+void ResetDMAChannels()
+{
+  dmaTx->cs = BCM2835_DMA_CS_RESET;
+  dmaTx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
+  dmaRx->cs = BCM2835_DMA_CS_RESET;
+  dmaRx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
+}
+
 int InitDMA()
 {
 #if defined(KERNEL_MODULE)
@@ -244,12 +258,8 @@ int InitDMA()
   if (dmaRx->cbAddr != 0 && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
     FATAL_ERROR("DMA RX channel was in use!");
 
-  // Reset the DMA channels
   LOG("Resetting DMA channels for use");
-  dmaTx->cs = BCM2835_DMA_CS_RESET;
-  dmaTx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
-  dmaRx->cs = BCM2835_DMA_CS_RESET;
-  dmaRx->cb.debug = BCM2835_DMA_DEBUG_DMA_READ_ERROR | BCM2835_DMA_DEBUG_DMA_FIFO_ERROR | BCM2835_DMA_DEBUG_READ_LAST_NOT_SET_ERROR;
+  ResetDMAChannels();
 
   // TODO: Set up IRQ
   LOG("DMA all set up");
@@ -591,6 +601,23 @@ void SPIDMATransfer(SPITask *task)
 
 #endif
 
+void DeinitDMA(void)
+{
+  WaitForDMAFinished();
+  ResetDMAChannels();
+  FreeUncachedGpuMemory(dmaSourceBuffer);
+  FreeUncachedGpuMemory(dmaCb);
+  if (dmaTxChannel != -1)
+  {
+    FreeDMAChannel(dmaTxChannel);
+    dmaTxChannel = -1;
+  }
+  if (dmaRxChannel != -1)
+  {
+    FreeDMAChannel(dmaRxChannel);
+    dmaRxChannel = -1;
+  }
+}
 
 
 #endif // ~USE_DMA_TRANSFERS

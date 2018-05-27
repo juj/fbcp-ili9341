@@ -85,4 +85,9 @@ void InitILI9486()
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
 }
 
+void DeinitSPIDisplay()
+{
+
+}
+
 #endif

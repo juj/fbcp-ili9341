@@ -2,12 +2,13 @@
 
 #include <inttypes.h>
 
-void InitGPU();
+void InitGPU(void);
+void DeinitGPU(void);
 void AddHistogramSample();
 void SnapshotFramebuffer(uint16_t *destination);
 bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer);
-uint64_t EstimateFrameRateInterval();
-uint64_t PredictNextFrameArrivalTime();
+uint64_t EstimateFrameRateInterval(void);
+uint64_t PredictNextFrameArrivalTime(void);
 
 extern uint16_t *videoCoreFramebuffer[2];
 extern volatile int numNewGpuFrames;
