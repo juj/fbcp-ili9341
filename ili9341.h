@@ -43,6 +43,14 @@
 // free scrolling, so default to using that.
 #define ILI9341_UPDATE_FRAMERATE ILI9341_FRAMERATE_119_HZ
 
+#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
+#define DISPLAY_WIDTH 240
+#define DISPLAY_HEIGHT 320
+#else
+#define DISPLAY_WIDTH 320
+#define DISPLAY_HEIGHT 240
+#endif
+
 #ifdef ADAFRUIT_ILI9341_PITFT
 #include "pitft_28r_ili9341.h"
 #elif defined(ADAFRUIT_HX8357D_PITFT)
@@ -53,11 +61,11 @@
 #error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON, -FREEPLAYTECH_WAVESHARE32B=ON or -DILI9341=ON (or contribute ports to more displays yourself)
 #endif
 
-#define DISPLAY_SCANLINE_SIZE (DISPLAY_WIDTH*DISPLAY_BYTESPERPIXEL)
-
 #if !defined(GPIO_TFT_DATA_CONTROL)
 #error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
 #endif
+
+#define InitSPIDisplay InitILI9341
 
 void InitILI9341(void);
 

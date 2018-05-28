@@ -10,8 +10,6 @@
 
 #include "waveshare35b.h"
 
-#define DISPLAY_SCANLINE_SIZE (DISPLAY_WIDTH*DISPLAY_BYTESPERPIXEL)
-
 #if !defined(GPIO_TFT_DATA_CONTROL)
 #error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
 #endif

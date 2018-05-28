@@ -31,16 +31,7 @@
 // other displays, where issuing a DISPLAY_WRITE_PIXELS command resets the x&y cursor coordinates.
 #define DISPLAY_WRITE_PIXELS_CMD_DOES_NOT_RESET_WRITE_CURSOR
 
-#define DISPLAY_COVERED_LEFT_SIDE 0
-#define DISPLAY_COVERED_TOP_SIDE 0
-#define DISPLAY_COVERED_BOTTOM_SIDE 0
-
-#define DISPLAY_DRAWABLE_WIDTH (DISPLAY_WIDTH-DISPLAY_COVERED_LEFT_SIDE)
-#define DISPLAY_DRAWABLE_HEIGHT (DISPLAY_HEIGHT-DISPLAY_COVERED_TOP_SIDE-DISPLAY_COVERED_BOTTOM_SIDE)
-
 #define InitSPIDisplay InitSSD1351
-
-#define DISPLAY_SCANLINE_SIZE (DISPLAY_WIDTH*DISPLAY_BYTESPERPIXEL)
 
 #if !defined(GPIO_TFT_DATA_CONTROL)
 #error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
