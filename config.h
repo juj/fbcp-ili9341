@@ -40,6 +40,10 @@
 
 #endif
 
+// If USE_GPU_VSYNC is defined, then enabling this causes new frames to be snapshot more often than at
+// TARGET_FRAME_RATE interval to try to keep up smoother 60fps instead of stuttering. Consumes more CPU.
+#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
+
 // If enabled, the source video frame is not scaled to fit to the screen, but instead if the source frame
 // is bigger than the SPI display, then content is cropped away, i.e. the source is displayed "centered"
 // on the SPI screen:

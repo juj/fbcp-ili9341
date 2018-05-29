@@ -262,6 +262,7 @@ int main()
       // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
+#ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
       framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
       while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
@@ -272,6 +273,9 @@ int main()
         DrawStatisticsOverlay(framebuffer[0]);
         framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
+#else
+      framebufferHasNewChangedPixels = true;
+#endif
 
       if (framebufferHasNewChangedPixels)
       {
