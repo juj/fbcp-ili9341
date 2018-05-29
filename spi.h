@@ -19,6 +19,7 @@
 #define BCM2835_SPI0_CS_TXD                  0x00040000 // TXD TX FIFO can accept Data
 #define BCM2835_SPI0_CS_RXD                  0x00020000 // RXD RX FIFO contains Data
 #define BCM2835_SPI0_CS_DONE                 0x00010000 // Done transfer Done
+#define BCM2835_SPI0_CS_ADCS                 0x00000800 // Automatically Deassert Chip Select
 #define BCM2835_SPI0_CS_INTR                 0x00000400 // Fire interrupts on RXR?
 #define BCM2835_SPI0_CS_INTD                 0x00000200 // Fire interrupts on DONE?
 #define BCM2835_SPI0_CS_DMAEN                0x00000100 // Enable DMA transfers?
@@ -35,6 +36,7 @@
 #define BCM2835_SPI0_CS_TXD_SHIFT                  18
 #define BCM2835_SPI0_CS_RXD_SHIFT                  17
 #define BCM2835_SPI0_CS_DONE_SHIFT                 16
+#define BCM2835_SPI0_CS_ADCS_SHIFT                 11
 #define BCM2835_SPI0_CS_INTR_SHIFT                 10
 #define BCM2835_SPI0_CS_INTD_SHIFT                 9
 #define BCM2835_SPI0_CS_DMAEN_SHIFT                8
@@ -77,21 +79,15 @@ typedef struct SPIRegisterFile
 } SPIRegisterFile;
 extern volatile SPIRegisterFile *spi;
 
-// Defines the maximum size of a single SPI task, in bytes. This excludes the command byte. The relationship
-// MAX_SPI_TASK_SIZE <= SHARED_MEMORY_SIZE/4 should hold, so that there is no danger of deadlocking the ring buffer, which has
-// been implemented with the assumption that an individual task in the buffer is considerably smaller than the size of the ring
-// buffer itself. Also, MAX_SPI_TASK_SIZE >= SCANLINE_SIZE should hold, scanline merging assumes that it can always fit one full
-// scanline bytes of data in one task.
-// In a LITE DMA engine, 65535 is max task size, and task may need to be aligned to 4 bytes, and there are +4 bytes for  SPI
-// header needed, so 65528 is the largest possible size.
-#define MAX_SPI_TASK_SIZE 65528
-
 // Defines the size of the SPI task memory buffer in bytes. This memory buffer can contain two frames worth of tasks at maximum,
 // so for best performance, should be at least ~DISPLAY_WIDTH*DISPLAY_HEIGHT*BYTES_PER_PIXEL*2 bytes in size, plus some small
 // amount for structuring each SPITask command. Technically this can be something very small, like 4096b, and not need to contain
 // even a single full frame of data, but such small buffers can cause performance issues from threads starving.
 #define SHARED_MEMORY_SIZE (DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT*DISPLAY_BYTESPERPIXEL*2)
 #define SPI_QUEUE_SIZE (SHARED_MEMORY_SIZE - sizeof(SharedMemory))
+
+// Defines the maximum size of a single SPI task, in bytes. This excludes the command byte.
+#define MAX_SPI_TASK_SIZE ((DISPLAY_DRAWABLE_WIDTH+2)*(DISPLAY_DRAWABLE_HEIGHT+2)*DISPLAY_BYTESPERPIXEL)
 
 typedef struct __attribute__((packed)) SPITask
 {

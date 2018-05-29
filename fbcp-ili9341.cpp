@@ -31,7 +31,8 @@
 // Spans track dirty rectangular areas on screen
 struct Span
 {
-  uint16_t x, endX, y, endY, lastScanEndX, size; // Specifies a box of width [x, endX[ * [y, endY[, where scanline endY-1 can be partial, and ends in lastScanEndX.
+  uint16_t x, endX, y, endY, lastScanEndX;
+  uint32_t size; // Specifies a box of width [x, endX[ * [y, endY[, where scanline endY-1 can be partial, and ends in lastScanEndX.
   Span *next; // Maintain a linked skip list inside the array for fast seek to next active element when pruning
 };
 Span *spans = 0;
@@ -59,6 +60,12 @@ volatile bool programRunning = true;
 void ProgramInterruptHandler(int)
 {
   printf("Ctrl-C received, quitting\n");
+  static int ctrlCHandlerCalled = 0;
+  if (++ctrlCHandlerCalled >= 5)
+  {
+    printf("Ctrl-C handler invoked five times, looks like fbcp-ili9341 is not gracefully quitting - performing a forcible shutdown!\n");
+    exit(1);
+  }
   programRunning = false;
   __sync_synchronize();
   // Wake the SPI thread if it was sleeping so that it can gracefully quit

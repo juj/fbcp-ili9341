@@ -77,7 +77,7 @@ volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber);
 
 #define BCM2835_DMA_DEBUG_LITE_SHIFT                        28
 #define BCM2835_DMA_DEBUG_VERSION_SHIFT                     25
-#define BCM2835_DMA_DEBUG_DMA_STATE_SHIFT                   6
+#define BCM2835_DMA_DEBUG_DMA_STATE_SHIFT                   16
 #define BCM2835_DMA_DEBUG_DMA_ID_SHIFT                      8
 #define BCM2835_DMA_DEBUG_DMA_OUTSTANDING_WRITES_SHIFT      4
 #define BCM2835_DMA_DEBUG_DMA_READ_ERROR_SHIFT              2
