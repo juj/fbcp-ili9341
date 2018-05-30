@@ -40,6 +40,11 @@
 
 #endif
 
+// If enabled, the source video frame is not scaled to fit to the screen, but instead if the source frame
+// is bigger than the SPI display, then content is cropped away, i.e. the source is displayed "centered"
+// on the SPI screen:
+// #define DISPLAY_CROPPED_INSTEAD_OF_SCALING
+
 // If enabled, the main thread and SPI thread are executed with realtime priority
 // #define RUN_WITH_REALTIME_THREAD_PRIORITY
 

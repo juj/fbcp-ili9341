@@ -347,11 +347,6 @@ void InitGPU()
   // to remove the letterboxed parts of the source. This overscan method can also used to crop excess edges of old emulator based games intended for analog TVs,
   // e.g. NES games often had graphical artifacts on left or right edge of the screen when the game scrolls, which usually were hidden on analog TVs with overscan.
 
-  // The overscan values are in normalized 0.0 .. 1.0 percentages of the total width/height of the screen.
-
-  // TODO: Make this dynamic somehow?
-
-#ifdef FREEPLAYTECH_WAVESHARE32B
   /* In /opt/retropie/configs/nes/retroarch.cfg, if running fceumm NES emulator, put:
       aspect_ratio_index = "22"
       custom_viewport_width = "256"
@@ -372,33 +367,28 @@ void InitGPU()
       video_fullscreen_x = "320"
       video_fullscreen_y = "240"
   */
-  // NES:
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
-  double overscanLeft = 19.0/240;
-  double overscanRight = 19.0/240;
-  double overscanTop = 9.0/320;
-  double overscanBottom = 9.0/320;
-#else
-  double overscanLeft = 9.0/320;
-  double overscanRight = 9.0/320;
-  double overscanTop = 19.0/240;
-  double overscanBottom = 19.0/240;
-#endif
-#else
-  // No overscan (e.g. Quake):
+
+  // The overscan values are in normalized 0.0 .. 1.0 percentages of the total width/height of the screen.
   double overscanLeft = 0.00;
   double overscanRight = 0.00;
   double overscanTop = 0.00;
   double overscanBottom = 0.00;
+
+  // If specified, computes overscan that crops away equally much content from all sides of the source frame
+  // to display the center of the source frame pixel perfect.
+#ifdef DISPLAY_CROPPED_INSTEAD_OF_SCALING
+  if (DISPLAY_DRAWABLE_WIDTH < display_info.width)
+  {
+    overscanLeft = (display_info.width - DISPLAY_DRAWABLE_WIDTH) * 0.5 / display_info.width;
+    overscanRight = overscanLeft;
+  }
+  if (DISPLAY_DRAWABLE_HEIGHT < display_info.height)
+  {
+    overscanTop = (display_info.height - DISPLAY_DRAWABLE_HEIGHT) * 0.5 / display_info.height;
+    overscanBottom = overscanTop;
+  }
 #endif
 
-  /*
-  // OpenTyrian: (320x200 -> 320x240)
-  double overscanLeft = 0.00;
-  double overscanRight = 0.00;
-  double overscanTop = 20.0/240;
-  double overscanBottom = 20.0/240;
-  */
   int relevantDisplayWidth = (int)(display_info.width * (1.0 - overscanLeft - overscanRight) + 0.5);
   int relevantDisplayHeight = (int)(display_info.height * (1.0 - overscanTop - overscanBottom) + 0.5);
   printf("Relevant source display area size with overscan cropped away: %dx%d.\n", relevantDisplayWidth, relevantDisplayHeight);
