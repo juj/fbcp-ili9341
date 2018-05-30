@@ -98,7 +98,7 @@ found_right:
   head->next = 0;
 }
 
-int DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
+void DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
 {
   int numSpans = 0;
   int y = interlacedDiff ? interlacedFieldParity : 0;

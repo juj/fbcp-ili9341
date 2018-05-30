@@ -35,6 +35,6 @@ extern Span *spans;
 
 void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *prevFramebuffer, Span *&head);
 
-int DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head);
+void DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head);
 
 void MergeScanlineSpanList(Span *listHead);

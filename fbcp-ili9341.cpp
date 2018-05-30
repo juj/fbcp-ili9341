@@ -322,22 +322,15 @@ int main()
 #endif
 
     if (interlacedUpdate) frameParity = 1-frameParity; // Swap even-odd fields every second time we do an interlaced update (progressive updates ignore field order)
-    int y = interlacedUpdate ? frameParity : 0;
-    uint16_t *scanline = framebuffer[0] + y*(gpuFramebufferScanlineStrideBytes>>1);
-    uint16_t *prevScanline = framebuffer[1] + y*(gpuFramebufferScanlineStrideBytes>>1); // (same scanline from previous frame, not preceding scanline)
-
     int bytesTransferred = 0;
-
-    int numSpans = 0;
     Span *head = 0;
 
 #if defined(ALL_TASKS_SHOULD_DMA) && defined(UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF)
     DiffFramebuffersToSingleChangedRectangle(framebuffer[0], framebuffer[1], head);
-    numSpans = 1;
 #else
     // Collect all spans in this image
     if (framebufferHasNewChangedPixels || prevFrameWasInterlacedUpdate)
-      numSpans = DiffFramebuffersToScanlineSpans(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head);
+      DiffFramebuffersToScanlineSpans(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head);
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
     if (!interlacedUpdate)
