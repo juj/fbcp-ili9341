@@ -190,61 +190,71 @@ By default `fbcp-ili9341` builds with a statistics overlay enabled because - adm
 
 ### FAQ and Troubleshooting
 
-##### Does fbcp-ili9341 work on Pi Zero?
+#### Does fbcp-ili9341 work on Pi Zero?
 
-Yes, it does, although not quite as well as Pi 3B. If you'd like it to run better on a Pi Zero, leave a thumbs up at https://github.com/raspberrypi/userland/issues/440 - hard problems are difficult to justify prioritizing unless it is known that many people care about them.
+Yes, it does, although not quite as well as on Pi 3B. If you'd like it to run better on a Pi Zero, leave a thumbs up at https://github.com/raspberrypi/userland/issues/440 - hard problems are difficult to justify prioritizing unless it is known that many people care about them.
 
-##### The driver works well, but image is upside down. How do I rotate the display?
+#### The driver works well, but image is upside down. How do I rotate the display?
 
-Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the display to show up the other way around. Another option is to utilize a `/boot/config.txt` 
+Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the display to show up the other way around. Another option is to utilize a `/boot/config.txt` option [display_rotate=2](https://www.raspberrypi.org/forums/viewtopic.php?t=120793)
 
-##### How do I exactly edit the build options to e.g. remove the statistics or change some other option?
+#### How exactly do I edit the build options to e.g. remove the statistics lines or change some other option?
 
 Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the line `#define STATISTICS` in there. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
 
 After having edited and saved the file, reissue `make -j` in the build directory and restart `fbcp-ili9341`.
 
-##### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
+#### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
 
 I don't know, I don't currently have any to test. Perhaps the code does need some model specific configuration, or perhaps it might work out of the box. I only have Pi 3B, Pi 3B+, Pi Zero W and a Pi 3 Compute Module based systems to experiment on.
 
-##### Does fbcp-ili9341 work on display X?
+#### Does fbcp-ili9341 work on display XYZ?
 
-If the display controller is one of the currently tested ones (see list above), and it is wired up to run using 4-line SPI, then it should work. Pay attention to configure the `Data/Control` GPIO pin number correctly, and the `Reset` GPIO pin number, if the device has one.
+If the display controller is one of the currently tested ones (see the list above), and it is wired up to run using 4-line SPI, then it should work. Pay attention to configure the `Data/Control` GPIO pin number correctly, and also specify the `Reset` GPIO pin number if the device has one.
 
-If the display controller is not one of the tested ones, it may work if it operates close enough to one of the already tested ones. For example, ILI9340 and ILI9341 are practically the same controller. You can just try with a specific one to see how it goes.
+If the display controller is not one of the tested ones, it may still work if it is similar to one of the existing ones. For example, ILI9340 and ILI9341 are practically the same controller. You can just try with a specific one to see how it goes.
 
 If `fbcp-ili9341` does not support your display controller, you will have to write support for it. `fbcp-ili9341` does not have a "generic SPI TFT driver routine" that might work across multiple devices, but needs specific code for each. If you have the spec sheet available, you can ask for advice, but please do not request to add support to a display controller "blind", that is not possible.
 
-##### I am running fbcp-ili9341 on a display that was listed above, but the display stays white?
+#### Is it possible to break my display with this driver if I misconfigure something?
 
-Unfortunately there may be a large number of things wrong that all result in a white screen. This is probably the hardest part to diagnose:
+I have done close to everything possible to my displays - cut power in middle of operation, sent random data and command bytes, set their operating voltage commands and clock timings to arbitrary high and low values, tested unspecified and reserved command fields, and driven the displays dozens of MHz faster than they managed to keep up with, and I have not yet done permanent damage to any of my displays or Pis.
+
+Easiest way to do permanent damage is to fail at wiring, e.g. drive 5 volts if your display requires 3.3v, or short a connection, or something similar.
+
+The one thing that `fbcp-ili9341` stays clear off is that it does not program the non-volatile memory areas of any of the displays. Therefore a hard power off on a display should clear all performed initialization and reset the display to its initial state at next power on.
+
+That being said, if it breaks, you'll get to purchase a new shiny one to replace it.
+
+#### I am running fbcp-ili9341 on a display that was listed above, but the display stays white after startup?
+
+Unfortunately there are a number of things to go wrong that all result in a white screen. This is probably the hardest part to diagnose. Some ideas:
 
 - double check the wiring,
 - double check that the display controller is really what you expected. Trying to drive with the display with wrong initialization code usually results in the display not reacting, and the screen stays white,
-- physically shut down and power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to clear,
-- if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving `fbcp-ili9341` without specifying the reset pin
-- even if the display has a 4-wire SPI mode, make sure the display is not configured to run in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode.
+- shut down and physically power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to reset,
+- if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving `fbcp-ili9341` without specifying the reset pin,
+- make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode.
 
-##### The display does not even show up white at boot?
+#### The display stays blank at boot without lighting up
 
-This suggests that the power line, or backlight line is not properly connected. All LCD TFT displays I have immediately light up their backlight immediately when they receive power. The OLED displays on the other hand stay all black even when they do get power.
+This suggests that the power line or the backlight line is not properly connected. All LCD TFT displays I have immediately light up their backlight when they receive power. OLED displays on the other hand seem to stay all black even after they do get power, while waiting for their initialization to be performed.
 
-##### The display clears from white to black at initialization, but picture does not show up?
+#### The display clears from white to black after starting fbcp-ili9341, but picture does not show up?
 
-`fbcp-ili9341` runs a clear screen command at low speed as first thing after init, so this is a good sign. Try increasing `-DSPI_BUS_CLOCK_DIVISOR=` CMake option to a higher number to see if the display driving rate was too fast. Or try disabling DMA with `-DUSE_DMA_TRANSFERS=OFF` to see if this might be a DMA conflict.
+`fbcp-ili9341` runs a clear screen command at low speed as first thing after init, so if that goes through, it is a good sign. Try increasing `-DSPI_BUS_CLOCK_DIVISOR=` CMake option to a higher number to see if the display driving rate was too fast. Or try disabling DMA with `-DUSE_DMA_TRANSFERS=OFF` to see if this might be a DMA conflict.
 
-##### Image does show up on display, but it freezes shortly afterwards
+#### Image does show up on display, but it freezes shortly afterwards
 
 This suggests same as above, increase SPI bus divisor or troubleshoot disabling DMA. If DMA is detected to be the culprit, try changing up the DMA channels. Double check that `/boot/config.txt` does not have any `dtoverlay`s regarding other SPI display drivers or touch screen controllers, and that it does **NOT** have a `dtparam=spi=on` line in it - `fbcp-ili9341` does not use the Linux kernel SPI driver.
 
 Make sure other `fbcp` programs are not running, or that another copy of `fbcp-ili9341` is not running on the background.
 
-##### There are some animated pixels on the display, but it looks all garbled
+#### The driver is updating pixels on the display, but it looks all garbled
 
-Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever `fbcp-ili9341` refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. 
+Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever `fbcp-ili9341` refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. Make sure no other `fbcp` programs or SPI drivers or dtoverlays are enabled.
 
-##### The screen is tearing when it updates
+#### The screen is tearing when it updates
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
 
@@ -252,12 +262,12 @@ You can choose between two distinct types of tearing artifacts: *straight line t
 
 To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that cheap small 3.5" HDMI displays such as KeDei do also tear - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
 
-##### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
+#### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
 Here is a speed report on different displays I have tested. Note that these are sample sizes of one. I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance.
 
 | Vendor | Size | Resolution | Controller | Rated SPI Bus Speed | Obtained Bus Speed | Core Freq | CDIV |
-| ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | ---------------- |
+| ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | ----------|----- |
 | [Adafruit PiTFT](https://www.adafruit.com/product/1601) | 2.8" | 240x320 | ILI9341 | 10MHz | 73.50MHz | 294MHz | 4 |
 | [Adafruit PiTFT](https://www.adafruit.com/product/2315) | 2.2" | 240x320 | ILI9340 | 15.15MHz | 84.50MHz | 338MHz | 4 |
 | [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | ? | 52.33MHz | 314MHz | 6 |
