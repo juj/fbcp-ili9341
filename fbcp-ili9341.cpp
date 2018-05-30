@@ -467,7 +467,11 @@ int main()
           int lastScanEndX = (endY > i->endY) ? j->lastScanEndX : ((endY > j->endY) ? i->lastScanEndX : MAX(i->lastScanEndX, j->lastScanEndX));
           int newSize = (endX-x)*(endY-y-1) + (lastScanEndX - x);
           int wastedPixels = newSize - i->size - j->size;
-          if (wastedPixels <= SPAN_MERGE_THRESHOLD && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE)
+          if (wastedPixels <= SPAN_MERGE_THRESHOLD
+#ifdef MAX_SPI_TASK_SIZE
+            && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE
+#endif
+            )
           {
             i->x = x;
             i->y = y;

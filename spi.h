@@ -86,8 +86,12 @@ extern volatile SPIRegisterFile *spi;
 #define SHARED_MEMORY_SIZE (DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT*DISPLAY_BYTESPERPIXEL*3)
 #define SPI_QUEUE_SIZE (SHARED_MEMORY_SIZE - sizeof(SharedMemory))
 
-// Defines the maximum size of a single SPI task, in bytes. This excludes the command byte.
-#define MAX_SPI_TASK_SIZE ((DISPLAY_DRAWABLE_WIDTH+2)*(DISPLAY_DRAWABLE_HEIGHT+2)*DISPLAY_BYTESPERPIXEL)
+// Defines the maximum size of a single SPI task, in bytes. This excludes the command byte. If MAX_SPI_TASK_SIZE
+// is not defined, there is no length limit that applies. (In ALL_TASKS_SHOULD_DMA version of DMA transfer,
+// there is DMA chaining, so SPI tasks can be arbitrarily long)
+#ifndef ALL_TASKS_SHOULD_DMA
+#define MAX_SPI_TASK_SIZE 65528
+#endif
 
 typedef struct __attribute__((packed)) SPITask
 {
