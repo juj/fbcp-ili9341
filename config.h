@@ -83,9 +83,18 @@
 // DMA usage is tailored towards maximum performance.
 // #define ALL_TASKS_SHOULD_DMA
 
+// If defined, screen updates are performed in strictly one update rectangle per frame.
+// This reduces CPU consumption at the expense of sending more pixels. You can try enabling this
+// if your SPI display runs at a good high SPI bus MHz speed with respect to the screen resolution.
+// Useful on Pi Zero W and ILI9341 to conserve CPU power. If this is not defined, the default much
+// more powerful diffing algorithm is used, which sends far fewer pixels each frame, (but that diffing
+// costs more CPU time). Enabling this requires that ALL_TASKS_SHOULD_DMA is also enabled.
+// #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
+
 #if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS) && !defined(ALL_TASKS_SHOULD_DMA)
 // This is a prerequisite for good performance on Pi Zero
 #define ALL_TASKS_SHOULD_DMA
+
 #endif
 
 #if defined(ALL_TASKS_SHOULD_DMA)
