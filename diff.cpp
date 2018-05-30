@@ -17,9 +17,9 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   uint16_t *scanline = framebuffer;
   uint16_t *prevScanline = prevFramebuffer;
 
-  while(minY < DISPLAY_DRAWABLE_HEIGHT)
+  while(minY < gpuFrameHeight)
   {
-    for(int x = 0; x < DISPLAY_DRAWABLE_WIDTH; ++x)
+    for(int x = 0; x < gpuFrameWidth; ++x)
       if (scanline[x] != prevScanline[x])
       {
         minX = x;
@@ -32,14 +32,14 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   return; // No pixels changed, nothing to do.
 found_top:
 
-  scanline = framebuffer + (DISPLAY_DRAWABLE_HEIGHT - 1)*stride;
-  prevScanline = prevFramebuffer + (DISPLAY_DRAWABLE_HEIGHT - 1)*stride; // (same scanline from previous frame, not preceding scanline)
+  scanline = framebuffer + (gpuFrameHeight - 1)*stride;
+  prevScanline = prevFramebuffer + (gpuFrameHeight - 1)*stride; // (same scanline from previous frame, not preceding scanline)
 
   int maxX = -1;
-  int maxY = DISPLAY_DRAWABLE_HEIGHT-1;
-  while(maxY >= minY && maxX == -1)
+  int maxY = gpuFrameHeight-1;
+  while(maxY >= minY)
   {
-    for(int x = DISPLAY_DRAWABLE_WIDTH-1; x >= 0; --x)
+    for(int x = gpuFrameWidth-1; x >= 0; --x)
       if (scanline[x] != prevScanline[x])
       {
         maxX = x;
@@ -51,8 +51,8 @@ found_top:
   }
 found_bottom:
 
-  scanline = framebuffer;
-  prevScanline = prevFramebuffer;
+  scanline = framebuffer + minY*stride;
+  prevScanline = prevFramebuffer + minY*stride;
   int lastScanEndX = maxX;
   if (minX > maxX) SWAPU32(minX, maxX);
   int leftX = 0;
@@ -71,9 +71,8 @@ found_bottom:
   }
 found_left:
 
-  int rightX = DISPLAY_DRAWABLE_WIDTH-1;
-  bool foundRightX = false;
-  while(rightX > maxX && !foundRightX)
+  int rightX = gpuFrameWidth-1;
+  while(rightX > maxX)
   {
     uint16_t *s = scanline + rightX;
     uint16_t *prevS = prevScanline + rightX;
@@ -91,7 +90,7 @@ found_right:
   head = spans;
   head->x = leftX;
   head->endX = rightX+1;
-  head->lastScanEndX = lastScanEndX;
+  head->lastScanEndX = lastScanEndX+1;
   head->y = minY;
   head->endY = maxY+1;
   head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);

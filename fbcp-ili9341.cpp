@@ -357,7 +357,7 @@ int main()
 #endif
       {
 #if defined(MUST_SEND_FULL_CURSOR_WINDOW) || defined(ALIGN_TASKS_FOR_DMA_TRANSFERS)
-        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, displayYOffset + DISPLAY_DRAWABLE_HEIGHT - 1);
+        QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y, displayYOffset + gpuFrameHeight - 1);
 #else
         QUEUE_MOVE_CURSOR_TASK(DISPLAY_SET_CURSOR_Y, displayYOffset + i->y);
 #endif
@@ -377,10 +377,10 @@ int main()
 #ifdef ALIGN_TASKS_FOR_DMA_TRANSFERS
         if (spiX != i->x || spiEndX < i->endX)
         {
-          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + DISPLAY_DRAWABLE_WIDTH - 1);
+          QUEUE_SET_WRITE_WINDOW_TASK(DISPLAY_SET_CURSOR_X, displayXOffset + i->x, displayXOffset + gpuFrameWidth - 1);
           IN_SINGLE_THREADED_MODE_RUN_TASK();
           spiX = i->x;
-          spiEndX = DISPLAY_DRAWABLE_WIDTH;
+          spiEndX = gpuFrameWidth;
         }
 #else
         if (spiEndX < i->endX) // Need to push the X end window?
