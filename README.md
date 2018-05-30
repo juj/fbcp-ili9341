@@ -137,7 +137,7 @@ to the end. Make note of the needed ampersand `&` at the end of that line.
 
 ##### Configuring HDMI and TFT display sizes
 
-If the size of the default HDMI output `/dev/fb0` framebuffer differs from the 320x240 resolution of the display, the source size will need to be rescaled to fit to 320x240 pixels. `fbcp-ili9341` will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the 320x240 size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
+If the size of the default HDMI output `/dev/fb0` framebuffer differs from the resolution of the display, the source video size will by default be rescaled to fit to the size of the SPI display. `fbcp-ili9341` will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the SPI display size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
 
 ```
 hdmi_group=2
@@ -146,21 +146,131 @@ hdmi_cvt=320 240 60 1 0 0 0
 hdmi_force_hotplug=1
 ```
 
+If your SPI display has a different resolution than 320x240, change the `320 240` part to e.g. `480 320`.
+
 These lines hint native applications about the default display mode, and let them render to the native resolution of the TFT display. This can however prevent the use of the HDMI connector, if the HDMI connected display does not support such a small resolution. As a compromise, if both HDMI and SPI displays want to be used at the same time, some other compatible resolution such as 640x480 can be used. See [Raspberry Pi HDMI documentation](https://www.raspberrypi.org/documentation/configuration/config-txt/video.md) for the available options to do this.
 
 ##### Tuning Performance
 
-There are three ways to configure the throughput performance of the display driver.
+Check the following tips to optimize the display to run as fast as possible.
 
 1. The main configuration is the SPI bus `CDIV` (Clock DIVider) setting which controls the MHz rate of the SPI0 controller. By default this is set to value `CDIV=6`. To adjust this value, pass the directive `-DSPI_BUS_CLOCK_DIVISOR=even_number` in CMake command line. Possible values are even numbers `2`, `4`, `6`, `8`, `...`. Smaller values result in higher bus speeds. Usually for ILI9341, `CDIV=6` seems good, but if one underclocks `core_freq` to around 300MHz, it looks like `CDIV=4` can also be used. On ILI9486, it seems that `CDIV=14` or `CDIV=16` are good starting values.
 
-2. Ensure turbo speed. This is critical for good frame rates. On the Raspberry Pi 3 Model B, the SPI bus runs at 400MHz (divided by `CDIV`) **if** there is enough power provided to the Pi, and if the CPU temperature does not exceed thermal limits. If for some reason under-voltage protection is kicking in even when enough power should be fed, you can [force-enable turbo when low voltage is present](https://www.raspberrypi.org/forums/viewtopic.php?f=29&t=82373) by setting the value `avoid_warnings=2` in the file `/boot/config.txt`. The effect of turbo speed on performance is significant, 400MHz vs non-turbo 250MHz, which comes out to +60% of more bandwidth. Getting 60fps in Quake, Sonic or Tyrian requires this turbo frequency, but NES and C64 emulators can often reach 60fps even with the stock 250MHz.
+2. Ensure turbo speed. This is critical for good frame rates. On the Raspberry Pi 3 Model B, the SPI bus runs by default at `400/CDIV` MHz **if** there is enough power provided to the Pi, and if the CPU temperature does not exceed thermal limits. If for some reason under-voltage protection is kicking in even when enough power should be fed, you can [force-enable turbo when low voltage is present](https://www.raspberrypi.org/forums/viewtopic.php?f=29&t=82373) by setting the value `avoid_warnings=2` in the file `/boot/config.txt`. The effect of turbo speed on performance is significant, 400MHz vs non-turbo 250MHz, which comes out to +60% of more bandwidth. Getting 60fps in Quake, Sonic or Tyrian requires this turbo frequency, but NES and C64 emulators can often reach 60fps even with the stock 250MHz.
 
-3. **Underclock** the core. The `core_freq=` option in `/boot/config.txt` affects also the SPI bus speed. Setting a **smaller** core frequency than the default turbo 400MHz can enable using a smaller clock divider to get a better SPI bus speed. For example, if with default `core_freq=400` SPI `CDIV=8` works (resulting in SPI bus speed `400MHz/8=50MHz`), but `CDIV=6` does not (`400MHz/6=66.67MHz` was too much), you can try lowering `core_freq=360` and set `CDIV=6` to get an effective SPI bus speed of `360MHz/6=60MHz`, a middle ground between the two that might perhaps work. Balancing `core_freq=` and `CDIV` options allows one to find the maximum SPI bus speed up to the last few kHz that the display controller can tolerate.
+3. Perhaps a bit counterintuitively, **underclock** the core. The `core_freq=` option in `/boot/config.txt` affects also the SPI bus speed. Setting a **smaller** core frequency than the default turbo 400MHz can enable using a smaller clock divider to get a higher resulting SPI bus speed. For example, if with default `core_freq=400` SPI `CDIV=8` works (resulting in SPI bus speed `400MHz/8=50MHz`), but `CDIV=6` does not (`400MHz/6=66.67MHz` was too much), you can try lowering `core_freq=360` and set `CDIV=6` to get an effective SPI bus speed of `360MHz/6=60MHz`, a middle ground between the two that might perhaps work. Balancing `core_freq=` and `CDIV` options allows one to find the maximum SPI bus speed up to the last few kHz that the display controller can tolerate.
+
+##### Reducing CPU Usage
+
+On the other hand, it is desirable to control how much CPU time `fbcp-ili9341` is allowed to use. The default build settings are tuned to maximize the display refresh rate at the expense of power consumption on Pi 3B. On Pi Zero, the opposite is done, i.e. by default the driver optimizes for battery saving instead of maximal display update speed. The following options can be controlled to balance between these two:
+
+- The main option to control CPU usage vs performance aspect is the option `#define ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling this option will greatly reduce CPU usage. If this option is disabled, SPI bus utilization is maximized but CPU usage can be up to 80%-120%. When this option is enabled, CPU usage is generally up to around 15%-30%. Maximal CPU usage occurs when watching a video, or playing a fast moving game. If nothing is changing on the screen, CPU consumption of the driver should go down very close to 0-5%. By default `#define ALL_TASKS_SHOULD_DMA` is enabled for Pi Zero, but disabled for Pi 3B.
+
+- The CMake option `-DUSE_DMA_TRANSFERS=ON` should always be enabled for good low CPU usage. If DMA transfers are disabled, the driver will run in Polled SPI mode, which generally utilizes a full dedicated single core of CPU time. If DMA transfers are causing issues, try adjusting the DMA send and receive channels to use for SPI communication with `-DDMA_TX_CHANNEL=<num>` and `-DDMA_RX_CHANNEL=<num>` CMake options.
+
+- The statistics overlay prints out quite detailed information about execution state. Removing `#define STATISTICS` in config.h improves performance and reduces CPU usage. If you want to keep printing statistics, you can try increasing the interval with the `#define STATISTICS_REFRESH_INTERVAL <timeInMicroseconds>` option.
+
+- Enabling `#define USE_GPU_VSYNC` reduces CPU consumption, but because of https://github.com/raspberrypi/userland/issues/440 can cause stuttering. Disabling `#defined USE_GPU_VSYNC` produces less stuttering, but because of https://github.com/raspberrypi/userland/issues/440, increases CPU power consumption.
+
+- The option `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` can be used in conjunction with `#define USE_GPU_VSYNC` to try to find a middle ground between https://github.com/raspberrypi/userland/issues/440 issues - moderate to little stuttering while not trying to consume too much CPU. Try experimenting with enabling or disabling this setting.
+
+- There are a number of `#define SAVE_BATTERY_BY_x` options in config.h, which all default to being enabled. These should be safe to use always without tradeoffs. If you are experiencing latency or performance related issues, you can try to toggle these to troubleshoot.
+
+- The option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` does cause a bit of extra CPU usage, so disabling it will lighten up the CPU load a bit.
+
+- If your SPI display bus is able to run really fast in comparison to the size of the display and the amount of content changing on the screen, you can try enabling `#define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF` to reduce CPU usage at the expense of increasing the number of bytes sent over the bus.
+
+- The option `#define RUN_WITH_REALTIME_THREAD_PRIORITY` can be enabled to make the driver run at realtime process priority. This can lock up the system however, but still made available for advanced experimentation.
+
+- In `display.h` there is an option `#define TARGET_FRAME_RATE <number>`. Setting this to a smaller value, such as 30, will trade refresh rate to reduce CPU consumption.
 
 ### Statistics Overlay
 
-By default `fbcp-ili9341` builds with a statistics overlay enabled. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Remove the `#define STATISTICS` option in `config.h` to disable displaying the statistics.
+By default `fbcp-ili9341` builds with a statistics overlay enabled because - admit it - when you first run, you like to geek out on all the knobs and numbers anyways. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Remove the `#define STATISTICS` option in `config.h` to disable displaying the statistics.
+
+### FAQ and Troubleshooting
+
+##### Does fbcp-ili9341 work on Pi Zero?
+
+Yes, it does, although not quite as well as Pi 3B. If you'd like it to run better on a Pi Zero, leave a thumbs up at https://github.com/raspberrypi/userland/issues/440 - hard problems are difficult to justify prioritizing unless it is known that many people care about them.
+
+##### The driver works well, but image is upside down. How do I rotate the display?
+
+Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the display to show up the other way around. Another option is to utilize a `/boot/config.txt` 
+
+##### How do I exactly edit the build options to e.g. remove the statistics or change some other option?
+
+Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the line `#define STATISTICS` in there. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
+
+After having edited and saved the file, reissue `make -j` in the build directory and restart `fbcp-ili9341`.
+
+##### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
+
+I don't know, I don't currently have any to test. Perhaps the code does need some model specific configuration, or perhaps it might work out of the box. I only have Pi 3B, Pi 3B+, Pi Zero W and a Pi 3 Compute Module based systems to experiment on.
+
+##### Does fbcp-ili9341 work on display X?
+
+If the display controller is one of the currently tested ones (see list above), and it is wired up to run using 4-line SPI, then it should work. Pay attention to configure the `Data/Control` GPIO pin number correctly, and the `Reset` GPIO pin number, if the device has one.
+
+If the display controller is not one of the tested ones, it may work if it operates close enough to one of the already tested ones. For example, ILI9340 and ILI9341 are practically the same controller. You can just try with a specific one to see how it goes.
+
+If `fbcp-ili9341` does not support your display controller, you will have to write support for it. `fbcp-ili9341` does not have a "generic SPI TFT driver routine" that might work across multiple devices, but needs specific code for each. If you have the spec sheet available, you can ask for advice, but please do not request to add support to a display controller "blind", that is not possible.
+
+##### I am running fbcp-ili9341 on a display that was listed above, but the display stays white?
+
+Unfortunately there may be a large number of things wrong that all result in a white screen. This is probably the hardest part to diagnose:
+
+- double check the wiring,
+- double check that the display controller is really what you expected. Trying to drive with the display with wrong initialization code usually results in the display not reacting, and the screen stays white,
+- physically shut down and power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to clear,
+- if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving `fbcp-ili9341` without specifying the reset pin
+- even if the display has a 4-wire SPI mode, make sure the display is not configured to run in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode.
+
+##### The display does not even show up white at boot?
+
+This suggests that the power line, or backlight line is not properly connected. All LCD TFT displays I have immediately light up their backlight immediately when they receive power. The OLED displays on the other hand stay all black even when they do get power.
+
+##### The display clears from white to black at initialization, but picture does not show up?
+
+`fbcp-ili9341` runs a clear screen command at low speed as first thing after init, so this is a good sign. Try increasing `-DSPI_BUS_CLOCK_DIVISOR=` CMake option to a higher number to see if the display driving rate was too fast. Or try disabling DMA with `-DUSE_DMA_TRANSFERS=OFF` to see if this might be a DMA conflict.
+
+##### Image does show up on display, but it freezes shortly afterwards
+
+This suggests same as above, increase SPI bus divisor or troubleshoot disabling DMA. If DMA is detected to be the culprit, try changing up the DMA channels. Double check that `/boot/config.txt` does not have any `dtoverlay`s regarding other SPI display drivers or touch screen controllers, and that it does **NOT** have a `dtparam=spi=on` line in it - `fbcp-ili9341` does not use the Linux kernel SPI driver.
+
+Make sure other `fbcp` programs are not running, or that another copy of `fbcp-ili9341` is not running on the background.
+
+##### There are some animated pixels on the display, but it looks all garbled
+
+Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever `fbcp-ili9341` refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. 
+
+##### The screen is tearing when it updates
+
+Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
+
+You can choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` consumes a few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing.
+
+To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that cheap small 3.5" HDMI displays such as KeDei do also tear - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
+
+##### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
+
+Here is a speed report on different displays I have tested. Note that these are sample sizes of one. I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance.
+
+| Vendor | Size | Resolution | Controller | Rated SPI Bus Speed | Obtained Bus Speed | Core Freq | CDIV |
+| ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | ---------------- |
+| [Adafruit PiTFT](https://www.adafruit.com/product/1601) | 2.8" | 240x320 | ILI9341 | 10MHz | 73.50MHz | 294MHz | 4 |
+| [Adafruit PiTFT](https://www.adafruit.com/product/2315) | 2.2" | 240x320 | ILI9340 | 15.15MHz | 84.50MHz | 338MHz | 4 |
+| [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | ? | 52.33MHz | 314MHz | 6 |
+| [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 18.00MHz | 360MHz | 20 |
+| [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 31.88MHz | 255MHz | 8 |
+| [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 77.50MHz | 310MHz | 4 |
+| [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 59.16MHz | 355MHz | 6 |
+
+All of the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs quite slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
+
+If manufacturing variances turn out not to be high between copies, then it is recommended to avoid ILI9486, and opt for HX8357D displays instead.
+
+Note also how most of these displays can be run at a considerable overdrive compared to what their spec sheets officially state. Either my purchases have been really lucky, or this is generally more the norm rather than an exception.
 
 ### Resources
 
