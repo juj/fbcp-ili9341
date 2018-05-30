@@ -29,6 +29,7 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
     prevScanline += stride;
     ++minY;
   }
+  return; // No pixels changed, nothing to do.
 found_top:
 
   scanline = framebuffer + (DISPLAY_DRAWABLE_HEIGHT - 1)*stride;
@@ -50,54 +51,51 @@ found_top:
   }
 found_bottom:
 
-  if (minY <= maxY && minX != -1 && maxX != -1)
+  scanline = framebuffer;
+  prevScanline = prevFramebuffer;
+  int lastScanEndX = maxX;
+  if (minX > maxX) SWAPU32(minX, maxX);
+  int leftX = 0;
+  while(leftX < minX)
   {
-    scanline = framebuffer;
-    prevScanline = prevFramebuffer;
-    int lastScanEndX = maxX;
-    if (minX > maxX) SWAPU32(minX, maxX);
-    int leftX = 0;
-    while(leftX < minX)
+    uint16_t *s = scanline + leftX;
+    uint16_t *prevS = prevScanline + leftX;
+    for(int y = minY; y <= maxY; ++y)
     {
-      uint16_t *s = scanline + leftX;
-      uint16_t *prevS = prevScanline + leftX;
-      for(int y = minY; y <= maxY; ++y)
-      {
-        if (*s != *prevS)
-          goto found_left;
-        s += stride;
-        prevS += stride;
-      }
-      ++leftX;
+      if (*s != *prevS)
+        goto found_left;
+      s += stride;
+      prevS += stride;
     }
+    ++leftX;
+  }
 found_left:
 
-    int rightX = DISPLAY_DRAWABLE_WIDTH-1;
-    bool foundRightX = false;
-    while(rightX > maxX && !foundRightX)
+  int rightX = DISPLAY_DRAWABLE_WIDTH-1;
+  bool foundRightX = false;
+  while(rightX > maxX && !foundRightX)
+  {
+    uint16_t *s = scanline + rightX;
+    uint16_t *prevS = prevScanline + rightX;
+    for(int y = minY; y <= maxY; ++y)
     {
-      uint16_t *s = scanline + rightX;
-      uint16_t *prevS = prevScanline + rightX;
-      for(int y = minY; y <= maxY; ++y)
-      {
-        if (*s != *prevS)
-          goto found_right;
-        s += stride;
-        prevS += stride;
-      }
-      --rightX;
+      if (*s != *prevS)
+        goto found_right;
+      s += stride;
+      prevS += stride;
     }
+    --rightX;
+  }
 found_right:
 
-    head = spans;
-    head->x = leftX;
-    head->endX = rightX+1;
-    head->lastScanEndX = lastScanEndX;
-    head->y = minY;
-    head->endY = maxY+1;
-    head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
-    head->next = 0;
-  }
+  head = spans;
+  head->x = leftX;
+  head->endX = rightX+1;
+  head->lastScanEndX = lastScanEndX;
+  head->y = minY;
+  head->endY = maxY+1;
+  head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
+  head->next = 0;
 }
 
 int DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
