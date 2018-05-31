@@ -19,6 +19,8 @@
 #include "st7735r.h"
 #elif defined(SSD1351)
 #include "ssd1351.h"
+#elif defined(MZ61581)
+#include "mz61581.h"
 #else
 #error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON or -DFREEPLAYTECH_WAVESHARE32B=ON (or contribute ports to more displays yourself)
 #endif
@@ -42,5 +44,9 @@
 #define DISPLAY_DRAWABLE_WIDTH (DISPLAY_WIDTH-DISPLAY_COVERED_LEFT_SIDE-DISPLAY_COVERED_RIGHT_SIDE)
 #define DISPLAY_DRAWABLE_HEIGHT (DISPLAY_HEIGHT-DISPLAY_COVERED_TOP_SIDE-DISPLAY_COVERED_BOTTOM_SIDE)
 #define DISPLAY_SCANLINE_SIZE (DISPLAY_WIDTH*DISPLAY_BYTESPERPIXEL)
+
+#ifndef DISPLAY_SPI_DRIVE_SETTINGS
+#define DISPLAY_SPI_DRIVE_SETTINGS (0)
+#endif
 
 void DeinitSPIDisplay(void);

@@ -86,9 +86,9 @@ void WaitForPolledSPITransferToFinish()
   uint32_t cs;
   while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE))
     if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
-      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+      spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
 
-  if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+  if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
 }
 
 #ifdef ALL_TASKS_SHOULD_DMA
@@ -115,7 +115,7 @@ void RunSPITask(SPITask *task)
     if (!previousTaskWasSPI)
     {
       WaitForDMAFinished();
-      spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR_TX;
+      spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR_TX | DISPLAY_SPI_DRIVE_SETTINGS;
       // After having done a DMA transfer, the SPI0 DLEN register has reset to zero, so restore it to fast mode.
       UNLOCK_FAST_8_CLOCKS_SPI();
     }
@@ -148,7 +148,7 @@ void RunSPITask(SPITask *task)
       cs = spi->cs;
       if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
 // TODO:      else asm volatile("yield");
-      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
 
     previousTaskWasSPI = true;
@@ -203,7 +203,7 @@ void RunSPITask(SPITask *task)
       uint32_t cs = spi->cs;
       if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
 // TODO:      else asm volatile("yield");
-      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA;
+      if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
   }
 }
@@ -343,7 +343,7 @@ int InitSPI()
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
   CLEAR_GPIO(GPIO_SPI0_CE0);
 
-  spi->cs = BCM2835_SPI0_CS_CLEAR; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
+  spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk
 #endif
 
@@ -415,7 +415,7 @@ void DeinitSPI()
   DeinitDMA();
 #endif
 
-  spi->cs = BCM2835_SPI0_CS_CLEAR;
+  spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
   if (bcm2835)
   {

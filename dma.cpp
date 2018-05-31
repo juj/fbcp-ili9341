@@ -424,7 +424,7 @@ void SPIDMATransfer(SPITask *task)
     bytesLeft -= sendSize;
 
     volatile DMAControlBlock *tx = cb++;
-    txData[0] = BCM2835_SPI0_CS_TA | (sendSize << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+    txData[0] = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS | (sendSize << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
     memcpy((void*)(txData+1), data, sendSize);
     data += sendSize;
     tx->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
@@ -502,7 +502,7 @@ void SPIDMATransfer(SPITask *task)
   pendingTaskBytes = task->size;
 
   // First send the SPI command byte in Polled SPI mode
-  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
+  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 #ifdef ILI9486
   spi->fifo = 0;
@@ -518,7 +518,7 @@ void SPIDMATransfer(SPITask *task)
 #endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
-  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
+  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
   dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, tx0);
   dmaRx->cbAddr = VIRT_TO_BUS(dmaCb, rx0);
@@ -533,8 +533,8 @@ void SPIDMATransfer(SPITask *task)
 void SPIDMATransfer(SPITask *task)
 {
   // Transition the SPI peripheral to enable the use of DMA
-  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR;
-  task->dmaSpiHeader = BCM2835_SPI0_CS_TA | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+  spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
+  task->dmaSpiHeader = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
 
   // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
   // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
@@ -591,7 +591,7 @@ void SPIDMATransfer(SPITask *task)
   }
 
   __sync_synchronize();
-  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR;
+  spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
   __sync_synchronize();
 }
 
