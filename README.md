@@ -52,15 +52,18 @@ The following LCD displays have been tested:
  - [BuyDisplay.com 320x480 Serial SPI 3.2"TFT LCD Module Display](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) with ILI9341 controller
  - [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
 
-### Limitations
+### Known Issues
 
-While the performance of the driver is great and 60fps is just lovable, there are a number of current limitations to the code:
+Be aware of the following limitations:
 
 ###### Specific to BCM2835
  - The codebase has been written with a hardcoded assumption of the ARM BCM2835 chip. Since it bypasses the generic drivers for SPI and GPIO, it will definitely not work out of the box on any other display controllers than the ones mentioned earlier. It might not work on other Pis than the ones mentioned earlier either. The driver also assumes it is the exclusive user of the SPI bus, which means that at the moment, touch controllers are not supported and should be disabled.
 
 ###### No rendered frame delivery via events from VideoCore IV GPU
  - The codebase captures screen framebuffers by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not exist an event-based mechanism to get new frames from the GPU as they are produced. The result is inefficient and can easily cause stuttering, since different applications produce frames at different paces. For example an emulated PAL NES game would be producing frames at fixed 50Hz, a native GLES2 game at fixed 60Hz, or perhaps at variable times depending on the GPU workload. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality does not exist in the current GPU driver stack. In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect. This GPU limitation is discussed at https://github.com/raspberrypi/userland/issues/440. If you'd like to see fbcp-ili9341 operation reduce latency, stuttering and power consumption, please throw a (kind!) comment or a thumbs up emoji in that bug thread to share that you care about this, and perhaps Raspberry Pi engineers might pick the improvement up on the development roadmap.
+
+###### Screen resize freezes DispmanX
+ - Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
 
 ### Installation
 
@@ -265,6 +268,10 @@ This suggests that the power line or the backlight line is not properly connecte
 This suggests same as above, increase SPI bus divisor or troubleshoot disabling DMA. If DMA is detected to be the culprit, try changing up the DMA channels. Double check that `/boot/config.txt` does not have any `dtoverlay`s regarding other SPI display drivers or touch screen controllers, and that it does **NOT** have a `dtparam=spi=on` line in it - `fbcp-ili9341` does not use the Linux kernel SPI driver.
 
 Make sure other `fbcp` programs are not running, or that another copy of `fbcp-ili9341` is not running on the background.
+
+#### Image does show up on display, but when I start up program XYZ, the image freezes
+
+This is likely caused by the program resizing the video resolution at runtime, which breaks DispmanX. See https://github.com/raspberrypi/userland/issues/461 for more details.
 
 #### The driver is updating pixels on the display, but it looks all garbled
 
