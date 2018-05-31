@@ -300,6 +300,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 255MHz/8=31.88MHz | 12.97 fps |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
 | [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 355MHz/6=59.16MHz | 180.56 fps |
+| [Tontec MZ61581-PI-EXT 2016.1.28](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) | 3.5" | 320x480 | MZ61581 | 128MHz | 280MHz/2=140.00MHz | 56.97 fps |
 
 In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display controller is rated to run at. The *Obtained Bus Speed* column lists the fastest SPI bus speed that was achieved in practice, and the `core_freq` BCM Core speed and SPI Clock Divider `CDIV` setting that was used to achieve that rate. Note how most display controllers can generally be driven much faster than what they are officially rated at in their spec sheets.
 
@@ -307,9 +308,13 @@ The *Frame Rate* column shows the worst case frame rate when full screen updates
 
 All the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs really slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
 
-If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, and opt for a HX8357D instead.
+If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, they indeed are slow.
+
+The Tontec MZ61581 controller based 320x480 3.5" display on the other hand can be driven insanely fast at up to 140MHz! These seem to be quite hard to come by though and they are expensive. Tontec seems to have gone out of business and for example the domain itontec.com from which the supplied instructions sheet asks to download original drivers from is no longer registered. I was able to find one from eBay for testing.
 
 Search around, or ask the manufacturer of the display what the maximum SPI bus speed is for the device. This is the most important aspect to getting good frame rates, but unfortunately most web links never state the SPI speed rating, or they state it ridiculously low like in the spec sheets. Try and buy to see, or ask in some community forums from people who already have a particular display to find out what SPI bus speed it can achieve. 
+
+Ultimately, it should be noted that parallel displays (DPI) are the proper method for getting fast framerates easily. SPI displays should only be preferred if display form factor is important and a desired product might only exist as SPI and not as DPI, or the number of GPIO pins that are available on the Pi is scarce that sacrificing dozens of pins to RGB data is not feasible.
 
 ### Resources
 
