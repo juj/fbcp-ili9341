@@ -204,6 +204,10 @@ Edit the file `config.h` in a text editor (a command line one such as `pico`, `v
 
 After having edited and saved the file, reissue `make -j` in the build directory and restart `fbcp-ili9341`.
 
+#### Does fbcp-ili9341 work with linux command line terminal or X windowing system?
+
+Yes, both work fine.
+
 #### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
 
 I don't know, I don't currently have any to test. Perhaps the code does need some model specific configuration, or perhaps it might work out of the box. I only have Pi 3B, Pi 3B+, Pi Zero W and a Pi 3 Compute Module based systems to experiment on.
@@ -215,6 +219,18 @@ If the display controller is one of the currently tested ones (see the list abov
 If the display controller is not one of the tested ones, it may still work if it is similar to one of the existing ones. For example, ILI9340 and ILI9341 are practically the same controller. You can just try with a specific one to see how it goes.
 
 If `fbcp-ili9341` does not support your display controller, you will have to write support for it. `fbcp-ili9341` does not have a "generic SPI TFT driver routine" that might work across multiple devices, but needs specific code for each. If you have the spec sheet available, you can ask for advice, but please do not request to add support to a display controller "blind", that is not possible.
+
+#### Does fbcp-ili9341 work with 3-wire SPI displays?
+
+No, only 4-wire SPI displays work. Make sure the display has a Data/Control (DC) GPIO pin to connect.
+
+#### Does fbcp-ili9341 work with I2C, DPI, MIPI DSI or USB connected displays?
+
+No. Those are completely different technologies altogether. It should be possible to port the driver algorithm to work on I2C however, if someone is interested.
+
+#### Does fbcp-ili9341 work with touch displays?
+
+At the moment one cannot utilize the XPT2046/ADS7846 touch controllers while running `fbcp-ili9341`, so touch is mutually incompatible with this driver. In order for `fbcp-ili9341` to function, you will need to remove all `dtoverlay`s in `/boot/config.txt` related to touch.
 
 #### Is it possible to break my display with this driver if I misconfigure something?
 
@@ -258,29 +274,35 @@ Double check the Data/Command (D/C) GPIO pin physically, and in CMake command li
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
 
-You can choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` consumes a few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing.
+You can choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` produces straight line tearing, and consumes a few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing.
 
 To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that cheap small 3.5" HDMI displays such as KeDei do also tear - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
 
 #### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
-Here is a speed report on different displays I have tested. Note that these are sample sizes of one. I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance.
+First, make sure the display is a 4-wire SPI and not a 3-wire one. `fbcp-ili9341` does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
 
-| Vendor | Size | Resolution | Controller | Rated SPI Bus Speed | Obtained Bus Speed | Core Freq | CDIV |
-| ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | ----------|----- |
-| [Adafruit PiTFT](https://www.adafruit.com/product/1601) | 2.8" | 240x320 | ILI9341 | 10MHz | 73.50MHz | 294MHz | 4 |
-| [Adafruit PiTFT](https://www.adafruit.com/product/2315) | 2.2" | 240x320 | ILI9340 | 15.15MHz | 84.50MHz | 338MHz | 4 |
-| [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | ? | 52.33MHz | 314MHz | 6 |
-| [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 18.00MHz | 360MHz | 20 |
-| [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 31.88MHz | 255MHz | 8 |
-| [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 77.50MHz | 310MHz | 4 |
-| [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 59.16MHz | 355MHz | 6 |
+Second is the consideration about display speed. Below is a performance chart of the different displays I have tested. Note that these are sample sizes of one, I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance, whether they are from Adafruit or WaveShare or from BuyDisplay.com.
 
-All of the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs quite slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
+| Vendor | Size | Resolution | Controller | Rated SPI Bus Speed | Obtained Bus Speed | Frame Rate |
+| ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | -----------|
+| [Adafruit PiTFT](https://www.adafruit.com/product/1601) | 2.8" | 240x320 | ILI9341 | 10MHz | 294MHz/4=73.50MHz | 59.81 fps |
+| [Adafruit PiTFT](https://www.adafruit.com/product/2315) | 2.2" | 240x320 | ILI9340 | 15.15MHz | 338MHz/4=84.50MHz | 68.76 fps |
+| [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | ? | 314MHz/6=52.33MHz | 21.29 fps |
+| [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 360MHz/20=18.00MHz | 91.55 fps |
+| [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 255MHz/8=31.88MHz | 12.97 fps |
+| [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
+| [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 355MHz/6=59.16MHz | 180.56 fps |
 
-If manufacturing variances turn out not to be high between copies, then it is recommended to avoid ILI9486, and opt for HX8357D displays instead.
+In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display controller is rated to run at. The *Obtained Bus Speed* column lists the fastest SPI bus speed that was achieved in practice, and the `core_freq` BCM Core speed and SPI Clock Divider `CDIV` setting that was used to achieve that rate. Note how most display controllers can generally be driven much faster than what they are officially rated at in their spec sheets.
 
-Note also how most of these displays can be run at a considerable overdrive compared to what their spec sheets officially state. Either my purchases have been really lucky, or this is generally more the norm rather than an exception.
+The *Frame Rate* column shows the worst case frame rate when full screen updates are being performed. This occurs for example when watching fullscreen video (that is not a flat colored cartoon). Because `fbcp-ili341` only sends over the pixels that have changed, displays such as HX8357D and ILI9486 can still be used to play many games at 60fps. Retro games work especially well.
+
+All the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs really slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
+
+If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, and opt for a HX8357D instead.
+
+Search around, or ask the manufacturer of the display what the maximum SPI bus speed is for the device. This is the most important aspect to getting good frame rates, but unfortunately most web links never state the SPI speed rating, or they state it ridiculously low like in the spec sheets. Try and buy to see, or ask in some community forums from people who already have a particular display to find out what SPI bus speed it can achieve. 
 
 ### Resources
 
