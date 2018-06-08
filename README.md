@@ -66,6 +66,9 @@ Be aware of the following limitations:
 ###### Screen resize freezes DispmanX
  - Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
 
+###### CPU Turbo is needed for good SPI bus bandwidth
+ - The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
+
 ### Installation
 
 Check the following topics to set up the driver.
