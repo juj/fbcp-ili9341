@@ -115,6 +115,7 @@ On the CMake command line, the following options can be configured:
 - `-DSSD1351=ON`: If you have a SSD1351 OLED display, use this.
 - `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers.
 - `-DGPIO_TFT_RESET_PIN=number`: Specifies/overrides which GPIO pin to use for the display Reset line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a Reset pin, and is always on.
+- `-DGPIO_TFT_BACKLIGHT=number`: Specifies/overrides which GPIO pin to use for the display backlight line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a GPIO-controlled backlight pin, and is always on. If setting this, also see the `#define BACKLIGHT_CONTROL` option in `config.h`.
 - `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a Waveshare 3.5" 480x320 display, or possibly any other generic ILI9486 controller. This support is experimental.
 - `-DILI9486=ON`: If you have any other generic ILI9486 display, pass this directive.
 - `-DUSE_DMA_TRANSFERS=OFF`: If specified, disables using DMA transfers. Pass this if DMA is giving some issues.
@@ -261,7 +262,9 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 
 #### The display stays blank at boot without lighting up
 
-This suggests that the power line or the backlight line is not properly connected. All LCD TFT displays I have immediately light up their backlight when they receive power. OLED displays on the other hand seem to stay all black even after they do get power, while waiting for their initialization to be performed.
+This suggests that the power line or the backlight line might not be properly connected. Or if the backlight connects to a GPIO pin on the Pi (and not a voltage pin), then it may be that the pin is not in correct state for the backlight to turn on. Most of the LCD TFT displays I have immediately light up their backlight when they receive power. The Tontec one has a backlight GPIO pin that boots up high but must be pulled low to activate the backlight. OLED displays on the other hand seem to stay all black even after they do get power, while waiting for their initialization to be performed, so for OLEDs it may be normal for nothing to show up on the screen immediately after boot.
+
+If the backlight connects to a GPIO pin, you may need to define `-DGPIO_TFT_BACKLIGHT=<pin>` in CMake command line or `config.h`, and edit `config.h` to enable `#define BACKLIGHT_CONTROL`.
 
 #### The display clears from white to black after starting fbcp-ili9341, but picture does not show up?
 
