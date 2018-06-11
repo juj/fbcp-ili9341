@@ -71,8 +71,17 @@ if (GPIO_TFT_BACKLIGHT)
 endif()
 
 if (DISPLAY_CROPPED_INSTEAD_OF_SCALING)
-	message(STATUS "Cropping source image to view instead of scaling")
+	message(STATUS "Cropping source image to view instead of scaling. This will produce crisp pixel perfect rendering, though edges of the display will be cut off if the HDMI and SPI display resolutions do not match. (pass -DDISPLAY_CROPPED_INSTEAD_OF_SCALING=OFF to scale instead of crop)")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISPLAY_CROPPED_INSTEAD_OF_SCALING")
+else()
+	message(STATUS "Scaling source image to view. If the HDMI resolution does not match the SPI display resolution, this will produce blurriness. Match the HDMI display resolution with the SPI resolution in /boot/config.txt to get crisp pixel perfect rendering, or alternatively pass -DDISPLAY_CROPPED_INSTEAD_OF_SCALING=ON to crop instead of scale if you want to view the center of the screen pixel perfect when HDMI and SPI resolutions do not match.")
+endif()
+
+if (DISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING)
+	message(STATUS "Ignoring aspect ratio when scaling source image to the SPI display (Pass -DDISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING=OFF to preserve aspect ratio)")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING")
+else()
+	message(STATUS "Preserving aspect ratio when scaling source image to the SPI display, introducing letterboxing/pillarboxing if HDMI and SPI aspect ratios are different (Pass -DDISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING=ON to stretch HDMI to cover full screen if you do not care about aspect ratio)")
 endif()
 
 if (SPI_BUS_CLOCK_DIVISOR)
