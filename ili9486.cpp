@@ -49,7 +49,12 @@ void InitILI9486()
     SPI_TRANSFER(0x11/*Sleep OUT*/);
     usleep(120*1000);
     SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x00, 0x55/*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/); // This can be switched from 0x55 to 0x66 for 18bits/pixel instead.
+    // Oddly, WaveShare 3.5" (B) seems to need Display Inversion ON, whereas WaveShare 3.5" (A) seems to need Display Inversion OFF for proper image. See https://github.com/juj/fbcp-ili9341/issues/8
+#ifdef DISPLAY_INVERT_COLORS
     SPI_TRANSFER(0x21/*Display Inversion ON*/);
+#else
+    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
+#endif
     SPI_TRANSFER(0xC0/*Power Control 1*/, 0x00, 0x09, 0x00, 0x09);
     SPI_TRANSFER(0xC1/*Power Control 2*/, 0x00, 0x41, 0x00, 0x00);
     SPI_TRANSFER(0xC5/*VCOM Control*/, 0x00, 0x00, 0x00, 0x36);

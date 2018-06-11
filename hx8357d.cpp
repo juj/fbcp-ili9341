@@ -70,6 +70,12 @@ void InitHX8357D()
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
     SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x55/*16 bits/pixel*/);
 
+#ifdef DISPLAY_INVERT_COLORS
+    SPI_TRANSFER(0x21/*Display Inversion ON*/);
+#else
+    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
+#endif
+
     SPI_TRANSFER(0x11/*Sleep Out*/);
     usleep(120 * 1000);
     SPI_TRANSFER(/*Display ON*/0x29);

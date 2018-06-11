@@ -127,6 +127,10 @@
 // If display colors come out reversed in blue vs red channels, define this to swap the two.
 // #define DISPLAY_SWAP_BGR
 
+// If defined, inverts display pixel colors (31=black, 0=white). Default is to have (0=black, 31=white)
+// Pass this if the colors look like a photo negative of the actual image.
+// #define DISPLAY_INVERT_COLORS
+
 // If defined, flipping the display between portrait<->landscape is done in software, rather than
 // asking the display controller to adjust its RAM write direction.
 // Doing the flip in software reduces tearing, since neither the ILI9341 nor ILI9486 displays (and
