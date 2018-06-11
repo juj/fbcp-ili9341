@@ -121,6 +121,12 @@
 // values of DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
 #define DISPLAY_OUTPUT_LANDSCAPE
 
+// If defined, reverses RGB<->BGR color subpixel order. This is something that seems to be display panel
+// specific, rather than display controller specific, and displays manufactured with the same controller
+// can have different subpixel order (without the controller taking it automatically into account).
+// If display colors come out reversed in blue vs red channels, define this to swap the two.
+// #define DISPLAY_SWAP_BGR
+
 // If defined, flipping the display between portrait<->landscape is done in software, rather than
 // asking the display controller to adjust its RAM write direction.
 // Doing the flip in software reduces tearing, since neither the ILI9341 nor ILI9486 displays (and
