@@ -4,6 +4,7 @@
 #include <sys/syscall.h>
 #include <syslog.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "config.h"
 #include "gpu.h"
@@ -333,12 +334,6 @@ void InitGPU()
   // We may need to scale the main framebuffer to fit the native pixel size of the display. Always want to do such scaling in aspect ratio fixed mode to not stretch the image.
   // (For non-square pixels or similar, could apply a correction factor here to fix aspect ratio)
 
-  displayXOffset = 0;
-  displayYOffset = 0;
-  int scaledWidth = DISPLAY_DRAWABLE_WIDTH;
-  int scaledHeight = DISPLAY_DRAWABLE_HEIGHT;
-  double scalingFactor = 1.0;
-
   // Often it happens that the content that is being rendered already has black letterboxes/pillarboxes if it was produced for a different aspect ratio than
   // what the current HDMI resolution is. However the current HDMI resolution might not be in the same aspect ratio as DISPLAY_DRAWABLE_WIDTH x DISPLAY_DRAWABLE_HEIGHT.
   // Therefore we may be aspect ratio correcting content that has already letterboxes/pillarboxes on it, which can result in letterboxes-on-pillarboxes, or vice versa.
@@ -389,29 +384,39 @@ void InitGPU()
   }
 #endif
 
-  int relevantDisplayWidth = (int)(display_info.width * (1.0 - overscanLeft - overscanRight) + 0.5);
-  int relevantDisplayHeight = (int)(display_info.height * (1.0 - overscanTop - overscanBottom) + 0.5);
+  // Overscan must be actual pixels - can't be fractional, so round the overscan %s so that they align with
+  // pixel boundaries of the source image.
+  overscanLeft = (double)ROUND_TO_FLOOR_INT(display_info.width * overscanLeft) / display_info.width;
+  overscanRight = (double)ROUND_TO_CEIL_INT(display_info.width * overscanRight) / display_info.width;
+  overscanTop = (double)ROUND_TO_FLOOR_INT(display_info.height * overscanTop) / display_info.height;
+  overscanBottom = (double)ROUND_TO_CEIL_INT(display_info.height * overscanBottom) / display_info.height;
+
+  int relevantDisplayWidth = ROUND_TO_NEAREST_INT(display_info.width * (1.0 - overscanLeft - overscanRight));
+  int relevantDisplayHeight = ROUND_TO_NEAREST_INT(display_info.height * (1.0 - overscanTop - overscanBottom));
   printf("Relevant source display area size with overscan cropped away: %dx%d.\n", relevantDisplayWidth, relevantDisplayHeight);
 
-  if (DISPLAY_DRAWABLE_WIDTH * relevantDisplayHeight < DISPLAY_DRAWABLE_HEIGHT * relevantDisplayWidth)
-  {
-    scaledHeight = (int)((double)DISPLAY_DRAWABLE_WIDTH * relevantDisplayHeight / relevantDisplayWidth + 0.5);
-    scalingFactor = (double)DISPLAY_DRAWABLE_WIDTH/relevantDisplayWidth;
-    displayXOffset = DISPLAY_COVERED_LEFT_SIDE;
-    displayYOffset = DISPLAY_COVERED_TOP_SIDE + (DISPLAY_DRAWABLE_HEIGHT - scaledHeight) / 2;
-  }
-  else
-  {
-    scaledWidth = (int)((double)DISPLAY_DRAWABLE_HEIGHT * relevantDisplayWidth / relevantDisplayHeight + 0.5);
-    scalingFactor = (double)DISPLAY_DRAWABLE_HEIGHT/relevantDisplayHeight;
-    displayXOffset = DISPLAY_COVERED_LEFT_SIDE + (DISPLAY_DRAWABLE_WIDTH - scaledWidth) / 2;
-    displayYOffset = DISPLAY_COVERED_TOP_SIDE;
-  }
+  double scalingFactorWidth = (double)DISPLAY_DRAWABLE_WIDTH/relevantDisplayWidth;
+  double scalingFactorHeight = (double)DISPLAY_DRAWABLE_HEIGHT/relevantDisplayHeight;
 
-  excessPixelsLeft = (int)(display_info.width * overscanLeft * scalingFactor + 0.5);
-  excessPixelsRight = (int)(display_info.width * overscanRight * scalingFactor + 0.5);
-  excessPixelsTop = (int)(display_info.height * overscanTop * scalingFactor + 0.5);
-  excessPixelsBottom = (int)(display_info.height * overscanBottom * scalingFactor + 0.5);
+#ifndef DISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING
+  // If doing aspect ratio correct scaling, scale both width and height by equal proportions
+  scalingFactorWidth = scalingFactorHeight = MIN(scalingFactorWidth, scalingFactorHeight);
+#endif
+
+  // Since display resolution must be full pixels and not fractional, round the scaling to nearest pixel size
+  // (and recompute after the subpixel rounding what the actual scaling factor ends up being)
+  int scaledWidth = ROUND_TO_NEAREST_INT(relevantDisplayWidth * scalingFactorWidth);
+  int scaledHeight = ROUND_TO_NEAREST_INT(relevantDisplayHeight * scalingFactorHeight);
+  scalingFactorWidth = (double)scaledWidth/relevantDisplayWidth;
+  scalingFactorHeight = (double)scaledHeight/relevantDisplayHeight;
+
+  displayXOffset = DISPLAY_COVERED_LEFT_SIDE + (DISPLAY_DRAWABLE_WIDTH - scaledWidth) / 2;
+  displayYOffset = DISPLAY_COVERED_TOP_SIDE + (DISPLAY_DRAWABLE_HEIGHT - scaledHeight) / 2;
+
+  excessPixelsLeft = ROUND_TO_NEAREST_INT(display_info.width * overscanLeft * scalingFactorWidth);
+  excessPixelsRight = ROUND_TO_NEAREST_INT(display_info.width * overscanRight * scalingFactorWidth);
+  excessPixelsTop = ROUND_TO_NEAREST_INT(display_info.height * overscanTop * scalingFactorHeight);
+  excessPixelsBottom = ROUND_TO_NEAREST_INT(display_info.height * overscanBottom * scalingFactorHeight);
 
   gpuFrameWidth = scaledWidth;
   gpuFrameHeight = scaledHeight;
@@ -430,8 +435,8 @@ void InitGPU()
   videoCoreFramebuffer[0] += (gpuFramebufferSizeBytes>>1);
   videoCoreFramebuffer[1] += (gpuFramebufferSizeBytes>>1);
 
-  syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d with drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
-  printf("Source GPU display is %dx%d. Output SPI display is %dx%d with a drawable area of %dx%d. Applying scaling factor %.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactor, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
+  syslog(LOG_INFO, "GPU display is %dx%d. SPI display is %dx%d with drawable area of %dx%d. Applying scaling factor horiz=%.2fx & vert=%.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactorWidth, scalingFactorHeight, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
+  printf("Source GPU display is %dx%d. Output SPI display is %dx%d with a drawable area of %dx%d. Applying scaling factor horiz=%.2fx & vert=%.2fx, xOffset: %d, yOffset: %d, scaledWidth: %d, scaledHeight: %d\n", display_info.width, display_info.height, DISPLAY_WIDTH, DISPLAY_HEIGHT, DISPLAY_DRAWABLE_WIDTH, DISPLAY_DRAWABLE_HEIGHT, scalingFactorWidth, scalingFactorHeight, displayXOffset, displayYOffset, scaledWidth, scaledHeight);
 
   uint32_t image_prt;
   printf("Creating dispmanX resource of size %dx%d (aspect ratio=%f).\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, (double)(scaledWidth + excessPixelsLeft + excessPixelsRight) / (scaledHeight + excessPixelsTop + excessPixelsBottom));

@@ -1,5 +1,9 @@
 #pragma once
 
+#define ROUND_TO_NEAREST_INT(x) ((int)lround((x)))
+#define ROUND_TO_FLOOR_INT(x) ((int)(floor((x))))
+#define ROUND_TO_CEIL_INT(x) ((int)(ceil((x))))
+
 #define MIN(x, y) ((x) <= (y) ? (x) : (y))
 #define MAX(x, y) ((x) >= (y) ? (x) : (y))
 

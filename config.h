@@ -121,6 +121,12 @@
 // values of DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
 #define DISPLAY_OUTPUT_LANDSCAPE
 
+// If defined, the source video frame is scaled to fit the SPI display by stretching to fit, ignoring
+// aspect ratio. Enabling this will cause e.g. 16:9 1080p source to be stretched to fully cover
+// a 4:3 320x240 display. If disabled, scaling is performed preserving aspect ratio, so letterboxes or
+// pillarboxes will be introduced if needed to retain proper width and height proportions.
+// #define DISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING
+
 // If defined, reverses RGB<->BGR color subpixel order. This is something that seems to be display panel
 // specific, rather than display controller specific, and displays manufactured with the same controller
 // can have different subpixel order (without the controller taking it automatically into account).
