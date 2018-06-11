@@ -286,6 +286,14 @@ This is likely caused by the program resizing the video resolution at runtime, w
 
 Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever `fbcp-ili9341` refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. Make sure no other `fbcp` programs or SPI drivers or dtoverlays are enabled.
 
+#### Colors look wrong on the display
+
+![BGR vs RGB and inverted colors](/wrong_colors.jpg)
+
+If the color channels are mixed (red is blue, blue is red, green is green) like shown on the left image, pass the CMake option `-DDISPLAY_SWAP_BGR=ON` to the build.
+
+If the color intensities look wrong (white is black, black is white, color looks like a negative image) like seen in the middle image, pass the CMake option `-DDISPLAY_INVERT_COLORS=ON` to the build.
+
 #### The screen is tearing when it updates
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
