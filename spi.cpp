@@ -412,7 +412,10 @@ void DeinitSPI()
   pthread_join(spiThread, NULL);
   spiThread = (pthread_t)0;
   DeinitSPIDisplay();
+#ifdef USE_DMA_TRANSFERS
   DeinitDMA();
+#endif
+
 #endif
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
