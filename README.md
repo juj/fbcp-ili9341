@@ -252,6 +252,16 @@ The one thing that `fbcp-ili9341` stays clear off is that it does not program th
 
 That being said, if it breaks, you'll get to purchase a new shiny one to replace it.
 
+#### Can I have both the HDMI and SPI connected at the same time?
+
+Yes, `fbcp-ili9341` shows the output of the HDMI display on the SPI screen, and both can be attached at the same time. A HDMI display does not have to be connected however, although `fbcp-ili9341` operation will still be affected by whatever HDMI display mode is configured. Check out `tvservice -s` on the command line to check what the current DispmanX HDMI output mode is.
+
+#### Do I have to show the same image on HDMI output and the SPI display, or can they be different?
+
+At the moment `fbcp-ili9341` has been developed to only display the contents of the main DispmanX GPU framebuffer over to the SPI display. That is, the SPI display will show the same picture as the HDMI output does. There is no technical restriction that requires this though, so if you know C/C++ well, it should be a manageable project to turn `fbcp-ili9341` to operate as an offscreen display library to show a completely separate (non-GPU-accelerated) image than what the main HDMI display outputs. For example you could have two different outputs, e.g. a HUD overlay, a dashboard for network statistics, weather, temps, etc. showing on the SPI while having the main Raspberry Pi desktop on the HDMI.
+
+In this kind of mode, you would probably strip the DispmanX bits out of `fbcp-ili9341`, and recast it as a static library that you would link to in your drawing application, and instead of snapshotting frames, you can then programmatically write to a framebuffer in memory from your C/C++ code.
+
 #### I am running fbcp-ili9341 on a display that was listed above, but the display stays white after startup?
 
 Unfortunately there are a number of things to go wrong that all result in a white screen. This is probably the hardest part to diagnose. Some ideas:
