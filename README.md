@@ -216,7 +216,9 @@ After having edited and saved the file, reissue `make -j` in the build directory
 
 #### Does fbcp-ili9341 work with linux command line terminal or X windowing system?
 
-Yes, both work fine.
+Yes, both work fine. For linux command line terminal, the `/dev/tty1` console should be set to output to Linux framebuffer 0 (`/dev/fb0`). This is the default mode of operation and there do not exist other framebuffers in a default distribution of Raspbian, but if you have manually messed with the `con2fbmap` command in your installation, you may have inadvertently changed this configuration. Run `con2fbmap 1` to see which framebuffer the `/dev/tty1` console is outputting to, it should print `console 1 is mapped to framebuffer 0`. Type `con2fbmap 1 0` to reset console 1 back to outputting to framebuffer 0.
+
+Likewise, the X windowing system should be configured to render to framebuffer 0. This is by default the case. The target framebuffer for X windowing service is usually configured via the `FRAMEBUFFER` environment variable before launching X. If X is not working by default, you can try overriding the framebuffer by launching X with `FRAMEBUFFER=/dev/fb0 startx` instead of just running `startx`.
 
 #### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
 
