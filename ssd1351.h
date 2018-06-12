@@ -2,10 +2,6 @@
 
 #ifdef SSD1351
 
-#ifndef SPI_BUS_CLOCK_DIVISOR
-#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file ssd1351.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
-#endif
-
 // On Adafruit's Adafruit 1.27" and 1.5" Color OLED Breakout Board 128x96 SSD1351 display, the following speed configurations have been tested (on a Pi 3B):
 
 // core_freq=360: CDIV=20, results in 18.00MHz, works
@@ -32,10 +28,6 @@
 #define DISPLAY_WRITE_PIXELS_CMD_DOES_NOT_RESET_WRITE_CURSOR
 
 #define InitSPIDisplay InitSSD1351
-
-#if !defined(GPIO_TFT_DATA_CONTROL)
-#error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
-#endif
 
 void InitSSD1351(void);
 

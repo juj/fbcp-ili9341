@@ -2,11 +2,8 @@
 
 #ifdef MZ61581
 
-// Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
+// SPI_BUS_CLOCK_DIVISOR specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster.
-#ifndef SPI_BUS_CLOCK_DIVISOR
-#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file mz61581.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
-#endif
 
 // The following bus speed have been tested on Tontec 3.5" display with marking "MZ61581-PI-EXT 2016.1.28" on the back (on a Pi 3B+):
 
@@ -29,10 +26,6 @@
 
 #ifdef TONTEC_MZ61581
 #include "tontec_35_mz61581.h"
-#endif
-
-#if !defined(GPIO_TFT_DATA_CONTROL)
-#error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
 #endif
 
 #define InitSPIDisplay InitMZ61581

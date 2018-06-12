@@ -24,16 +24,4 @@
 #define GPIO_TFT_BACKLIGHT 18
 #endif
 
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 480
-#else
-#define DISPLAY_WIDTH 480
-#define DISPLAY_HEIGHT 320
-#endif
-
-#define MUST_SEND_FULL_CURSOR_WINDOW
-
-#define InitSPIDisplay InitHX8357D
-
 #endif

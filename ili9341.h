@@ -2,13 +2,10 @@
 
 #ifdef ILI9341
 
-// Specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
+// SPI_BUS_CLOCK_DIVISOR specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
 // 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
 // actually work either, and only 6, 8 and 10 were functioning properly.
-#ifndef SPI_BUS_CLOCK_DIVISOR
-#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file ili9341.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
-#endif
 
 // On Adafruit PiTFT 2.8", the following speed configurations have been tested (on a Pi 3B):
 // core_freq=400: CDIV=6, results in 66.67MHz, works
@@ -25,7 +22,6 @@
 // On Adafruit 2.2" PiTFT HAT - 320x240 Display with ILI9340 controller, the following speed configurations have been tested (on a Pi 3B):
 // core_freq=338: CDIV=4, results in 84.5MHz, works
 // core_freq=339: CDIV=4, would result in 84.75MHz, would work most of the time, but every few minutes generated random glitched pixels.
-
 
 // Data specific to the ILI9341 controller
 #define DISPLAY_BYTESPERPIXEL 2
@@ -57,12 +53,6 @@
 #include "pitft_35r_hx8357d.h"
 #elif defined(FREEPLAYTECH_WAVESHARE32B)
 #include "freeplaytech_waveshare32b.h"
-#elif !defined(ILI9341)
-#error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON, -FREEPLAYTECH_WAVESHARE32B=ON or -DILI9341=ON (or contribute ports to more displays yourself)
-#endif
-
-#if !defined(GPIO_TFT_DATA_CONTROL)
-#error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
 #endif
 
 #define InitSPIDisplay InitILI9341

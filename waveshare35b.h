@@ -15,10 +15,6 @@
 // core_freq=400: CDIV=12, would result in 33.33MHz, but this was too fast for the display
 // core_freq=256: CDIV=8, would result in 32.00MHz, this would work 99% of the time, but occassionally every ~few minutes would glitch a pixel or two
 
-#if !defined(SPI_BUS_CLOCK_DIVISOR)
-#error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! (see file waveshare35b.h for details). This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed.
-#endif
-
 #if !defined(GPIO_TFT_DATA_CONTROL)
 #define GPIO_TFT_DATA_CONTROL 24
 #endif
@@ -26,17 +22,5 @@
 #if !defined(GPIO_TFT_RESET_PIN)
 #define GPIO_TFT_RESET_PIN 25
 #endif
-
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 480
-#else
-#define DISPLAY_WIDTH 480
-#define DISPLAY_HEIGHT 320
-#endif
-
-#define MUST_SEND_FULL_CURSOR_WINDOW
-
-#define InitSPIDisplay InitILI9486
 
 #endif
