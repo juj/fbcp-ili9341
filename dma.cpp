@@ -281,6 +281,9 @@ int InitDMA()
   if (dmaRx->cbAddr != 0 && (dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
     FATAL_ERROR("DMA RX channel was in use!");
 
+  if ((dmaRx->cb.debug & BCM2835_DMA_DEBUG_LITE) != 0)
+    FATAL_ERROR("DMA RX channel cannot be a lite channel, because to get best performance we want to use BCM2835_DMA_TI_DEST_IGNORE DMA operation mode that lite DMA channels do not have. (Try using DMA RX channel value < 7)");
+
   LOG("Resetting DMA channels for use");
   ResetDMAChannels();
 
@@ -495,14 +498,20 @@ void SPIDMATransfer(SPITask *task)
     usleep(250);
     CheckSPIDMAChannelsNotStolen();
     if (tick() - dmaTaskStart > 5000000)
+    {
+      DumpDMAState();
       FATAL_ERROR("DMA TX channel has stalled!");
+    }
   }
   while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE) && programRunning)
   {
     usleep(250);
     CheckSPIDMAChannelsNotStolen();
     if (tick() - dmaTaskStart > 5000000)
+    {
+      DumpDMAState();
       FATAL_ERROR("DMA RX channel has stalled!");
+    }
   }
   if (!programRunning) return;
 
