@@ -85,9 +85,9 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 242, 1, gpuPollingWastedColor, 0);
 #endif
 
-#if DISPLAY_WIDTH > 280
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 270, 1, RGB565(31,50,21), 0);
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 270, 10, RGB565(31,50,31), 0);
+#if DISPLAY_WIDTH >= 320
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 260, 1, RGB565(31,50,21), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 260, 10, RGB565(31,50,31), 0);
 #endif
 
 }
