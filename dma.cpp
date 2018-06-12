@@ -513,15 +513,14 @@ void SPIDMATransfer(SPITask *task)
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 #ifdef ILI9486
   spi->fifo = 0;
-#endif
   spi->fifo = task->cmd;
-#ifdef ILI9486
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
-  // spi->fifo; // Currently no need to flush these, the disableTA DMA task clears rx queue.
+  // spi->fifo; // Currently no need to flush these, the clear below clears the rx queue.
   // spi->fifo;
 #else
+  spi->fifo = task->cmd;
   while(!(spi->cs & (BCM2835_SPI0_CS_RXD|BCM2835_SPI0_CS_DONE))) /*nop*/;
-  // spi->fifo;
+  // spi->fifo; // Currently no need to flush this, the clear below clears the rx queue.
 #endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
