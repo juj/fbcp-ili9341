@@ -97,12 +97,17 @@ void InitHX8357D()
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
 }
 
-void TurnDisplayOff()
+void TurnBacklightOff()
 {
 #if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
   SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
   CLEAR_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight off.
 #endif
+}
+
+void TurnDisplayOff()
+{
+  TurnBacklightOff();
 #if 0
   QUEUE_SPI_TRANSFER(0x28/*Display OFF*/);
   QUEUE_SPI_TRANSFER(0x10/*Enter Sleep Mode*/);
@@ -127,7 +132,9 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-
+  HX8357DClearScreen();
+  SPI_TRANSFER(/*Display OFF*/0x28);
+  TurnBacklightOff();
 }
 
 #endif

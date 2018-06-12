@@ -108,7 +108,7 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-
+  SSD1351ClearScreen();
 }
 
 #endif

@@ -128,7 +128,7 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-
+  ST7735RClearScreen();
 }
 
 #endif

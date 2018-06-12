@@ -96,7 +96,8 @@ void InitILI9486()
 
 void DeinitSPIDisplay()
 {
-
+  ILI9486ClearScreen();
+  SPI_TRANSFER(/*Display OFF*/0x28);
 }
 
 #endif

@@ -134,7 +134,8 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-
+  MZ61581ClearScreen();
+  SPI_TRANSFER(/*Display OFF*/0x28);
 }
 
 #endif
