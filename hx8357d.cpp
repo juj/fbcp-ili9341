@@ -93,6 +93,7 @@ void InitHX8357D()
 #endif
 
   // And speed up to the desired operation speed finally after init is done.
+  usleep(10 * 1000); // Delay a bit before restoring CLK, or otherwise this has been observed to cause the display not init if done back to back after the clear operation above.
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
 }
 
