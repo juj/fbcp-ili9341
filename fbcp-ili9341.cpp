@@ -48,11 +48,21 @@ bool displayOff = false;
 
 volatile bool programRunning = true;
 
-void ProgramInterruptHandler(int)
+const char *SignalToString(int signal)
 {
-  printf("Ctrl-C received, quitting\n");
-  static int ctrlCHandlerCalled = 0;
-  if (++ctrlCHandlerCalled >= 5)
+  if (signal == SIGINT) return "SIGINT";
+  if (signal == SIGQUIT) return "SIGQUIT";
+  if (signal == SIGUSR1) return "SIGUSR1";
+  if (signal == SIGUSR2) return "SIGUSR2";
+  if (signal == SIGTERM) return "SIGTERM";
+  return "?";
+}
+
+void ProgramInterruptHandler(int signal)
+{
+  printf("Signal %s(%d) received, quitting\n", SignalToString(signal), signal);
+  static int quitHandlerCalled = 0;
+  if (++quitHandlerCalled >= 5)
   {
     printf("Ctrl-C handler invoked five times, looks like fbcp-ili9341 is not gracefully quitting - performing a forcible shutdown!\n");
     exit(1);
@@ -75,6 +85,10 @@ void ProgramInterruptHandler(int)
 int main()
 {
   signal(SIGINT, ProgramInterruptHandler);
+  signal(SIGQUIT, ProgramInterruptHandler);
+  signal(SIGUSR1, ProgramInterruptHandler);
+  signal(SIGUSR2, ProgramInterruptHandler);
+  signal(SIGTERM, ProgramInterruptHandler);
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
@@ -477,5 +491,5 @@ int main()
   DeinitGPU();
   DeinitSPI();
   CloseMailbox();
-  printf("Ctrl-C, quit.\n");
+  printf("Quit.\n");
 }
