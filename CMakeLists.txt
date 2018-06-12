@@ -54,6 +54,13 @@ if (GPIO_TFT_BACKLIGHT)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_BACKLIGHT=${GPIO_TFT_BACKLIGHT}")
 endif()
 
+option(BACKLIGHT_CONTROL "If true, enables fbcp-ili9341 to take control of backlight" OFF)
+if (BACKLIGHT_CONTROL)
+	message(STATUS "Enabling fbcp-ili9341 backlight control")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DBACKLIGHT_CONTROL")
+endif()
+
+option(DISPLAY_CROPPED_INSTEAD_OF_SCALING "If ON, displays the cropped center part of the source image on the SPI display. If OFF, scales the source image to the SPI display" OFF)
 if (DISPLAY_CROPPED_INSTEAD_OF_SCALING)
 	message(STATUS "Cropping source image to view instead of scaling. This will produce crisp pixel perfect rendering, though edges of the display will be cut off if the HDMI and SPI display resolutions do not match. (pass -DDISPLAY_CROPPED_INSTEAD_OF_SCALING=OFF to scale instead of crop)")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISPLAY_CROPPED_INSTEAD_OF_SCALING")
