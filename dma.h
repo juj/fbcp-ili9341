@@ -136,5 +136,6 @@ void SPIDMATransfer(SPITask *task);
 
 extern int dmaTxChannel;
 extern int dmaRxChannel;
+extern uint64_t totalGpuMemoryUsed;
 
 #endif

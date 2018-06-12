@@ -12,6 +12,7 @@
 #include "tick.h"
 #include "util.h"
 #include "statistics.h"
+#include "mem_alloc.h"
 
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
@@ -90,7 +91,7 @@ void SnapshotFramebuffer(uint16_t *destination)
   const int stride = RoundUpToMultipleOf(pixelWidth*sizeof(uint16_t), 32);
   if (!tempTransposeBuffer)
   {
-    tempTransposeBuffer = (uint16_t *)malloc(pixelHeight * stride * 2);
+    tempTransposeBuffer = (uint16_t *)Malloc(pixelHeight * stride * 2, "gpu.cpp tempTransposeBuffer");
     tempTransposeBuffer += pixelHeight * (stride>>1);
   }
   uint16_t *destPtr = tempTransposeBuffer - excessPixelsLeft * (stride >> 1) - excessPixelsTop;
@@ -428,8 +429,8 @@ void InitGPU()
   // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
   // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
   // to randomly fail and then subsequently hang if called a second time)
-  videoCoreFramebuffer[0] = (uint16_t *)malloc(gpuFramebufferSizeBytes*2);
-  videoCoreFramebuffer[1] = (uint16_t *)malloc(gpuFramebufferSizeBytes*2);
+  videoCoreFramebuffer[0] = (uint16_t *)Malloc(gpuFramebufferSizeBytes*2, "gpu.cpp framebuffer0");
+  videoCoreFramebuffer[1] = (uint16_t *)Malloc(gpuFramebufferSizeBytes*2, "gpu.cpp framebuffer1");
   memset(videoCoreFramebuffer[0], 0, gpuFramebufferSizeBytes*2);
   memset(videoCoreFramebuffer[1], 0, gpuFramebufferSizeBytes*2);
   videoCoreFramebuffer[0] += (gpuFramebufferSizeBytes>>1);

@@ -13,6 +13,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <math.h>
+#include <signal.h>
 
 #include "config.h"
 #include "text.h"
@@ -24,10 +26,7 @@
 #include "util.h"
 #include "mailbox.h"
 #include "diff.h"
-
-#include <math.h>
-
-#include <signal.h>
+#include "mem_alloc.h"
 
 int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
 {
@@ -91,7 +90,7 @@ int main()
 
   InitGPU();
 
-  spans = (Span*)malloc((gpuFrameWidth * gpuFrameHeight / 2) * sizeof(Span));
+  spans = (Span*)Malloc((gpuFrameWidth * gpuFrameHeight / 2) * sizeof(Span), "main() task spans");
   int size = gpuFramebufferSizeBytes;
 #ifdef USE_GPU_VSYNC
   // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
@@ -101,7 +100,7 @@ int main()
   // to randomly fail and then subsequently hang if called a second time)
   size *= 2;
 #endif
-  uint16_t *framebuffer[2] = { (uint16_t *)malloc(size), (uint16_t *)malloc(gpuFramebufferSizeBytes) };
+  uint16_t *framebuffer[2] = { (uint16_t *)Malloc(size, "main() framebuffer0"), (uint16_t *)Malloc(gpuFramebufferSizeBytes, "main() framebuffer1") };
   memset(framebuffer[0], 0, size); // Doublebuffer received GPU memory contents, first buffer contains current GPU memory,
   memset(framebuffer[1], 0, gpuFramebufferSizeBytes); // second buffer contains whatever the display is currently showing. This allows diffing pixels between the two.
 #ifdef USE_GPU_VSYNC

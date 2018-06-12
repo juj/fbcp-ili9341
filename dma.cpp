@@ -130,10 +130,12 @@ void FreeDMAChannel(int channel)
 
 #define VIRT_TO_BUS(block, x) ((uintptr_t)(x) - (uintptr_t)((block).virtualAddr) + (block).busAddress)
 
+uint64_t totalGpuMemoryUsed = 0;
+
 // Allocates the given number of bytes in GPU side memory, and returns the virtual address and physical bus address of the allocated memory block.
 // The virtual address holds an uncached view to the allocated memory, so writes and reads to that memory address bypass the L1 and L2 caches. Use
 // this kind of memory to pass data blocks over to the DMA controller to process.
-GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes)
+GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason)
 {
   GpuMemory mem;
   mem.sizeBytes = ALIGN_UP(numBytes, PAGE_SIZE);
@@ -143,14 +145,19 @@ GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes)
   uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT;
 #endif
   mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/allocationFlags);
+  if (!mem.allocationHandle) FATAL_ERROR("Failed to allocate GPU memory! Try increasing gpu_mem allocation in /boot/config.txt. See https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md");
   mem.busAddress = Mailbox(MEM_LOCK_MESSAGE, mem.allocationHandle);
+  if (!mem.busAddress) FATAL_ERROR("Failed to lock GPU memory!");
   mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, BUS_TO_PHYS(mem.busAddress));
   if (mem.virtualAddr == MAP_FAILED) FATAL_ERROR("Failed to mmap GPU memory!");
+  totalGpuMemoryUsed += mem.sizeBytes;
+//  printf("Allocated %u bytes of GPU memory for %s (bus address=%p). Total GPU memory used: %llu bytes\n", mem.sizeBytes, reason, (void*)mem.busAddress, totalGpuMemoryUsed);
   return mem;
 }
 
 void FreeUncachedGpuMemory(GpuMemory mem)
 {
+  totalGpuMemoryUsed -= mem.sizeBytes;
   munmap(mem.virtualAddr, mem.sizeBytes);
   Mailbox(MEM_UNLOCK_MESSAGE, mem.allocationHandle);
   Mailbox(MEM_FREE_MESSAGE, mem.allocationHandle);
@@ -235,9 +242,9 @@ int InitDMA()
 #endif
 
 #if !defined(KERNEL_MODULE)
-  dmaCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock) * NUM_DMA_CBS);
+  dmaCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock) * NUM_DMA_CBS, "DMA control blocks");
   memset(dmaCb.virtualAddr, 0, dmaCb.sizeBytes); // Some fields of the CBs (debug, reserved) are initialized to zero and assumed to stay so throughout app lifetime.
-  dmaSourceBuffer = AllocateUncachedGpuMemory(SHARED_MEMORY_SIZE*2);
+  dmaSourceBuffer = AllocateUncachedGpuMemory(SHARED_MEMORY_SIZE*2, "DMA source data");
   dmaSourceEnd = (volatile uint8_t *)dmaSourceBuffer.virtualAddr;
   firstFreeCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
 #endif

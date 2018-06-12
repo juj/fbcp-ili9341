@@ -15,6 +15,8 @@
 #include "spi.h"
 #include "util.h"
 #include "mailbox.h"
+#include "mem_alloc.h"
+#include "dma.h"
 
 volatile uint64_t timeWastedPollingGPU = 0;
 volatile float statsSpiBusSpeed = 0;
@@ -41,6 +43,9 @@ char cpuTemperatureText[32] = {};
 uint16_t cpuTemperatureColor = 0;
 char gpuPollingWastedText[32] = {};
 uint16_t gpuPollingWastedColor = 0;
+
+char cpuMemoryUsedText[32] = {};
+char gpuMemoryUsedText[32] = {};
 
 uint64_t statsLastPrint = 0;
 
@@ -78,6 +83,11 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText2, 140, 10, RGB565(10,24,31), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 210, 1, cpuTemperatureColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 242, 1, gpuPollingWastedColor, 0);
+#endif
+
+#if DISPLAY_WIDTH > 280
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 270, 1, RGB565(31,50,21), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 270, 10, RGB565(31,50,31), 0);
 #endif
 
 }
@@ -184,6 +194,9 @@ void RefreshStatisticsOverlayText()
     statsFrameSkipText[0] = '\0';
     fpsColor = 0xFFFF;
   }
+  sprintf(cpuMemoryUsedText, "CPU:%.2fMB", totalCpuMemoryAllocated/1024.0/1024.0);
+  if (totalGpuMemoryUsed > 0)
+    sprintf(gpuMemoryUsedText, "GPU:%.2fMB", totalGpuMemoryUsed/1024.0/1024.0);
 }
 #else
 int InitStatistics() {}

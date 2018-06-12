@@ -312,6 +312,10 @@ You can choose between two distinct types of tearing artifacts: *straight line t
 
 To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that cheap small 3.5" HDMI displays such as KeDei do also tear - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
 
+#### Failed to allocate GPU memory!
+
+`fbcp-ili9341` needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64, which has been observed to not leave enough memory for `fbcp-ili9341` if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
+
 #### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
 First, make sure the display is a 4-wire SPI and not a 3-wire one. `fbcp-ili9341` does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
