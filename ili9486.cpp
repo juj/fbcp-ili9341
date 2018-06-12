@@ -13,7 +13,7 @@ static void ILI9486ClearScreen()
   for(int y = 0; y < DISPLAY_HEIGHT; ++y)
   {
     SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, 0, 0, 0, DISPLAY_WIDTH >> 8, 0, DISPLAY_WIDTH & 0xFF);
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, y >> 8, 0, y & 0xFF, 0, DISPLAY_HEIGHT >> 8, 0, DISPLAY_HEIGHT & 0xFF);
+    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, (uint8_t)(y >> 8), 0, (uint8_t)(y & 0xFF), 0, DISPLAY_HEIGHT >> 8, 0, DISPLAY_HEIGHT & 0xFF);
     SPITask *clearLine = AllocTask(DISPLAY_WIDTH*2);
     clearLine->cmd = DISPLAY_WRITE_PIXELS;
     memset(clearLine->data, 0, clearLine->size);

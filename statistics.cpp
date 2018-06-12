@@ -195,8 +195,10 @@ void RefreshStatisticsOverlayText()
     fpsColor = 0xFFFF;
   }
   sprintf(cpuMemoryUsedText, "CPU:%.2fMB", totalCpuMemoryAllocated/1024.0/1024.0);
+#ifdef USE_DMA_TRANSFERS
   if (totalGpuMemoryUsed > 0)
     sprintf(gpuMemoryUsedText, "GPU:%.2fMB", totalGpuMemoryUsed/1024.0/1024.0);
+#endif
 }
 #else
 int InitStatistics() {}

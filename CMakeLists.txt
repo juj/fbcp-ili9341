@@ -90,7 +90,7 @@ endif()
 
 option(DISPLAY_INVERT_COLORS "If true, inverts display colors (white=0, black=31/63" OFF)
 if (DISPLAY_INVERT_COLORS)
-	message(STATUS "Inverting display colors (white=0, black=31/63")
+	message(STATUS "Inverting display colors (white=0, black=31/63)")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISPLAY_INVERT_COLORS")
 endif()
 
