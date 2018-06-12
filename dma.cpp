@@ -43,7 +43,7 @@ struct GpuMemory
 };
 
 #define NUM_DMA_CBS 1024
-GpuMemory dmaCb, dmaSourceBuffer;
+GpuMemory dmaCb, dmaSourceBuffer, dmaConstantData;
 
 volatile DMAControlBlock *dmaSendTail = 0;
 volatile DMAControlBlock *dmaRecvTail = 0;
@@ -244,9 +244,15 @@ int InitDMA()
 #if !defined(KERNEL_MODULE)
   dmaCb = AllocateUncachedGpuMemory(sizeof(DMAControlBlock) * NUM_DMA_CBS, "DMA control blocks");
   memset(dmaCb.virtualAddr, 0, dmaCb.sizeBytes); // Some fields of the CBs (debug, reserved) are initialized to zero and assumed to stay so throughout app lifetime.
+  firstFreeCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+
   dmaSourceBuffer = AllocateUncachedGpuMemory(SHARED_MEMORY_SIZE*2, "DMA source data");
   dmaSourceEnd = (volatile uint8_t *)dmaSourceBuffer.virtualAddr;
-  firstFreeCB = (volatile DMAControlBlock *)dmaCb.virtualAddr;
+
+  dmaConstantData = AllocateUncachedGpuMemory(2*sizeof(uint32_t), "DMA constant data");
+  uint32_t *constantData = (uint32_t *)dmaConstantData.virtualAddr;
+  constantData[0] = BCM2835_SPI0_CS_DMAEN; // constantData[0] is for disableTransferActive task
+  constantData[1] = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END; // constantData[1] is for startDMATxChannel task
 #endif
 
   LOG("DMA hardware register file is at ptr: %p, using DMA TX channel: %d and DMA RX channel: %d", dma0, dmaTxChannel, dmaRxChannel);
@@ -407,15 +413,9 @@ void SPIDMATransfer(SPITask *task)
 
   const int numDMASendTasks = (task->size + MAX_DMA_SPI_TASK_SIZE - 1) / MAX_DMA_SPI_TASK_SIZE;
 
-  volatile uint32_t *dmaData = (volatile uint32_t *)GrabFreeDMASourceBytes(8+4*(numDMASendTasks-1)+4*numDMASendTasks+task->size);
-
-  // TODO: Make these statically allocated, no need to reallocate constant data for each task
-  volatile uint32_t *constantData = dmaData;
-  constantData[0] = BCM2835_SPI0_CS_DMAEN; // constantData[0] is for disableTransferActive task
-  constantData[1] = BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END; // constantData[1] is for startDMATxChannel task
-
-  volatile uint32_t *setDMATxAddressData = dmaData+2;
-  volatile uint32_t *txData = dmaData+2+numDMASendTasks-1;
+  volatile uint32_t *dmaData = (volatile uint32_t *)GrabFreeDMASourceBytes(4*(numDMASendTasks-1)+4*numDMASendTasks+task->size);
+  volatile uint32_t *setDMATxAddressData = dmaData;
+  volatile uint32_t *txData = dmaData+numDMASendTasks-1;
 
   volatile DMAControlBlock *cb = GrabFreeCBs(numDMASendTasks*5-3);
 
@@ -465,13 +465,13 @@ void SPIDMATransfer(SPITask *task)
       ++setDMATxAddressData;
 
       disableTransferActive->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;
-      disableTransferActive->src = VIRT_TO_BUS(dmaSourceBuffer, &constantData[0]);
+      disableTransferActive->src = dmaConstantData.busAddress;
       disableTransferActive->dst = DMA_SPI_CS_PHYS_ADDRESS;
       disableTransferActive->len = 4;
       disableTransferActive->next = VIRT_TO_BUS(dmaCb, startDMATxChannel);
 
       startDMATxChannel->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC | BCM2835_DMA_TI_WAIT_RESP;
-      startDMATxChannel->src = VIRT_TO_BUS(dmaSourceBuffer, &constantData[1]);
+      startDMATxChannel->src = dmaConstantData.busAddress+4;
       startDMATxChannel->dst = DMA_DMA0_CB_PHYS_ADDRESS + dmaTxChannel*0x100;
       startDMATxChannel->len = 4;
       startDMATxChannel->next = VIRT_TO_BUS(dmaCb, rx);
@@ -609,6 +609,7 @@ void DeinitDMA(void)
   ResetDMAChannels();
   FreeUncachedGpuMemory(dmaSourceBuffer);
   FreeUncachedGpuMemory(dmaCb);
+  FreeUncachedGpuMemory(dmaConstantData);
   if (dmaTxChannel != -1)
   {
     FreeDMAChannel(dmaTxChannel);
