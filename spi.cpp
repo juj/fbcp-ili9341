@@ -412,14 +412,22 @@ void DeinitSPI()
 #ifdef USE_SPI_THREAD
   pthread_join(spiThread, NULL);
   spiThread = (pthread_t)0;
+#endif
   DeinitSPIDisplay();
 #ifdef USE_DMA_TRANSFERS
   DeinitDMA();
 #endif
 
-#endif
-
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
+
+#ifndef KERNEL_MODULE_CLIENT
+  SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
+  SET_GPIO_MODE(GPIO_SPI0_CE1, 0);
+  SET_GPIO_MODE(GPIO_SPI0_CE0, 0);
+  SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
+  SET_GPIO_MODE(GPIO_SPI0_MOSI, 0);
+  SET_GPIO_MODE(GPIO_SPI0_CLK, 0);
+#endif
 
   if (bcm2835)
   {
@@ -442,12 +450,6 @@ void DeinitSPI()
 #else
   free(spiTaskMemory);
 #endif
-  spiTaskMemory = 0;
-  SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
-  SET_GPIO_MODE(GPIO_SPI0_CE1, 0);
-  SET_GPIO_MODE(GPIO_SPI0_CE0, 0);
-  SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
-  SET_GPIO_MODE(GPIO_SPI0_MOSI, 0);
-  SET_GPIO_MODE(GPIO_SPI0_CLK, 0);
 #endif
+  spiTaskMemory = 0;
 }
