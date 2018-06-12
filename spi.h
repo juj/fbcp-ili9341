@@ -118,7 +118,7 @@ typedef struct __attribute__((packed)) SPITask
     DoneTask(t); \
   } while(0)
 
-#ifdef ILI9486
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
 // 16-bit interface
 #define QUEUE_SPI_TRANSFER(command, ...) do { \
     char data_buffer[] = { __VA_ARGS__ }; \

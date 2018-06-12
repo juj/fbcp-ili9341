@@ -126,14 +126,14 @@ void RunSPITask(SPITask *task)
 //    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
     CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
-#ifdef ILI9486
-    // On the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    // On e.g. the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
     spi->fifo = 0x00;
 #endif
     spi->fifo = task->cmd;
 
     uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
-#ifdef ILI9486
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
     while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
     spi->fifo;
     spi->fifo;
@@ -163,8 +163,8 @@ void RunSPITask(SPITask *task)
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
-#ifdef ILI9486
-  // On the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+  // On e.g. the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
   spi->fifo = 0x00;
 #endif
   spi->fifo = task->cmd;
@@ -172,7 +172,7 @@ void RunSPITask(SPITask *task)
   uint8_t *tStart = task->data;
   uint8_t *tEnd = task->data + task->size;
   uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
-#ifdef ILI9486
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
   spi->fifo;
   spi->fifo;

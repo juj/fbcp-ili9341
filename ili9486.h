@@ -20,6 +20,10 @@
 #define DISPLAY_HEIGHT 320
 #endif
 
+// On ILI9486 the display bus commands and data are 16 bits rather than the usual 8 bits that most other controllers have.
+#define DISPLAY_SPI_BUS_IS_16BITS_WIDE
+
+// ILI9486 does not behave well if one sends partial commands, but must finish each command or the command does not apply
 #define MUST_SEND_FULL_CURSOR_WINDOW
 
 void InitILI9486(void);

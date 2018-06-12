@@ -520,7 +520,7 @@ void SPIDMATransfer(SPITask *task)
   // First send the SPI command byte in Polled SPI mode
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
-#ifdef ILI9486
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   spi->fifo = 0;
   spi->fifo = task->cmd;
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
