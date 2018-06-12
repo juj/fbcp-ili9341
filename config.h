@@ -91,10 +91,14 @@
 // costs more CPU time). Enabling this requires that ALL_TASKS_SHOULD_DMA is also enabled.
 // #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
 
-#if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS) && !defined(ALL_TASKS_SHOULD_DMA)
-// This is a prerequisite for good performance on Pi Zero
+#if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS)
+// These are prerequisites for good performance on Pi Zero
+#ifndef ALL_TASKS_SHOULD_DMA
 #define ALL_TASKS_SHOULD_DMA
-
+#endif
+#ifndef NO_INTERLACING
+#define NO_INTERLACING
+#endif
 #endif
 
 #if defined(ALL_TASKS_SHOULD_DMA)
