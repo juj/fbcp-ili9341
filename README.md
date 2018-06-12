@@ -306,6 +306,8 @@ If the color channels are mixed (red is blue, blue is red, green is green) like 
 
 If the color intensities look wrong (white is black, black is white, color looks like a negative image) like seen in the middle image, pass the CMake option `-DDISPLAY_INVERT_COLORS=ON` to the build.
 
+If the colors looks off in some other fashion, it is possible that the display is just being driven at a too high SPI bus speed, in which case try making the display run slower by choosing a higher `-DSPI_BUS_CLOCK_DIVISOR=` option to CMake. Especially on ILI9486 displays it has been observed that the colors on the display can become distorted if the display is run too fast beyond its maximum capability.
+
 #### The screen is tearing when it updates
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
