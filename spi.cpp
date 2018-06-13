@@ -85,7 +85,7 @@ bool previousTaskWasSPI = true;
 void WaitForPolledSPITransferToFinish()
 {
   uint32_t cs;
-  while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE))
+  while (!(((cs = spi->cs) ^ BCM2835_SPI0_CS_TA) & (BCM2835_SPI0_CS_DONE | BCM2835_SPI0_CS_TA))) // While TA=1 and DONE=0
     if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF)))
       spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
 
@@ -160,6 +160,14 @@ void RunSPITask(SPITask *task)
 {
   WaitForPolledSPITransferToFinish();
 
+  // The Adafruit 1.65" 240x240 ST7789 based display is unique compared to others that it does want to see the Chip Select line go
+  // low and high to start a new command. For that display we let hardware SPI toggle the CS line, and actually run TA<-0 and TA<-1
+  // transitions to let the CS line live. For most other displays, we just set CS line always enabled for the display throughout fbcp-ili9341 lifetime,
+  // which is a tiny bit faster.
+#ifdef DISPLAY_NEEDS_CHIP_SELECT_SIGNAL
+  BEGIN_SPI_COMMUNICATION();
+#endif
+
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
@@ -207,6 +215,10 @@ void RunSPITask(SPITask *task)
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
   }
+
+#ifdef DISPLAY_NEEDS_CHIP_SELECT_SIGNAL
+  END_SPI_COMMUNICATION();
+#endif
 }
 #endif
 
@@ -338,11 +350,19 @@ int InitSPI()
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_CLK, 0x04);
 
+#ifdef DISPLAY_NEEDS_CHIP_SELECT_SIGNAL
+  // The Adafruit 1.65" 240x240 ST7789 based display is unique compared to others that it does want to see the Chip Select line go
+  // low and high to start a new command. For that display we let hardware SPI toggle the CS line, and actually run TA<-0 and TA<-1
+  // transitions to let the CS line live. For most other displays, we just set CS line always enabled for the display throughout
+  // fbcp-ili9341 lifetime, which is a tiny bit faster.
+  SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
+#else
   // Set the SPI 0 pin explicitly to output, and enable chip select on the line by setting it to low.
   // fbcp-ili9341 assumes exclusive access to the SPI0 bus, and exclusive presence of only one device on the bus,
   // which is (permanently) activated here.
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
   CLEAR_GPIO(GPIO_SPI0_CE0);
+#endif
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk

@@ -1,6 +1,6 @@
 #include "config.h"
 
-#ifdef ST7735R
+#if defined(ST7735R) || defined(ST7789)
 
 #include "spi.h"
 
@@ -42,8 +42,11 @@ void InitST7735R()
 #define MADCTL_ROTATE_180_DEGREES 0xC0
 
     uint8_t madctl = 0;
-#ifndef DISPLAY_SWAP_BGR
+#ifdef ST7735R
     madctl |= MADCTL_BGR_PIXEL_ORDER;
+#endif
+#ifdef DISPLAY_SWAP_BGR
+    madctl ^= MADCTL_BGR_PIXEL_ORDER;
 #endif
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl |= MADCTL_ROTATE_180_DEGREES;
@@ -53,9 +56,33 @@ void InitST7735R()
 #endif
     madctl |= MADCTL_ROW_ADDRESS_ORDER_SWAP;
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
+    usleep(10*1000);
+
+#ifdef ST7789
+    SPI_TRANSFER(0xBA/*DGMEN: Enable Gamma*/, 0x04);
+    bool invertColors = true;
+#else
+    bool invertColors = false;
+#endif
+#ifdef DISPLAY_INVERT_COLORS
+    invertColors = !invertColors;
+#endif
+    if (invertColors)
+      SPI_TRANSFER(0x21/*Display Inversion On*/);
+    else
+      SPI_TRANSFER(0x20/*Display Inversion Off*/);
 
     SPI_TRANSFER(0x13/*NORON: Partial off (normal)*/);
-    usleep(2*1000);
+    usleep(10*1000);
+
+#ifdef ST7789
+    // The ST7789 controller is actually a unit with 320x240 graphics memory area, but only 240x240 portion
+    // of it is displayed. Therefore if we wanted to swap row address mode above, writes to Y=0...239 range will actually land in
+    // memory in row addresses Y = 319-(0...239) = 319...80 range. To view this range, we must scroll the view by +80 units in Y
+    // direction so that contents of Y=80...319 is displayed instead of Y=0...239.
+    if ((madctl & MADCTL_ROW_ADDRESS_ORDER_SWAP))
+      SPI_TRANSFER(0x37/*VSCSAD: Vertical Scroll Start Address of RAM*/, 0, 80);
+#endif
 
     // Frame rate = 850000 / [ (2*RTNA+40) * (162 + FPA+BPA)]
     SPI_TRANSFER(0xB1/*FRMCTR1:Frame Rate Control*/, /*RTNA=*/6, /*FPA=*/1, /*BPA=*/1); // This should set frame rate = 99.67 Hz

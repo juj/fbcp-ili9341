@@ -55,6 +55,7 @@ The following LCD displays have been tested:
  - [BuyDisplay.com 320x480 Serial SPI 3.2"TFT LCD Module Display](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) with ILI9341 controller
  - [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
  - [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
+ - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
 
 ### Known Issues
 
@@ -116,10 +117,11 @@ On the CMake command line, the following options can be configured:
 - `-DHX8357D=ON`: If you have any other generic HX8357D display, pass this directive.
 - `-DST7735R=ON`: If you have a ST7735R display, use this.
 - `-DSSD1351=ON`: If you have a SSD1351 OLED display, use this.
+- `-DST7789=ON`: If you have a ST7789 display, use this.
 - `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers.
 - `-DGPIO_TFT_RESET_PIN=number`: Specifies/overrides which GPIO pin to use for the display Reset line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a Reset pin, and is always on.
 - `-DGPIO_TFT_BACKLIGHT=number`: Specifies/overrides which GPIO pin to use for the display backlight line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a GPIO-controlled backlight pin, and is always on. If setting this, also see the `#define BACKLIGHT_CONTROL` option in `config.h`.
-- `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a Waveshare 3.5" 480x320 display, or possibly any other generic ILI9486 controller. This support is experimental.
+- `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a Waveshare 3.5" 480x320 ILI9486 display.
 - `-DILI9486=ON`: If you have any other generic ILI9486 display, pass this directive.
 - `-DUSE_DMA_TRANSFERS=OFF`: If specified, disables using DMA transfers. Pass this if DMA is giving some issues.
 - `-DDMA_TX_CHANNEL=<num>`: Specifies the DMA channel number to use for SPI send commands. Change this if you find a DMA channel conflict.
@@ -339,6 +341,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
 | [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 355MHz/6=59.16MHz | 180.56 fps |
 | [Tontec MZ61581-PI-EXT 2016.1.28](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) | 3.5" | 320x480 | MZ61581 | 128MHz | 280MHz/2=140.00MHz | 56.97 fps |
+| [Adafruit 240x240 Wide Angle TFT](https://www.adafruit.com/product/3787) | 1.54" | 240x240 | ST7789 | ? | 340MHz/4=85.00MHz | 92.23 fps |
 
 In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display controller is rated to run at. The *Obtained Bus Speed* column lists the fastest SPI bus speed that was achieved in practice, and the `core_freq` BCM Core speed and SPI Clock Divider `CDIV` setting that was used to achieve that rate. Note how most display controllers can generally be driven much faster than what they are officially rated at in their spec sheets.
 

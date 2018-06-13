@@ -101,10 +101,15 @@ typedef struct __attribute__((packed)) SPITask
   uint8_t data[];
 } SPITask;
 
-#define BEGIN_SPI_COMMUNICATION() do { spi->cs |= BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA; __sync_synchronize(); } while(0)
+#define BEGIN_SPI_COMMUNICATION() do { spi->cs = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS; } while(0)
 #define END_SPI_COMMUNICATION()  do { \
-    while (!(spi->cs & BCM2835_SPI0_CS_DONE)) if ((spi->cs & BCM2835_SPI0_CS_RXD)) (void)spi->fifo; \
-    spi->cs &= ~BCM2835_SPI0_CS_TA; \
+    uint32_t cs; \
+    while (!(((cs = spi->cs) ^ BCM2835_SPI0_CS_TA) & (BCM2835_SPI0_CS_DONE | BCM2835_SPI0_CS_TA))) /* While TA=1 and DONE=0*/ \
+    { \
+      if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF))) \
+        spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS; \
+    } \
+    spi->cs = BCM2835_SPI0_CS_CLEAR_RX | DISPLAY_SPI_DRIVE_SETTINGS; /* Clear TA and any pending bytes */ \
   } while(0)
 
 // A convenience for defining and dispatching SPI task bytes inline
