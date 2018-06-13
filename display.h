@@ -49,6 +49,7 @@
 #define DISPLAY_SPI_DRIVE_SETTINGS (0)
 #endif
 
+void ClearScreen(void);
 void DeinitSPIDisplay(void);
 
 #if !defined(SPI_BUS_CLOCK_DIVISOR)

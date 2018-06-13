@@ -27,6 +27,9 @@
 // other displays, where issuing a DISPLAY_WRITE_PIXELS command resets the x&y cursor coordinates.
 #define DISPLAY_WRITE_PIXELS_CMD_DOES_NOT_RESET_WRITE_CURSOR
 
+// This is defined for displays that have the set cursor command 8 bits wide (0-255) instead of 16 bits (0-65535)
+#define DISPLAY_SET_CURSOR_IS_8_BIT
+
 #define InitSPIDisplay InitSSD1351
 
 void InitSSD1351(void);

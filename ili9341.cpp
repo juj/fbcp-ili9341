@@ -7,24 +7,6 @@
 #include <memory.h>
 #include <stdio.h>
 
-static void ILI9341ClearScreen()
-{
-  // Since we are doing delta updates to only changed pixels, clear display initially to black for known starting state
-  for(int y = 0; y < DISPLAY_HEIGHT; ++y)
-  {
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, (uint8_t)(y >> 8), (uint8_t)(y & 0xFF), DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-    SPITask *clearLine = AllocTask(DISPLAY_WIDTH*2);
-    clearLine->cmd = DISPLAY_WRITE_PIXELS;
-    memset(clearLine->data, 0, clearLine->size);
-    CommitTask(clearLine);
-    RunSPITask(clearLine);
-    DoneTask(clearLine);
-  }
-  SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-  SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-}
-
 void InitILI9341()
 {
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
@@ -107,7 +89,7 @@ void InitILI9341()
 //    SPI_TRANSFER(0x38/*Idle Mode OFF*/);
 //    SPI_TRANSFER(0x39/*Idle Mode ON*/); // Idle mode gives a super-saturated high contrast reduced colors mode
 
-    ILI9341ClearScreen();
+    ClearScreen();
   }
 #ifndef USE_DMA_TRANSFERS // For DMA transfers, keep SPI CS & TA active.
   END_SPI_COMMUNICATION();
@@ -153,7 +135,7 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-  ILI9341ClearScreen();
+  ClearScreen();
   SPI_TRANSFER(/*Display OFF*/0x28);
   TurnBacklightOff();
 }

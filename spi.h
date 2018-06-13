@@ -118,8 +118,6 @@ typedef struct __attribute__((packed)) SPITask
     DoneTask(t); \
   } while(0)
 
-#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
-// 16-bit interface
 #define QUEUE_SPI_TRANSFER(command, ...) do { \
     char data_buffer[] = { __VA_ARGS__ }; \
     SPITask *t = AllocTask(sizeof(data_buffer)); \
@@ -127,6 +125,8 @@ typedef struct __attribute__((packed)) SPITask
     memcpy(t->data, data_buffer, sizeof(data_buffer)); \
     CommitTask(t); \
   } while(0)
+
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE // For displays that have their command register set be 16 bits word size width (ILI9486)
 
 #define QUEUE_MOVE_CURSOR_TASK(cursor, pos) do { \
     SPITask *task = AllocTask(4); \
@@ -154,15 +154,7 @@ typedef struct __attribute__((packed)) SPITask
     CommitTask(task); \
   } while(0)
 
-#elif defined(SSD1351)
-
-#define QUEUE_SPI_TRANSFER(command, ...) do { \
-    char data_buffer[] = { __VA_ARGS__ }; \
-    SPITask *t = AllocTask(sizeof(data_buffer)); \
-    t->cmd = (command); \
-    memcpy(t->data, data_buffer, sizeof(data_buffer)); \
-    CommitTask(t); \
-  } while(0)
+#elif defined(DISPLAY_SET_CURSOR_IS_8_BIT) // For displays that have their set cursor commands be a uint8 instead of uint16 (SSD1351)
 
 #define QUEUE_SET_WRITE_WINDOW_TASK(cursor, x, endX) do { \
     SPITask *task = AllocTask(2); \
@@ -173,15 +165,7 @@ typedef struct __attribute__((packed)) SPITask
     CommitTask(task); \
   } while(0)
 
-#else
-// 8-bit interface
-#define QUEUE_SPI_TRANSFER(command, ...) do { \
-    char data_buffer[] = { __VA_ARGS__ }; \
-    SPITask *t = AllocTask(sizeof(data_buffer)); \
-    t->cmd = (command); \
-    memcpy(t->data, data_buffer, sizeof(data_buffer)); \
-    CommitTask(t); \
-  } while(0)
+#else // Regular 8-bit interface with 16bits wide set cursor commands (most displays)
 
 #define QUEUE_MOVE_CURSOR_TASK(cursor, pos) do { \
     SPITask *task = AllocTask(2); \

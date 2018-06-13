@@ -9,24 +9,6 @@
 #include <memory.h>
 #include <stdio.h>
 
-static void HX8357DClearScreen()
-{
-  // Since we are doing delta updates to only changed pixels, clear display initially to black for known starting state
-  for(int y = 0; y < DISPLAY_HEIGHT; ++y)
-  {
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, (uint8_t)(y >> 8), (uint8_t)(y & 0xFF), DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-    SPITask *clearLine = AllocTask(DISPLAY_WIDTH*2);
-    clearLine->cmd = DISPLAY_WRITE_PIXELS;
-    memset(clearLine->data, 0, clearLine->size);
-    CommitTask(clearLine);
-    RunSPITask(clearLine);
-    DoneTask(clearLine);
-  }
-  SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-  SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-}
-
 void InitHX8357D()
 {
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
@@ -86,7 +68,7 @@ void InitHX8357D()
     SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
 #endif
 
-    HX8357DClearScreen();
+    ClearScreen();
   }
 #ifndef USE_DMA_TRANSFERS // For DMA transfers, keep SPI CS & TA active.
   END_SPI_COMMUNICATION();
@@ -132,7 +114,7 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
-  HX8357DClearScreen();
+  ClearScreen();
   SPI_TRANSFER(/*Display OFF*/0x28);
   TurnBacklightOff();
 }
