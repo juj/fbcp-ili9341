@@ -31,12 +31,25 @@
 
 // ILI9341 displays are able to update at any rate between 61Hz to up to 119Hz. Default at power on is 70Hz.
 #define ILI9341_FRAMERATE_61_HZ 0x1F
+#define ILI9341_FRAMERATE_63_HZ 0x1E
+#define ILI9341_FRAMERATE_65_HZ 0x1D
+#define ILI9341_FRAMERATE_68_HZ 0x1C
 #define ILI9341_FRAMERATE_70_HZ 0x1B
+#define ILI9341_FRAMERATE_73_HZ 0x1A
+#define ILI9341_FRAMERATE_76_HZ 0x19
 #define ILI9341_FRAMERATE_79_HZ 0x18
+#define ILI9341_FRAMERATE_83_HZ 0x17
+#define ILI9341_FRAMERATE_86_HZ 0x16
+#define ILI9341_FRAMERATE_90_HZ 0x15
+#define ILI9341_FRAMERATE_95_HZ 0x14
+#define ILI9341_FRAMERATE_100_HZ 0x13
+#define ILI9341_FRAMERATE_106_HZ 0x12
+#define ILI9341_FRAMERATE_112_HZ 0x11
 #define ILI9341_FRAMERATE_119_HZ 0x10
 
-// Visually estimating NES Super Mario Bros 3 "match mushroom, flower, star" arcade game, 119Hz gives most tear
-// free scrolling, so default to using that.
+// Visually estimating NES Super Mario Bros 3 "match mushroom, flower, star" arcade game, 119Hz gives visually
+// most pleasing result, so default to using that. You can also try other settings above. 119 Hz should give
+// lowest latency, perhaps 61 Hz might give least amount of tearing, although this can be quite subjective.
 #define ILI9341_UPDATE_FRAMERATE ILI9341_FRAMERATE_119_HZ
 
 #if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
