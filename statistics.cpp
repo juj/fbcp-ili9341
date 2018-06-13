@@ -194,10 +194,17 @@ void RefreshStatisticsOverlayText()
     statsFrameSkipText[0] = '\0';
     fpsColor = 0xFFFF;
   }
-  sprintf(cpuMemoryUsedText, "CPU:%.2fMB", totalCpuMemoryAllocated/1024.0/1024.0);
+
+#if DISPLAY_WIDTH > 320
+#define HINTSUFFIX "MB"
+#else
+#define HINTSUFFIX ""
+#endif
+  sprintf(cpuMemoryUsedText, "CPU:%.2f" HINTSUFFIX, totalCpuMemoryAllocated/1024.0/1024.0);
+
 #ifdef USE_DMA_TRANSFERS
   if (totalGpuMemoryUsed > 0)
-    sprintf(gpuMemoryUsedText, "GPU:%.2fMB", totalGpuMemoryUsed/1024.0/1024.0);
+    sprintf(gpuMemoryUsedText, "GPU:%.2f" HINTSUFFIX, totalGpuMemoryUsed/1024.0/1024.0);
 #endif
 }
 #else
