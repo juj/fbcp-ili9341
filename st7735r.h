@@ -38,8 +38,6 @@ void InitST7735R(void);
 void TurnDisplayOn(void);
 void TurnDisplayOff(void);
 
-#define MUST_SEND_FULL_CURSOR_WINDOW
-
 #ifdef ST7789
 // Unlike all other displays developed so far, Adafruit 1.54" 240x240 ST7789 display
 // actually needs to observe the CS line toggle during execution, it cannot just be always activated.
