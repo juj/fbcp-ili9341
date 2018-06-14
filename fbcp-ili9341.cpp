@@ -305,7 +305,6 @@ int main()
 #else // !USE_GPU_VSYNC
       if (!displayOff)
         RefreshStatisticsOverlayText();
-      AddHistogramSample();
 #endif
     }
 

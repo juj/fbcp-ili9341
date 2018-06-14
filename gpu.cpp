@@ -144,18 +144,27 @@ uint64_t PredictNextFrameArrivalTime()
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
 // The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
 // main menu <-> ingame transitions
-#define HISTOGRAM_SIZE (2*TARGET_FRAME_RATE)
+#define HISTOGRAM_SIZE 120
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
 uint64_t lastFramePollTime = 0;
 int histogramSize = 0;
 
+// If one first runs content that updates at e.g. 24fps, a video perhaps, the frame rate histogram will lock to that update
+// rate and frame snapshots are done at 24fps. Later when user quits watching the video, and returns to e.g. 60fps updated
+// launcher menu, there needs to be some mechanism that detects that update rate has now increased, and synchronizes to the
+// new update rate. If snapshots keep occurring at fixed 24fps, the increase in content update rate would go unnoticed.
+// Therefore maintain a "linear increases/geometric slowdowns" style of factor that pulls the frame snapshotting mechanism
+// to drive itself at faster rates, poking snapshots to be performed more often to discover if the content update rate is
+// more than what is currently expected.
+int eagerFastTrackToSnapshottingFramesEarlierFactor = 0;
+
 // Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
 #define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
 
-void AddHistogramSample()
+void AddHistogramSample(uint64_t t)
 {
-  frameArrivalTimes[frameArrivalTimesTail] = tick();
+  frameArrivalTimes[frameArrivalTimesTail] = t;
   frameArrivalTimesTail = (frameArrivalTimesTail + 1) % HISTOGRAM_SIZE;
   if (histogramSize < HISTOGRAM_SIZE) ++histogramSize;
 }
@@ -175,24 +184,26 @@ uint64_t EstimateFrameRateInterval()
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
   if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return 500000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
   if (timeNow - mostRecentFrame > 1000000) return 250000; // if it's been more than a second since last seen update, assume interval of 100ms.
-  if (histogramSize < HISTOGRAM_SIZE) return 1000000/TARGET_FRAME_RATE;
+  if (histogramSize < 10) return 1000000/TARGET_FRAME_RATE; // Frame histogram needs to have at least a few entries to bootstrap
 #ifndef SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
   return 1000000/TARGET_FRAME_RATE;
 #endif
 #endif
 
-  // Look at the intervals of all previous arrived frames, and take their 10% percentile as our expected current frame rate
+  // Look at the intervals of all previous arrived frames, and take some percentile value as our expected current frame rate
   uint64_t intervals[HISTOGRAM_SIZE-1];
   for(int i = 0; i < histogramSize-1; ++i)
     intervals[i] = GET_HISTOGRAM(i) - GET_HISTOGRAM(i+1);
   qsort(intervals, histogramSize-1, sizeof(uint64_t), cmp);
-  uint64_t interval = intervals[(histogramSize-1)/10];
 
-  // With bad luck, we may actually have synchronized to observing every second update, so halve the computed interval if it looks like a long period of time
-  if (interval >= 2000000/TARGET_FRAME_RATE) interval /= 2;
+  // Apply frame rate increase discovery factor to both the percentile position and the interpreted frame interval to catch
+  // up with display update rate if it has increased
+  int percentile = (histogramSize-1)*2/5;
+  percentile = MAX(percentile-eagerFastTrackToSnapshottingFramesEarlierFactor, 0);
+  uint64_t interval = intervals[percentile];
+  interval = MAX((int64_t)interval - eagerFastTrackToSnapshottingFramesEarlierFactor*500, (int64_t)1000000/TARGET_FRAME_RATE);
   if (interval > 100000) interval = 100000;
   return MAX(interval, 1000000/TARGET_FRAME_RATE);
-
 }
 
 uint64_t PredictNextFrameArrivalTime()
@@ -239,7 +250,7 @@ void *gpu_polling_thread(void*)
 #if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
     uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
     int64_t timeToSleep = nextFrameArrivalTime - tick();
-    const int64_t minimumSleepTime = 2500; // Don't sleep if the next frame is expected to arrive in less than this much time
+    const int64_t minimumSleepTime = 150; // Don't sleep if the next frame is expected to arrive in less than this much time
     if (timeToSleep > minimumSleepTime)
     {
       usleep(timeToSleep - minimumSleepTime);
@@ -294,7 +305,10 @@ void *gpu_polling_thread(void*)
     // Check the pixel contents of the snapshot to see if we actually received a new frame to render
     bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
     if (gotNewFramebuffer)
+    {
       lastNewFrameReceivedTime = t0;
+      AddHistogramSample(lastNewFrameReceivedTime);
+    }
 
     uint64_t t1 = tick();
     if (!gotNewFramebuffer)
@@ -302,10 +316,16 @@ void *gpu_polling_thread(void*)
 #ifdef STATISTICS
       __atomic_fetch_add(&timeWastedPollingGPU, t1-t0, __ATOMIC_RELAXED);
 #endif
+      // We did not get a new frame - halve the eager fast tracking factor geometrically, we are probably
+      // near synchronized to the update rate of the content.
+      eagerFastTrackToSnapshottingFramesEarlierFactor /= 2;
       continue;
     }
     else
     {
+      // We got a new framebuffer, so linearly increase the driving rate to snapshot next framebuffer a bit earlier, in case
+      // our update rate is too slow for the content.
+      ++eagerFastTrackToSnapshottingFramesEarlierFactor;
       memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
       __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
       syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame

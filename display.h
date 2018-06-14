@@ -6,7 +6,7 @@
 #if defined(PI_ZERO) || defined(USE_GPU_VSYNC)
 #define TARGET_FRAME_RATE 60
 #else
-#define TARGET_FRAME_RATE 120
+#define TARGET_FRAME_RATE 60
 #endif
 
 #ifdef ILI9341
