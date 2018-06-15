@@ -73,21 +73,21 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, dmaChannelsText, 1, 10, RGB565(31, 44, 8), 0);
 #endif
 #ifdef USE_SPI_THREAD
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 80, 10, spiUsageColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiUsagePercentageText, 75, 10, spiUsageColor, 0);
 #endif
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 80, 1, 0xFFFF, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 60, 1, 0xFFFF, 0);
 #endif
 
 #if DISPLAY_WIDTH > 180
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 140, 1, RGB565(31,14,20), 0);
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText2, 140, 10, RGB565(10,24,31), 0);
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 210, 1, cpuTemperatureColor, 0);
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 242, 1, gpuPollingWastedColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 120, 1, RGB565(31,14,20), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText2, 120, 10, RGB565(10,24,31), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 190, 1, cpuTemperatureColor, 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 222, 1, gpuPollingWastedColor, 0);
 #endif
 
-#if DISPLAY_WIDTH >= 320
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 260, 1, RGB565(31,50,21), 0);
-  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 260, 10, RGB565(31,50,31), 0);
+#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_HEIGHT >= 320) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_WIDTH >= 320)
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 250, 1, RGB565(31,50,21), 0);
+  DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 250, 10, RGB565(31,50,31), 0);
 #endif
 
 }
@@ -195,16 +195,11 @@ void RefreshStatisticsOverlayText()
     fpsColor = 0xFFFF;
   }
 
-#if DISPLAY_WIDTH > 320
-#define HINTSUFFIX "MB"
-#else
-#define HINTSUFFIX ""
-#endif
-  sprintf(cpuMemoryUsedText, "CPU:%.2f" HINTSUFFIX, totalCpuMemoryAllocated/1024.0/1024.0);
+  sprintf(cpuMemoryUsedText, "CPU:%.2fMB", totalCpuMemoryAllocated/1024.0/1024.0);
 
 #ifdef USE_DMA_TRANSFERS
   if (totalGpuMemoryUsed > 0)
-    sprintf(gpuMemoryUsedText, "GPU:%.2f" HINTSUFFIX, totalGpuMemoryUsed/1024.0/1024.0);
+    sprintf(gpuMemoryUsedText, "GPU:%.2fMB", totalGpuMemoryUsed/1024.0/1024.0);
 #endif
 }
 #else
