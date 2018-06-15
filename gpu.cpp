@@ -13,6 +13,7 @@
 #include "util.h"
 #include "statistics.h"
 #include "mem_alloc.h"
+#include "spi.h"
 
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
@@ -295,7 +296,37 @@ void *gpu_polling_thread(void*)
     }
     barY = (barY + 1) % gpuFrameHeight;
 #else
-    SnapshotFramebuffer(videoCoreFramebuffer[0]);
+    if (GET_GPIO(6))
+    {
+#if 0
+      memset(videoCoreFramebuffer[0], 0, gpuFrameHeight*gpuFramebufferScanlineStrideBytes);
+      for(int y = gpuFrameHeight/2-20; y < gpuFrameHeight/2+20; ++y)
+        for(int x = gpuFrameWidth/2-20; x < gpuFrameWidth/2+20; ++x)
+          videoCoreFramebuffer[0][y*(gpuFramebufferScanlineStrideBytes>>1)+x] = tick();
+#endif
+
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+      uint16_t color = (uint16_t)tick();
+      for(int y = 0; y < gpuFrameHeight; ++y)
+      {
+        for(int x = 0; x < gpuFrameWidth; ++x)
+        {
+          videoCoreFramebuffer[0][y*(gpuFramebufferScanlineStrideBytes>>1)+x] = color;
+        }
+      }
+#else
+        uint16_t color = (uint16_t)tick();
+      for(int x = 0; x < gpuFrameWidth; ++x)
+      {
+        for(int y = 0; y < gpuFrameHeight; ++y)
+        {
+          videoCoreFramebuffer[0][y*(gpuFramebufferScanlineStrideBytes>>1)+x] = color;
+        }
+      }
+#endif
+    }
+    else
+      SnapshotFramebuffer(videoCoreFramebuffer[0]);
 #endif
 
 #ifndef USE_GPU_VSYNC

@@ -3,7 +3,7 @@
 // Build options: Uncomment any of these, or set at the command line to configure:
 
 // If defined, renders a performance overlay on top of the screen
-#define STATISTICS
+// #define STATISTICS
 
 // How often the on-screen statistics is refreshed (in usecs)
 #define STATISTICS_REFRESH_INTERVAL 200000
@@ -108,15 +108,15 @@
 
 // If defined, the GPU polling thread will be put to sleep for 1/TARGET_FRAMERATE seconds after receiving
 // each new GPU frame, to wait for the earliest moment that the next frame could arrive.
-#define SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
+//#define SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
 
 // Detects when the activity on the screen is mostly idle, and goes to low power mode, in which new
 // frames will be polled first at 10fps, and ultimately at only 2fps.
-#define SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
+//#define SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
 
 // Builds a histogram of observed frame intervals and uses that to sync to a known update rate. This aims
 // to detect if an application uses a non-60Hz update rate, and synchronizes to that instead.
-#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
+//#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
 
 // If defined, rotates the display 180 degrees
 // #define DISPLAY_ROTATE_180_DEGREES

@@ -82,6 +82,21 @@ void ProgramInterruptHandler(int signal)
   syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0);
 }
 
+void *gpioClone(void*)
+{
+  SET_GPIO_MODE(5, 0x01);
+  while(programRunning)
+  {
+    if (GET_GPIO(6))
+      SET_GPIO(5);
+    else
+      CLEAR_GPIO(5);
+  }
+  SET_GPIO_MODE(5, 0x00);
+}
+
+#include <pthread.h>
+
 int main()
 {
   signal(SIGINT, ProgramInterruptHandler);
@@ -101,6 +116,9 @@ int main()
   int spiX = -1;
   int spiY = -1;
   int spiEndX = DISPLAY_WIDTH;
+
+  pthread_t gpioCloneThread;
+  pthread_create(&gpioCloneThread, 0, gpioClone, 0);
 
   InitGPU();
 
@@ -125,6 +143,7 @@ int main()
 
   uint32_t curFrameEnd = spiTaskMemory->queueTail;
   uint32_t prevFrameEnd = spiTaskMemory->queueTail;
+
 
   bool prevFrameWasInterlacedUpdate = false;
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
@@ -486,6 +505,8 @@ int main()
     statsBytesTransferred += bytesTransferred;
 #endif
   }
+
+  pthread_join(gpioCloneThread, 0);
 
   DeinitGPU();
   DeinitSPI();
