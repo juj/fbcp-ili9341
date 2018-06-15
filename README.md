@@ -13,6 +13,7 @@ In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI bas
 
 The `fbcp-ili9341` project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, `fbcp-ili9341` can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
+ - [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8)
  - [Latency and tearing test: KeDei 3.5" 320x480 HDMI vs Adafruit 2.8" PiTFT ILI9341 240x320 SPI](https://www.youtube.com/watch?v=1yvmvv0KtNs)
  - [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4)
  - [Quake 60 fps inside Gameboy Advance (ILI9341)](https://www.youtube.com/watch?v=xmO8t3XlxVM)
@@ -33,7 +34,7 @@ Other optimizations are also utilized to squeeze out even more performance:
 
 The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usual, to maximize the utilization rate of the bus, while only transmitting practically the minimum number of bytes needed to describe each new frame.
 
-As a bonus, `fbcp-ili9341` has a very low processing latency, 33msecs faster than what has been observed on a cheap 3.5" KeDei HDMI display. See the latency and tearing test video above for an example.
+As a bonus, `fbcp-ili9341` has a very low processing latency, [~33msecs faster than what has been observed on a cheap 3.5" KeDei HDMI display](https://www.youtube.com/watch?v=1yvmvv0KtNs). The incurred internal processing latency overhead is very quick as well: [fbcp-ili9341 gets pixels as response from GPIO input to screen in less than 16.66 msecs!](https://www.youtube.com/watch?v=EOICdpjiqv8) (I only have a 120fps recording camera, so can't easily measure delays shorter than that) This does not mean necessarily that overall input latency in games would be 16.66 msecs, since this test bypasses DispmanX and latency caused by game execution and e.g. emulation.
 
 ### Tested Devices
 
@@ -317,9 +318,9 @@ If the colors looks off in some other fashion, it is possible that the display i
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
 
-You can choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` produces straight line tearing, and consumes a few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing.
+You can choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` produces straight line tearing, and consumes a few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing. Check out the video [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8) to see in slow motion videos how these two tearing modes look like.
 
-To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that cheap small 3.5" HDMI displays such as KeDei do also tear - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
+To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that [cheap small 3.5" HDMI displays such as KeDei do also tear](https://www.youtube.com/watch?v=1yvmvv0KtNs) - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
 
 #### Failed to allocate GPU memory!
 

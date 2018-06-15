@@ -118,7 +118,9 @@
 // to detect if an application uses a non-60Hz update rate, and synchronizes to that instead.
 #define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
 
-// If defined, rotates the display 180 degrees
+// If defined, rotates the display 180 degrees. This might not rotate the panel scan order though,
+// so adding this can cause up to one vsync worth of extra display latency. It is best to avoid this and
+// install the display in its natural rotation order, if possible.
 // #define DISPLAY_ROTATE_180_DEGREES
 
 // If defined, displays in landscape. Undefine to display in portrait. When changing this, swap
