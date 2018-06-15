@@ -11,7 +11,7 @@ The work was motivated by curiosity after seeing this series of videos on the Re
 
 In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays update over a serial data bus, transmitting one bit per clock cycle on the bus. A 320x240x16bpp display hence requires a SPI bus clock rate of 73.728MHz to achieve a full 60fps refresh frequency. Not many SPI LCD controllers can communicate this fast in practice, but are constrained to e.g. a 16-50MHz SPI bus clock speed, capping the maximum update rate significantly. Can we do anything about this?
 
-The `fbcp-ili9341` project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, `fbcp-ili9341` can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
+The fbcp-ili9341 project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, fbcp-ili9341 can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
  - [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8)
  - [Latency and tearing test: KeDei 3.5" 320x480 HDMI vs Adafruit 2.8" PiTFT ILI9341 240x320 SPI](https://www.youtube.com/watch?v=1yvmvv0KtNs)
@@ -22,7 +22,7 @@ The `fbcp-ili9341` project started out as a display driver for the [Adafruit 2.8
 
 ### How It Works
 
-Given that the SPI bus can be so constrained on bandwidth, how come `fbcp-ili9341` seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually changed pixels on screen are submitted to the display. This is doable because the ILI9341 controller, as many other popular controllers, have communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
+Given that the SPI bus can be so constrained on bandwidth, how come fbcp-ili9341 seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually changed pixels on screen are submitted to the display. This is doable because the ILI9341 controller, as many other popular controllers, have communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
 
 Other optimizations are also utilized to squeeze out even more performance:
  - The program directly communicates with the BCM2835 ARM Peripherals controller registers, bypassing the usual Linux software stack.
@@ -58,17 +58,17 @@ The following LCD displays have been tested:
 
 ### About Input Latency
 
-A pleasing aspect of `fbcp-ili9341` is that it introduces very little latency overhead: on a 119Hz refreshing ILI9341 display, [fbcp-ili9341 gets pixels as response from GPIO input to screen in well less than 16.66 msecs](https://www.youtube.com/watch?v=EOICdpjiqv8) time. I only have a 120fps recording camera, so can't easily measure delays shorter than that, but rough statistical estimate of slow motion video footage suggests this delay could be as low as 2-3 msecs, dominated by the ~8.4msecs panel refresh rate of the ILI9341.
+A pleasing aspect of fbcp-ili9341 is that it introduces very little latency overhead: on a 119Hz refreshing ILI9341 display, [fbcp-ili9341 gets pixels as response from GPIO input to screen in well less than 16.66 msecs](https://www.youtube.com/watch?v=EOICdpjiqv8) time. I only have a 120fps recording camera, so can't easily measure delays shorter than that, but rough statistical estimate of slow motion video footage suggests this delay could be as low as 2-3 msecs, dominated by the ~8.4msecs panel refresh rate of the ILI9341.
 
-This does not mean that overall input to display latency in games would be so immediate. Briefly testing a NES emulated game in Retropie suggests a total latency of about 60-80 msecs. This latency is caused by the NES game emulator overhead and extra latency added by Linux, DispmanX and GPU rendering, and [GPU framebuffer snapshotting](https://github.com/raspberrypi/userland/issues/440). (If you ran `fbcp-ili9341` as a static library bypassing DispmanX and the GPU stack, directly linking your GPIO input and application logic into `fbcp-ili9341`, you would be able to get down to this few msecs of overall latency, like shown in the above GPIO input video)
+This does not mean that overall input to display latency in games would be so immediate. Briefly testing a NES emulated game in Retropie suggests a total latency of about 60-80 msecs. This latency is caused by the NES game emulator overhead and extra latency added by Linux, DispmanX and GPU rendering, and [GPU framebuffer snapshotting](https://github.com/raspberrypi/userland/issues/440). (If you ran fbcp-ili9341 as a static library bypassing DispmanX and the GPU stack, directly linking your GPIO input and application logic into fbcp-ili9341, you would be able to get down to this few msecs of overall latency, like shown in the above GPIO input video)
 
-Interestingly, `fbcp-ili9341` is about [~33msecs faster than a cheap 3.5" KeDei HDMI display](https://www.youtube.com/watch?v=1yvmvv0KtNs). I do not know if this is a result of the KeDei HDMI display specifically introducing extra latency, or if all HDMI displays connected to the Pi would have similar latency overhead. An interesting question is also how SPI would compare with DPI connected displays on the Pi.
+Interestingly, fbcp-ili9341 is about [~33msecs faster than a cheap 3.5" KeDei HDMI display](https://www.youtube.com/watch?v=1yvmvv0KtNs). I do not know if this is a result of the KeDei HDMI display specifically introducing extra latency, or if all HDMI displays connected to the Pi would have similar latency overhead. An interesting question is also how SPI would compare with DPI connected displays on the Pi.
 
 ### About Tearing
 
 Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does actually expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
 
-You can however choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, `fbcp-ili9341` produces straight line tearing, and consumes a tiny few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing. Check out the video [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8) to see in slow motion videos how these two tearing modes look like.
+You can however choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE` in `config.h`. When this option is enabled, fbcp-ili9341 produces straight line tearing, and consumes a tiny few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing. Check out the video [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8) to see in slow motion videos how these two tearing modes look like.
 
 Another option that is known to affect how the tearing artifact looks like is the internal panel refresh rate. For ILI9341 displays this refresh rate can be adjusted in `ili9341.h`, and this can be set to range between `ILI9341_FRAMERATE_61_HZ` and `ILI9341_FRAMERATE_119_HZ` (default). Slower refresh rates produce less tearing, but have higher input-to-display latency, whereas higher refresh rates will result in the opposite. Again visually the resulting effect is a bit subjective.
 
@@ -110,7 +110,7 @@ This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) f
 
 This program neither utilizes the default SPI driver, so a line such as `dtparam=spi=on` in `/boot/config.txt` should also be removed so that it will not cause conflicts.
 
-Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, that should be removed as well to avoid conflicts. It would be possible to add touch support to `fbcp-ili9341` if someone wants to take a stab at it.
+Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, that should be removed as well to avoid conflicts. It would be possible to add touch support to fbcp-ili9341 if someone wants to take a stab at it.
 
 ##### Building and running
 
@@ -161,7 +161,7 @@ In addition to the above CMake directives, there are various defines scattered a
 
 ##### Tuning CPU Usage
 
-Diffing frames to produce minimal SPI communication task lists takes up some performance, so expect to see a moderate backround CPU load coming from `fbcp-ili9341`. The default build configuration of `fbcp-ili9341` is optimized towards maximum performance on the Pi 3, and towards battery saving on the Pi Zero. Check out the build option `ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling that option in the build optimizes towards saving battery at the expense of performance, whereas building with that option disabled causes `fbcp-ili9341` to strive towards maximum screen refresh rate.
+Diffing frames to produce minimal SPI communication task lists takes up some performance, so expect to see a moderate backround CPU load coming from fbcp-ili9341. The default build configuration of fbcp-ili9341 is optimized towards maximum performance on the Pi 3, and towards battery saving on the Pi Zero. Check out the build option `ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling that option in the build optimizes towards saving battery at the expense of performance, whereas building with that option disabled causes fbcp-ili9341 to strive towards maximum screen refresh rate.
 
 To further reduce power consumption beyond enabling `ALL_TASKS_SHOULD_DMA`, try enabling `USE_GPU_VSYNC`, and/or lowering `TARGET_FRAME_RATE` in `display.h` - set it to e.g. 40 or 30. Currently Pi Zero will not likely reach 60fps except in NES games.
 
@@ -179,7 +179,7 @@ to the end. Make note of the needed ampersand `&` at the end of that line.
 
 ##### Configuring HDMI and TFT display sizes
 
-If the size of the default HDMI output `/dev/fb0` framebuffer differs from the resolution of the display, the source video size will by default be rescaled to fit to the size of the SPI display. `fbcp-ili9341` will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the SPI display size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
+If the size of the default HDMI output `/dev/fb0` framebuffer differs from the resolution of the display, the source video size will by default be rescaled to fit to the size of the SPI display. fbcp-ili9341 will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the SPI display size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
 
 ```
 hdmi_group=2
@@ -204,7 +204,7 @@ Check the following tips to optimize the display to run as fast as possible.
 
 ##### Reducing CPU Usage
 
-On the other hand, it is desirable to control how much CPU time `fbcp-ili9341` is allowed to use. The default build settings are tuned to maximize the display refresh rate at the expense of power consumption on Pi 3B. On Pi Zero, the opposite is done, i.e. by default the driver optimizes for battery saving instead of maximal display update speed. The following options can be controlled to balance between these two:
+On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is allowed to use. The default build settings are tuned to maximize the display refresh rate at the expense of power consumption on Pi 3B. On Pi Zero, the opposite is done, i.e. by default the driver optimizes for battery saving instead of maximal display update speed. The following options can be controlled to balance between these two:
 
 - The main option to control CPU usage vs performance aspect is the option `#define ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling this option will greatly reduce CPU usage. If this option is disabled, SPI bus utilization is maximized but CPU usage can be up to 80%-120%. When this option is enabled, CPU usage is generally up to around 15%-30%. Maximal CPU usage occurs when watching a video, or playing a fast moving game. If nothing is changing on the screen, CPU consumption of the driver should go down very close to 0-5%. By default `#define ALL_TASKS_SHOULD_DMA` is enabled for Pi Zero, but disabled for Pi 3B.
 
@@ -228,7 +228,7 @@ On the other hand, it is desirable to control how much CPU time `fbcp-ili9341` i
 
 ### Statistics Overlay
 
-By default `fbcp-ili9341` builds with a statistics overlay enabled because - admit it - when you first run, you like to geek out on all the knobs and numbers anyways. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Remove the `#define STATISTICS` option in `config.h` to disable displaying the statistics.
+By default fbcp-ili9341 builds with a statistics overlay enabled because - admit it - when you first run, you like to geek out on all the knobs and numbers anyways. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Remove the `#define STATISTICS` option in `config.h` to disable displaying the statistics.
 
 ### FAQ and Troubleshooting
 
@@ -244,7 +244,7 @@ Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This shoul
 
 Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the line `#define STATISTICS` in there. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
 
-After having edited and saved the file, reissue `make -j` in the build directory and restart `fbcp-ili9341`.
+After having edited and saved the file, reissue `make -j` in the build directory and restart fbcp-ili9341.
 
 #### Does fbcp-ili9341 work with linux command line terminal or X windowing system?
 
@@ -262,7 +262,7 @@ If the display controller is one of the currently tested ones (see the list abov
 
 If the display controller is not one of the tested ones, it may still work if it is similar to one of the existing ones. For example, ILI9340 and ILI9341 are practically the same controller. You can just try with a specific one to see how it goes.
 
-If `fbcp-ili9341` does not support your display controller, you will have to write support for it. `fbcp-ili9341` does not have a "generic SPI TFT driver routine" that might work across multiple devices, but needs specific code for each. If you have the spec sheet available, you can ask for advice, but please do not request to add support to a display controller "blind", that is not possible.
+If fbcp-ili9341 does not support your display controller, you will have to write support for it. fbcp-ili9341 does not have a "generic SPI TFT driver routine" that might work across multiple devices, but needs specific code for each. If you have the spec sheet available, you can ask for advice, but please do not request to add support to a display controller "blind", that is not possible.
 
 #### Does fbcp-ili9341 work with 3-wire SPI displays?
 
@@ -274,7 +274,7 @@ No. Those are completely different technologies altogether. It should be possibl
 
 #### Does fbcp-ili9341 work with touch displays?
 
-At the moment one cannot utilize the XPT2046/ADS7846 touch controllers while running `fbcp-ili9341`, so touch is mutually incompatible with this driver. In order for `fbcp-ili9341` to function, you will need to remove all `dtoverlay`s in `/boot/config.txt` related to touch.
+At the moment one cannot utilize the XPT2046/ADS7846 touch controllers while running fbcp-ili9341, so touch is mutually incompatible with this driver. In order for fbcp-ili9341 to function, you will need to remove all `dtoverlay`s in `/boot/config.txt` related to touch.
 
 #### Is it possible to break my display with this driver if I misconfigure something?
 
@@ -282,19 +282,19 @@ I have done close to everything possible to my displays - cut power in middle of
 
 Easiest way to do permanent damage is to fail at wiring, e.g. drive 5 volts if your display requires 3.3v, or short a connection, or something similar.
 
-The one thing that `fbcp-ili9341` stays clear off is that it does not program the non-volatile memory areas of any of the displays. Therefore a hard power off on a display should clear all performed initialization and reset the display to its initial state at next power on.
+The one thing that fbcp-ili9341 stays clear off is that it does not program the non-volatile memory areas of any of the displays. Therefore a hard power off on a display should clear all performed initialization and reset the display to its initial state at next power on.
 
 That being said, if it breaks, you'll get to purchase a new shiny one to replace it.
 
 #### Can I have both the HDMI and SPI connected at the same time?
 
-Yes, `fbcp-ili9341` shows the output of the HDMI display on the SPI screen, and both can be attached at the same time. A HDMI display does not have to be connected however, although `fbcp-ili9341` operation will still be affected by whatever HDMI display mode is configured. Check out `tvservice -s` on the command line to check what the current DispmanX HDMI output mode is.
+Yes, fbcp-ili9341 shows the output of the HDMI display on the SPI screen, and both can be attached at the same time. A HDMI display does not have to be connected however, although fbcp-ili9341 operation will still be affected by whatever HDMI display mode is configured. Check out `tvservice -s` on the command line to check what the current DispmanX HDMI output mode is.
 
 #### Do I have to show the same image on HDMI output and the SPI display, or can they be different?
 
-At the moment `fbcp-ili9341` has been developed to only display the contents of the main DispmanX GPU framebuffer over to the SPI display. That is, the SPI display will show the same picture as the HDMI output does. There is no technical restriction that requires this though, so if you know C/C++ well, it should be a manageable project to turn `fbcp-ili9341` to operate as an offscreen display library to show a completely separate (non-GPU-accelerated) image than what the main HDMI display outputs. For example you could have two different outputs, e.g. a HUD overlay, a dashboard for network statistics, weather, temps, etc. showing on the SPI while having the main Raspberry Pi desktop on the HDMI.
+At the moment fbcp-ili9341 has been developed to only display the contents of the main DispmanX GPU framebuffer over to the SPI display. That is, the SPI display will show the same picture as the HDMI output does. There is no technical restriction that requires this though, so if you know C/C++ well, it should be a manageable project to turn fbcp-ili9341 to operate as an offscreen display library to show a completely separate (non-GPU-accelerated) image than what the main HDMI display outputs. For example you could have two different outputs, e.g. a HUD overlay, a dashboard for network statistics, weather, temps, etc. showing on the SPI while having the main Raspberry Pi desktop on the HDMI.
 
-In this kind of mode, you would probably strip the DispmanX bits out of `fbcp-ili9341`, and recast it as a static library that you would link to in your drawing application, and instead of snapshotting frames, you can then programmatically write to a framebuffer in memory from your C/C++ code.
+In this kind of mode, you would probably strip the DispmanX bits out of fbcp-ili9341, and recast it as a static library that you would link to in your drawing application, and instead of snapshotting frames, you can then programmatically write to a framebuffer in memory from your C/C++ code.
 
 #### I am running fbcp-ili9341 on a display that was listed above, but the display stays white after startup?
 
@@ -303,7 +303,7 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 - double check the wiring,
 - double check that the display controller is really what you expected. Trying to drive with the display with wrong initialization code usually results in the display not reacting, and the screen stays white,
 - shut down and physically power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to reset,
-- if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving `fbcp-ili9341` without specifying the reset pin,
+- if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving fbcp-ili9341 without specifying the reset pin,
 - make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode.
 
 #### The display stays blank at boot without lighting up
@@ -314,11 +314,11 @@ If the backlight connects to a GPIO pin, you may need to define `-DGPIO_TFT_BACK
 
 #### The display clears from white to black after starting fbcp-ili9341, but picture does not show up?
 
-`fbcp-ili9341` runs a clear screen command at low speed as first thing after init, so if that goes through, it is a good sign. Try increasing `-DSPI_BUS_CLOCK_DIVISOR=` CMake option to a higher number to see if the display driving rate was too fast. Or try disabling DMA with `-DUSE_DMA_TRANSFERS=OFF` to see if this might be a DMA conflict.
+fbcp-ili9341 runs a clear screen command at low speed as first thing after init, so if that goes through, it is a good sign. Try increasing `-DSPI_BUS_CLOCK_DIVISOR=` CMake option to a higher number to see if the display driving rate was too fast. Or try disabling DMA with `-DUSE_DMA_TRANSFERS=OFF` to see if this might be a DMA conflict.
 
 #### Image does show up on display, but it freezes shortly afterwards
 
-This suggests same as above, increase SPI bus divisor or troubleshoot disabling DMA. If DMA is detected to be the culprit, try changing up the DMA channels. Double check that `/boot/config.txt` does not have any `dtoverlay`s regarding other SPI display drivers or touch screen controllers, and that it does **NOT** have a `dtparam=spi=on` line in it - `fbcp-ili9341` does not use the Linux kernel SPI driver.
+This suggests same as above, increase SPI bus divisor or troubleshoot disabling DMA. If DMA is detected to be the culprit, try changing up the DMA channels. Double check that `/boot/config.txt` does not have any `dtoverlay`s regarding other SPI display drivers or touch screen controllers, and that it does **NOT** have a `dtparam=spi=on` line in it - fbcp-ili9341 does not use the Linux kernel SPI driver.
 
 Make sure other `fbcp` programs are not running, or that another copy of `fbcp-ili9341` is not running on the background.
 
@@ -328,7 +328,7 @@ This is likely caused by the program resizing the video resolution at runtime, w
 
 #### The driver is updating pixels on the display, but it looks all garbled
 
-Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever `fbcp-ili9341` refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. Make sure no other `fbcp` programs or SPI drivers or dtoverlays are enabled.
+Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever fbcp-ili9341 refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. Make sure no other `fbcp` programs or SPI drivers or dtoverlays are enabled.
 
 #### Colors look wrong on the display
 
@@ -342,11 +342,11 @@ If the colors looks off in some other fashion, it is possible that the display i
 
 #### Failed to allocate GPU memory!
 
-`fbcp-ili9341` needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64, which has been observed to not leave enough memory for `fbcp-ili9341` if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
+fbcp-ili9341 needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64, which has been observed to not leave enough memory for fbcp-ili9341 if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
 
 #### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
-First, make sure the display is a 4-wire SPI and not a 3-wire one. `fbcp-ili9341` does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
+First, make sure the display is a 4-wire SPI and not a 3-wire one. fbcp-ili9341 does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
 
 Second is the consideration about display speed. Below is a performance chart of the different displays I have tested. Note that these are sample sizes of one, I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance, whether they are from Adafruit or WaveShare or from BuyDisplay.com.
 
@@ -394,6 +394,6 @@ The following links proved helpful when writing this:
 
 This driver is licensed under the MIT License. See LICENSE.txt. In nonlegal terms, it's yours for both free and commercial projects, DIY packages, kickstarters, Etsys and Ebays, and you don't owe back a dime. Feel free to apply and derive as you wish.
 
-If you found `fbcp-ili9341` useful, it makes me happy to hear back about the projects it found a home in. If you did a build or a project where `fbcp-ili9341` worked out, it'd be great to see a video or some photos or read about your experiences.
+If you found fbcp-ili9341 useful, it makes me happy to hear back about the projects it found a home in. If you did a build or a project where fbcp-ili9341 worked out, it'd be great to see a video or some photos or read about your experiences.
 
 I hope you build something you enjoy!
