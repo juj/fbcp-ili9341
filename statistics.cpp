@@ -68,7 +68,7 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, fpsText, 1, 1, fpsColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, statsFrameSkipText, strlen(fpsText)*6, 1, RGB565(31,0,0), 0);
 
-#if DISPLAY_WIDTH > 130
+#if DISPLAY_DRAWABLE_WIDTH > 130
 #ifdef USE_DMA_TRANSFERS
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, dmaChannelsText, 1, 10, RGB565(31, 44, 8), 0);
 #endif
@@ -78,14 +78,14 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiBusDataRateText, 60, 1, 0xFFFF, 0);
 #endif
 
-#if DISPLAY_WIDTH > 180
+#if DISPLAY_DRAWABLE_WIDTH > 180
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText, 120, 1, RGB565(31,14,20), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, spiSpeedText2, 120, 10, RGB565(10,24,31), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuTemperatureText, 190, 1, cpuTemperatureColor, 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 222, 1, gpuPollingWastedColor, 0);
 #endif
 
-#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_HEIGHT >= 320) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_WIDTH >= 320)
+#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT >= 290) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH >= 290)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 250, 1, RGB565(31,50,21), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 250, 10, RGB565(31,50,31), 0);
 #endif
@@ -195,11 +195,17 @@ void RefreshStatisticsOverlayText()
     fpsColor = 0xFFFF;
   }
 
-  sprintf(cpuMemoryUsedText, "CPU:%.2fMB", totalCpuMemoryAllocated/1024.0/1024.0);
+#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT > 302) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH > 302)
+#define HINTSUFFIX "MB"
+#else
+#define HINTSUFFIX ""
+#endif
+
+  sprintf(cpuMemoryUsedText, "CPU:%.2f" HINTSUFFIX, totalCpuMemoryAllocated/1024.0/1024.0);
 
 #ifdef USE_DMA_TRANSFERS
   if (totalGpuMemoryUsed > 0)
-    sprintf(gpuMemoryUsedText, "GPU:%.2fMB", totalGpuMemoryUsed/1024.0/1024.0);
+    sprintf(gpuMemoryUsedText, "GPU:%.2f" HINTSUFFIX, totalGpuMemoryUsed/1024.0/1024.0);
 #endif
 }
 #else
