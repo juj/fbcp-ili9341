@@ -478,10 +478,14 @@ int main()
 #endif
 
 #ifdef STATISTICS
-    if (bytesTransferred > 0 && frameTimeHistorySize < FRAME_HISTORY_MAX_SIZE)
+    if (bytesTransferred > 0)
     {
-      frameTimeHistory[frameTimeHistorySize].interlaced = interlacedUpdate || prevFrameWasInterlacedUpdate;
-      frameTimeHistory[frameTimeHistorySize++].time = tick();
+      if (frameTimeHistorySize < FRAME_HISTORY_MAX_SIZE)
+      {
+        frameTimeHistory[frameTimeHistorySize].interlaced = interlacedUpdate || prevFrameWasInterlacedUpdate;
+        frameTimeHistory[frameTimeHistorySize++].time = tick();
+      }
+      AddFrameCompletionTimeMarker();
     }
     statsBytesTransferred += bytesTransferred;
 #endif

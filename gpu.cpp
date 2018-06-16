@@ -144,7 +144,6 @@ uint64_t PredictNextFrameArrivalTime()
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
 // The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
 // main menu <-> ingame transitions
-#define HISTOGRAM_SIZE (4*TARGET_FRAME_RATE)
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
 uint64_t lastFramePollTime = 0;
@@ -158,9 +157,6 @@ int histogramSize = 0;
 // to drive itself at faster rates, poking snapshots to be performed more often to discover if the content update rate is
 // more than what is currently expected.
 int eagerFastTrackToSnapshottingFramesEarlierFactor = 0;
-
-// Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
-#define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
 
 // If framerate has been high for a long time, but then drops to e.g. 1fps, it would take a very very long time to fill up
 // the histogram of these 1fps intervals, so fbcp-ili9341 would take a long time to go back to sleep. Introduce a max age

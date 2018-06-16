@@ -22,6 +22,8 @@ extern uint64_t statsBytesTransferred;
 extern int frameSkipTimeHistorySize;
 extern uint64_t frameSkipTimeHistory[FRAME_HISTORY_MAX_SIZE];
 
+void AddFrameCompletionTimeMarker();
+
 // All overlay statistics are double-buffered: the updated data fields
 // are polled at certain rate, and updated in the first copy below. However
 // it is not desired that any changes in the overlay numbers would trigger

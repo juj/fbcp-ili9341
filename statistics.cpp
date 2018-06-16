@@ -31,6 +31,29 @@ uint64_t statsBytesTransferred = 0;
 int frameSkipTimeHistorySize = 0;
 uint64_t frameSkipTimeHistory[FRAME_HISTORY_MAX_SIZE] = {};
 
+#ifdef FRAME_COMPLETION_TIME_STATISTICS
+
+#define FRAME_COMPLETION_HISTORY_MAX_SIZE 480
+uint64_t frameCompletionTimeHistory[FRAME_COMPLETION_HISTORY_MAX_SIZE] = {};
+int frameCompletionTimeHistorySize = 0;
+
+int statsFrameIntervalsY[FRAME_COMPLETION_HISTORY_MAX_SIZE] = {};
+int statsFrameIntervalsSize = 0;
+int statsTargetFrameRateY = 0;
+int statsAvgFrameRateIntervalY = 0;
+
+void AddFrameCompletionTimeMarker()
+{
+  for(int i = frameCompletionTimeHistorySize; i >= 1; --i)
+    frameCompletionTimeHistory[i] = frameCompletionTimeHistory[i-1];
+  frameCompletionTimeHistory[0] = tick();
+  if (frameCompletionTimeHistorySize+1 < FRAME_COMPLETION_HISTORY_MAX_SIZE)
+    ++frameCompletionTimeHistorySize;
+}
+#else
+void AddFrameCompletionTimeMarker() {}
+#endif
+
 char dmaChannelsText[32] = {};
 char fpsText[32] = {};
 char spiUsagePercentageText[32] = {};
@@ -90,6 +113,42 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 250, 10, RGB565(31,50,31), 0);
 #endif
 
+#ifdef FRAME_COMPLETION_TIME_STATISTICS
+
+#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#define FRAMERATE_GRAPH_WIDTH gpuFrameHeight
+#define FRAMERATE_GRAPH_MIN_Y 20
+#define FRAMERATE_GRAPH_MAX_Y (DISPLAY_DRAWABLE_WIDTH - 10)
+#define AT(x,y) ((x)*(gpuFramebufferScanlineStrideBytes>>1)+(y))
+#else
+#define FRAMERATE_GRAPH_WIDTH gpuFrameWidth
+#define FRAMERATE_GRAPH_MIN_Y 20
+#define FRAMERATE_GRAPH_MAX_Y (DISPLAY_DRAWABLE_HEIGHT - 10)
+#define AT(x,y) ((y)*(gpuFramebufferScanlineStrideBytes>>1)+(x))
+#endif
+  for(int i = 0; i < MIN(statsFrameIntervalsSize, FRAMERATE_GRAPH_WIDTH); ++i)
+  {
+    int x = FRAMERATE_GRAPH_WIDTH-1-i;
+    int y = statsFrameIntervalsY[i];
+    framebuffer[AT(x, FRAMERATE_GRAPH_MIN_Y)] = RGB565(31,0,0);
+    framebuffer[AT(x, FRAMERATE_GRAPH_MIN_Y+1)] = RGB565(0,0,0);
+    framebuffer[AT(x, statsTargetFrameRateY-1)] = RGB565(0,0,0);
+    framebuffer[AT(x, statsTargetFrameRateY)] = RGB565(0,63,0);
+    framebuffer[AT(x, statsTargetFrameRateY+1)] = RGB565(0,0,0);
+    framebuffer[AT(x, statsAvgFrameRateIntervalY-1)] = RGB565(0,0,0);
+    framebuffer[AT(x, statsAvgFrameRateIntervalY)] = RGB565(29,50,7);
+    framebuffer[AT(x, statsAvgFrameRateIntervalY+1)] = RGB565(0,0,0);
+    framebuffer[AT(x, y-3)] = RGB565(0,0,0);
+    framebuffer[AT(x, y-2)] = RGB565(0,0,0);
+    framebuffer[AT(x, y-1)] = RGB565(5,11,5);
+    framebuffer[AT(x, y)] = RGB565(31,63,31);
+    framebuffer[AT(x, y+1)] = RGB565(5,11,5);
+    framebuffer[AT(x, y+2)] = RGB565(0,0,0);
+    framebuffer[AT(x, y+3)] = RGB565(0,0,0);
+    framebuffer[AT(x, FRAMERATE_GRAPH_MAX_Y-1)] = RGB565(0,0,0);
+    framebuffer[AT(x, FRAMERATE_GRAPH_MAX_Y)] = RGB565(15,30,15);
+  }
+#endif
 }
 
 void RefreshStatisticsOverlayText()
@@ -97,6 +156,25 @@ void RefreshStatisticsOverlayText()
   uint64_t now = tick();
   uint64_t elapsed = now - statsLastPrint;
   if (elapsed < STATISTICS_REFRESH_INTERVAL) return;
+
+#ifdef FRAME_COMPLETION_TIME_STATISTICS
+  if (frameCompletionTimeHistorySize > 1)
+  {
+    uint64_t maxInterval = 4000000 / TARGET_FRAME_RATE;
+    uint64_t accumIntervals = 0;
+    for(int i = 0; i < frameCompletionTimeHistorySize-1; ++i)
+    {
+      uint64_t interval = MIN(frameCompletionTimeHistory[i] - frameCompletionTimeHistory[i+1], maxInterval);
+      accumIntervals += interval;
+      statsFrameIntervalsY[i] = FRAMERATE_GRAPH_MAX_Y - (FRAMERATE_GRAPH_MAX_Y - FRAMERATE_GRAPH_MIN_Y) * interval / maxInterval;
+    }
+    statsTargetFrameRateY = FRAMERATE_GRAPH_MAX_Y - (FRAMERATE_GRAPH_MAX_Y - FRAMERATE_GRAPH_MIN_Y) * (1000000/TARGET_FRAME_RATE) / maxInterval;
+    statsAvgFrameRateIntervalY = FRAMERATE_GRAPH_MAX_Y - (FRAMERATE_GRAPH_MAX_Y - FRAMERATE_GRAPH_MIN_Y) * (accumIntervals / (frameCompletionTimeHistorySize-1)) / maxInterval;
+    statsFrameIntervalsSize = frameCompletionTimeHistorySize-1;
+  }
+  else
+    statsFrameIntervalsSize = 0;
+#endif
 
   UpdateStatisticsNumbers();
 
