@@ -144,7 +144,7 @@ uint64_t PredictNextFrameArrivalTime()
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
 // The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
 // main menu <-> ingame transitions
-#define HISTOGRAM_SIZE 120
+#define HISTOGRAM_SIZE (4*TARGET_FRAME_RATE)
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
 uint64_t lastFramePollTime = 0;
@@ -162,11 +162,20 @@ int eagerFastTrackToSnapshottingFramesEarlierFactor = 0;
 // Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
 #define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
 
+// If framerate has been high for a long time, but then drops to e.g. 1fps, it would take a very very long time to fill up
+// the histogram of these 1fps intervals, so fbcp-ili9341 would take a long time to go back to sleep. Introduce a max age
+// for histogram entries of 10 seconds, so that if refresh rate drops from 60hz to 1hz, then after 10 seconds the histogram
+// buffer will have only these 1fps intervals in it, and it will go to sleep to yield CPU time.
+#define HISTOGRAM_MAX_SAMPLE_AGE 10000000
+
 void AddHistogramSample(uint64_t t)
 {
   frameArrivalTimes[frameArrivalTimesTail] = t;
   frameArrivalTimesTail = (frameArrivalTimesTail + 1) % HISTOGRAM_SIZE;
   if (histogramSize < HISTOGRAM_SIZE) ++histogramSize;
+
+  // Expire too old entries.
+  while(t - GET_HISTOGRAM(histogramSize-1) > HISTOGRAM_MAX_SAMPLE_AGE) --histogramSize;
 }
 
 int cmp(const void *e1, const void *e2) { return *(uint64_t*)e1 > *(uint64_t*)e2; }
@@ -182,18 +191,20 @@ uint64_t EstimateFrameRateInterval()
   // High sleep mode hacks to save battery when ~idle: (These could be removed with an event based VideoCore display refresh API)
   uint64_t timeNow = tick();
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
+  // "Deep sleep" options: is user leaves the device with static content on screen for a long time.
   if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return 500000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
-  if (timeNow - mostRecentFrame > 1000000) return 250000; // if it's been more than a second since last seen update, assume interval of 100ms.
-  if (histogramSize < 10) return 1000000/TARGET_FRAME_RATE; // Frame histogram needs to have at least a few entries to bootstrap
+  if (timeNow - mostRecentFrame > 5000000) return lastFramePollTime + 100000; // if it's been more than 5 seconds since last seen update, assume interval of 100ms.
+#endif
+
 #ifndef SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES
   return 1000000/TARGET_FRAME_RATE;
-#endif
-#endif
+#else
+  if (histogramSize < 2) return 100000; // Frame histogram needs to have at least a few entries to bootstrap, if there's very few, either refresh rate is low, or fbcp-ili9341 just started
 
   // Look at the intervals of all previous arrived frames, and take some percentile value as our expected current frame rate
   uint64_t intervals[HISTOGRAM_SIZE-1];
   for(int i = 0; i < histogramSize-1; ++i)
-    intervals[i] = GET_HISTOGRAM(i) - GET_HISTOGRAM(i+1);
+    intervals[i] = MIN(100000, GET_HISTOGRAM(i) - GET_HISTOGRAM(i+1));
   qsort(intervals, histogramSize-1, sizeof(uint64_t), cmp);
 
   // Apply frame rate increase discovery factor to both the percentile position and the interpreted frame interval to catch
@@ -201,9 +212,13 @@ uint64_t EstimateFrameRateInterval()
   int percentile = (histogramSize-1)*2/5;
   percentile = MAX(percentile-eagerFastTrackToSnapshottingFramesEarlierFactor, 0);
   uint64_t interval = intervals[percentile];
-  interval = MAX((int64_t)interval - eagerFastTrackToSnapshottingFramesEarlierFactor*500, (int64_t)1000000/TARGET_FRAME_RATE);
+  // Fast tracking #1: Always look at two most recent frames in addition to the ~40% percentile and follow whichever is a shorter period of time
+  interval = MIN(interval, GET_HISTOGRAM(0) - GET_HISTOGRAM(1));
+  // Fast tracking #2: if we seem to always get a new frame whenever snapshotting, we should try speeding up
+  interval = MAX((int64_t)interval - eagerFastTrackToSnapshottingFramesEarlierFactor*1000, (int64_t)1000000/TARGET_FRAME_RATE);
   if (interval > 100000) interval = 100000;
   return MAX(interval, 1000000/TARGET_FRAME_RATE);
+#endif
 }
 
 uint64_t PredictNextFrameArrivalTime()
@@ -213,8 +228,9 @@ uint64_t PredictNextFrameArrivalTime()
   // High sleep mode hacks to save battery when ~idle: (These could be removed with an event based VideoCore display refresh API)
   uint64_t timeNow = tick();
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
+  // "Deep sleep" options: is user leaves the device with static content on screen for a long time.
   if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
-  if (timeNow - mostRecentFrame > 100000) return lastFramePollTime + 100000; // if it's been more than 100ms since last seen update, assume interval of 100ms.
+  if (timeNow - mostRecentFrame > 5000000) return lastFramePollTime + 100000; // if it's been more than 5 seconds since last seen update, assume interval of 100ms.
 #endif
   uint64_t interval = EstimateFrameRateInterval();
 
@@ -242,9 +258,7 @@ void *gpu_polling_thread(void*)
     uint64_t earliestNextFrameArrivaltime = lastNewFrameReceivedTime + 1000000/TARGET_FRAME_RATE - earlyFramePrediction;
     uint64_t now = tick();
     if (earliestNextFrameArrivaltime > now)
-    {
       usleep(earliestNextFrameArrivaltime - now);
-    }
 #endif
 
 #if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
@@ -252,9 +266,7 @@ void *gpu_polling_thread(void*)
     int64_t timeToSleep = nextFrameArrivalTime - tick();
     const int64_t minimumSleepTime = 150; // Don't sleep if the next frame is expected to arrive in less than this much time
     if (timeToSleep > minimumSleepTime)
-    {
       usleep(timeToSleep - minimumSleepTime);
-    }
 #endif
 
     uint64_t t0 = tick();
