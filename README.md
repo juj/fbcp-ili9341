@@ -127,8 +127,8 @@ Pros:
 Cons:
  - uses excessive CPU time, around +34% more CPU than the vsync signal based approach
  - uses excessive GPU time, the VideoCore GPU will be downscaling and snapshotting redundant frames
- - when content changes frame rate, has difficulties to adjust quickly - takes time
- - requires a continously running background thread, not feasible on Pi Zero
+ - when content changes frame rate, has difficulties to adjust quickly - takes a bit of time to ramp to the new frame rate
+ - requires a continuously running background thread, not feasible on Pi Zero
 
 **4. gpu polling thread without sleeping (bottom right)**, unset `#define USE_GPU_VSYNC` and unset `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
 
@@ -142,7 +142,7 @@ Pros:
 Cons:
  - uses ridiculously much CPU overhead, a full 100% core
  - uses ridiculously much GPU overhead, the VideoCore GPU will be very busy downscaling and snapshotting redundant frames
- - requires a continously running background thread, not feasible on Pi Zero
+ - requires a continuously running background thread, not feasible on Pi Zero
 
 
 ### Known Issues
