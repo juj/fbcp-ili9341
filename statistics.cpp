@@ -118,12 +118,12 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
 #ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
 #define FRAMERATE_GRAPH_WIDTH gpuFrameHeight
 #define FRAMERATE_GRAPH_MIN_Y 20
-#define FRAMERATE_GRAPH_MAX_Y (DISPLAY_DRAWABLE_WIDTH - 10)
+#define FRAMERATE_GRAPH_MAX_Y (gpuFrameWidth - 10)
 #define AT(x,y) ((x)*(gpuFramebufferScanlineStrideBytes>>1)+(y))
 #else
 #define FRAMERATE_GRAPH_WIDTH gpuFrameWidth
 #define FRAMERATE_GRAPH_MIN_Y 20
-#define FRAMERATE_GRAPH_MAX_Y (DISPLAY_DRAWABLE_HEIGHT - 10)
+#define FRAMERATE_GRAPH_MAX_Y (gpuFrameHeight - 10)
 #define AT(x,y) ((y)*(gpuFramebufferScanlineStrideBytes>>1)+(x))
 #endif
   for(int i = 0; i < MIN(statsFrameIntervalsSize, FRAMERATE_GRAPH_WIDTH); ++i)
