@@ -415,7 +415,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | ------ | ---- | ---------- | ---------- | ------------------- | ------------------ | -----------|
 | [Adafruit PiTFT](https://www.adafruit.com/product/1601) | 2.8" | 240x320 | ILI9341 | 10MHz | 294MHz/4=73.50MHz | 59.81 fps |
 | [Adafruit PiTFT](https://www.adafruit.com/product/2315) | 2.2" | 240x320 | ILI9340 | 15.15MHz | 338MHz/4=84.50MHz | 68.76 fps |
-| [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | ? | 314MHz/6=52.33MHz | 21.29 fps |
+| [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | 15.15MHz | 314MHz/6=52.33MHz | 21.29 fps |
 | [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 360MHz/20=18.00MHz | 91.55 fps |
 | [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 255MHz/8=31.88MHz | 12.97 fps |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
