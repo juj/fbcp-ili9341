@@ -410,6 +410,12 @@ If the colors looks off in some other fashion, it is possible that the display i
 
 fbcp-ili9341 needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64, which has been observed to not leave enough memory for fbcp-ili9341 if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
 
+#### It does not build, or crashes, or something is obviously out of date
+
+As the number of supported displays, Raspberry Pi device models, Raspbian/Retropie/Lakka OS versions, accompanied C++ compiler versions and fbcp-ili9341 build options have grown in number, there is a combinatorial explosion of all possible build modes that one can put the codebase through, so it is not easy to keep every possible combo tested all the time. Something may have regressed or gotten outdated. Stay calm, and report a bug.
+
+You can also try looking through the commit history to find changes related to your configuration combo, to see if there's a mention of a known good commit in time that should work for your case. If you get an odd compiler error on `cmake` or `make` lines, those will usually be very easy to fix, as they are most of the time a result of some configurational oversight.
+
 #### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
 First, make sure the display is a 4-wire SPI and not a 3-wire one. fbcp-ili9341 does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
