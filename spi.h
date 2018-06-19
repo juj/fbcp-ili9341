@@ -195,18 +195,22 @@ typedef struct __attribute__((packed)) SPITask
 
 typedef struct SharedMemory
 {
+/*
 #ifdef USE_DMA_TRANSFERS
   volatile DMAControlBlock cb[2];
   volatile uint32_t dummyDMADestinationWriteAddress;
   volatile uint32_t dmaTxChannel, dmaRxChannel;
 #endif
+*/
   volatile uint32_t queueHead;
   volatile uint32_t queueTail;
   volatile uint32_t spiBytesQueued; // Number of actual payload bytes in the queue
   volatile uint32_t interruptsRaised;
-  volatile uintptr_t sharedMemoryBaseInPhysMemory;
-  volatile uint8_t buffer[];
+  //volatile uintptr_t sharedMemoryBaseInPhysMemory;
+//  volatile uint8_t buffer[];
 } SharedMemory;
+
+extern GpuMemory spiMem;
 
 #ifdef KERNEL_MODULE
 extern dma_addr_t spiTaskMemoryPhysical;
@@ -248,7 +252,7 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 #endif
       head = spiTaskMemory->queueHead;
     }
-    SPITask *endOfBuffer = (SPITask*)(spiTaskMemory->buffer + tail);
+    SPITask *endOfBuffer = (SPITask*)((uintptr_t)spiMem.virtualAddr + tail);
     endOfBuffer->cmd = 0; // Use cmd=0x00 to denote "end of buffer, wrap to beginning"
     __sync_synchronize();
     spiTaskMemory->queueTail = 0;
@@ -272,7 +276,7 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
     head = spiTaskMemory->queueHead;
   }
 
-  SPITask *task = (SPITask*)(spiTaskMemory->buffer + tail);
+  SPITask *task = (SPITask*)((uintptr_t)spiMem.virtualAddr + tail);
   task->size = bytes;
   return task;
 }
@@ -283,7 +287,7 @@ static inline void CommitTask(SPITask *task) // Advertises the given SPI task fr
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
   uint32_t tail = spiTaskMemory->queueTail;
 #endif
-  spiTaskMemory->queueTail = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
+  spiTaskMemory->queueTail = (uint32_t)((uint8_t*)task - (uintptr_t)spiMem.virtualAddr) + sizeof(SPITask) + task->size;
   __atomic_fetch_add(&spiTaskMemory->spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
   __sync_synchronize();
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)

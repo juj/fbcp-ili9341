@@ -26,6 +26,17 @@ typedef struct __attribute__ ((packed, aligned(4))) DMAChannelRegisterFile
   volatile uint8_t padding[216]; // Pad this structure to 256 bytes in size total for easy indexing into DMA channels.
 } DMAChannelRegisterFile;
 
+struct GpuMemory
+{
+  uint32_t allocationHandle;
+  void *virtualAddr;
+  uintptr_t busAddress;
+  uint32_t sizeBytes;
+};
+
+GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason);
+void FreeUncachedGpuMemory(GpuMemory mem);
+
 extern int dmaTxChannel, dmaTxIrq;
 extern volatile DMAChannelRegisterFile *dmaTx; // DMA channel allocated to sending to SPI
 extern int dmaRxChannel, dmaRxIrq;

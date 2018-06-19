@@ -57,7 +57,7 @@
 
 // If defined, progressive updating is always used (at the expense of slowing down refresh rate if it's
 // too much for the display to handle)
-// #define NO_INTERLACING
+#define NO_INTERLACING
 
 #if (defined(FREEPLAYTECH_WAVESHARE32B) || (defined(ILI9341) && SPI_BUS_CLOCK_DIVISOR <= 4)) && defined(USE_DMA_TRANSFERS) && !defined(NO_INTERLACING)
 // The Freeplaytech CM3/Zero displays actually only have a visible display resolution of 302x202, instead of
@@ -74,7 +74,7 @@
 // a new application frame to be displayed, the same frame will be rendered again for its other field.
 // Define this option to disable this behavior, in which case when an interlaced frame is rendered, the 
 // remaining other field half of the image will never be uploaded.
-// #define THROTTLE_INTERLACING
+#define THROTTLE_INTERLACING
 
 // The ILI9486 has to resort to interlacing as a rule rather than exception, and it works much smoother
 // when applying throttling to interlacing, so enable it by default there.
@@ -84,7 +84,7 @@
 
 // If defined, DMA usage is foremost used to save power consumption and CPU usage. If not defined,
 // DMA usage is tailored towards maximum performance.
-// #define ALL_TASKS_SHOULD_DMA
+ #define ALL_TASKS_SHOULD_DMA
 
 // If defined, screen updates are performed in strictly one update rectangle per frame.
 // This reduces CPU consumption at the expense of sending more pixels. You can try enabling this
@@ -92,7 +92,7 @@
 // Useful on Pi Zero W and ILI9341 to conserve CPU power. If this is not defined, the default much
 // more powerful diffing algorithm is used, which sends far fewer pixels each frame, (but that diffing
 // costs more CPU time). Enabling this requires that ALL_TASKS_SHOULD_DMA is also enabled.
-// #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
+ #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
 
 #if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS)
 // These are prerequisites for good performance on Pi Zero

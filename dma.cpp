@@ -34,14 +34,6 @@ int dmaRxIrq = 0;
 
 #define PAGE_SIZE 4096
 
-struct GpuMemory
-{
-  uint32_t allocationHandle;
-  void *virtualAddr;
-  uintptr_t busAddress;
-  uint32_t sizeBytes;
-};
-
 #define NUM_DMA_CBS 1024
 GpuMemory dmaCb, dmaSourceBuffer, dmaConstantData;
 
@@ -142,7 +134,9 @@ GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason)
 #ifdef PI_ZERO
   uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT | MEM_ALLOC_FLAG_COHERENT;
 #else
-  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT;
+//  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT | MEM_ALLOC_FLAG_COHERENT;
+  uint32_t allocationFlags = MEM_ALLOC_FLAG_COHERENT;
+//  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT;
 #endif
   mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/allocationFlags);
   if (!mem.allocationHandle) FATAL_ERROR("Failed to allocate GPU memory! Try increasing gpu_mem allocation in /boot/config.txt. See https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md");

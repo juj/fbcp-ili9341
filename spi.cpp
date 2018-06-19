@@ -222,7 +222,7 @@ void RunSPITask(SPITask *task)
 }
 #endif
 
-
+GpuMemory spiMem;
 SharedMemory *spiTaskMemory = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
@@ -234,13 +234,13 @@ SPITask *GetTask() // Returns the first task in the queue, called in worker thre
   uint32_t head = spiTaskMemory->queueHead;
   uint32_t tail = spiTaskMemory->queueTail;
   if (head == tail) return 0;
-  SPITask *task = (SPITask*)(spiTaskMemory->buffer + head);
+  SPITask *task = (SPITask*)((uintptr_t)spiMem.virtualAddr + head);
   if (task->cmd == 0) // Wrapped around?
   {
     spiTaskMemory->queueHead = 0;
     __sync_synchronize();
     if (tail == 0) return 0;
-    task = (SPITask*)spiTaskMemory->buffer;
+    task = (SPITask*)spiMem.virtualAddr;
   }
   return task;
 }
@@ -248,7 +248,7 @@ SPITask *GetTask() // Returns the first task in the queue, called in worker thre
 void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called in worker thread
 {
   __atomic_fetch_sub(&spiTaskMemory->spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
-  spiTaskMemory->queueHead = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
+  spiTaskMemory->queueHead = (uint32_t)((uintptr_t)task - (uintptr_t)spiMem.virtualAddr) + sizeof(SPITask) + task->size;
   __sync_synchronize();
 }
 
@@ -393,7 +393,10 @@ int InitSPI()
   LOG("Allocated DMA memory: mem: %p, phys: %p", spiTaskMemory, (void*)spiTaskMemoryPhysical);
   memset((void*)spiTaskMemory, 0, SHARED_MEMORY_SIZE);
 #else
-  spiTaskMemory = (SharedMemory*)Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
+  spiTaskMemory = (SharedMemory*)Malloc(sizeof(SharedMemory), "spi.cpp shared task memory");
+  spiMem = AllocateUncachedGpuMemory(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
+  //spiMem.virtualAddr = Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
+//  spiTaskMemory = (SharedMemory*)spiMem.virtualAddr;
 #endif
 
   spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
@@ -468,7 +471,9 @@ void DeinitSPI()
   dma_free_writecombine(0, SHARED_MEMORY_SIZE, dmaSourceMemory, spiTaskMemoryPhysical);
   spiTaskMemoryPhysical = 0;
 #else
-  free(spiTaskMemory);
+  //free(spiTaskMemory);
+  FreeUncachedGpuMemory(spiMem);
+  //free(spiMem.virtualAddr);
 #endif
 #endif
   spiTaskMemory = 0;

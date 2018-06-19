@@ -345,8 +345,8 @@ int main()
       DiffFramebuffersToScanlineSpans(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head);
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
-    if (!interlacedUpdate)
-      MergeScanlineSpanList(head);
+//    if (!interlacedUpdate)
+  //    MergeScanlineSpanList(head);
 #endif
 
     // Submit spans

@@ -16,7 +16,7 @@
 
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
-// #define RANDOM_TEST_PATTERN
+#define RANDOM_TEST_PATTERN
 
 #ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
 #define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_HEIGHT
