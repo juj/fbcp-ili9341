@@ -3,7 +3,7 @@
 // Build options: Uncomment any of these, or set at the command line to configure:
 
 // If defined, renders a performance overlay on top of the screen
-#define STATISTICS
+// #define STATISTICS
 
 // How often the on-screen statistics is refreshed (in usecs)
 #define STATISTICS_REFRESH_INTERVAL 200000
