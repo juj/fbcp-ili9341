@@ -18,11 +18,7 @@
 // display content. Used to debug/measure performance.
 // #define RANDOM_TEST_PATTERN
 
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
-#define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_HEIGHT
-#else
-#define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_WIDTH
-#endif
+#define RANDOM_TEST_PATTERN_STRIPE_WIDTH DISPLAY_DRAWABLE_WIDTH
 
 #define RANDOM_TEST_PATTERN_FRAME_RATE 120
 
@@ -84,7 +80,7 @@ void SnapshotFramebuffer(uint16_t *destination)
   // corner of the subrectangle to capture. Therefore do dirty pointer arithmetic to adjust for this. To make this safe, videoCoreFramebuffer is allocated
   // double its needed size so that this adjusted pointer does not reference outside allocated memory (if it did, vc_dispmanx_resource_read_data() was seen
   // to randomly fail and then subsequently hang if called a second time)
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   static uint16_t *tempTransposeBuffer = 0; // Allocate as static here to keep the number of #ifdefs down a bit
   const int pixelWidth = gpuFrameHeight+excessPixelsTop+excessPixelsBottom;
   const int pixelHeight = gpuFrameWidth + excessPixelsLeft + excessPixelsRight;
@@ -105,7 +101,7 @@ void SnapshotFramebuffer(uint16_t *destination)
     printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
     exit(failed);
   }
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   // Transpose the snapshotted frame from landscape to portrait. The following takes around 0.5-1.0 msec
   // of extra CPU time, so while this improves tearing to be perhaps a bit nicer visually, it probably
   // is not good on the Pi Zero.
@@ -354,11 +350,11 @@ void InitGPU()
   int ret = vc_dispmanx_display_get_info(display, &display_info);
   if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
 
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   // Pretend that the display framebuffer would be in portrait mode for the purposes of size computation etc.
   // Snapshotting code transposes the obtained framebuffer immediately after capture from landscape to portrait to make it so.
   SWAPU32(display_info.width, display_info.height);
-  printf("DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE: Swapping width/height to update display in portrait mode to minimize tearing.\n");
+  printf("DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE: Swapping width/height to update display in portrait mode to minimize tearing.\n");
 #endif
   // We may need to scale the main framebuffer to fit the native pixel size of the display. Always want to do such scaling in aspect ratio fixed mode to not stretch the image.
   // (For non-square pixels or similar, could apply a correction factor here to fix aspect ratio)
@@ -469,7 +465,7 @@ void InitGPU()
 
   uint32_t image_prt;
   printf("Creating dispmanX resource of size %dx%d (aspect ratio=%f).\n", scaledWidth + excessPixelsLeft + excessPixelsRight, scaledHeight + excessPixelsTop + excessPixelsBottom, (double)(scaledWidth + excessPixelsLeft + excessPixelsRight) / (scaledHeight + excessPixelsTop + excessPixelsBottom));
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   screen_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, scaledHeight + excessPixelsTop + excessPixelsBottom, scaledWidth + excessPixelsLeft + excessPixelsRight, &image_prt);
   vc_dispmanx_rect_set(&rect, excessPixelsTop, excessPixelsLeft, scaledHeight, scaledWidth);
 #else

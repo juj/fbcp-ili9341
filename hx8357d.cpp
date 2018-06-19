@@ -46,7 +46,7 @@ void InitHX8357D()
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl |= MADCTL_ROTATE_180_DEGREES;
 #endif
-#if defined(DISPLAY_OUTPUT_LANDSCAPE) && !defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE)
+#if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
     madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
 #endif
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);

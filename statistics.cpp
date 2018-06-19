@@ -108,14 +108,14 @@ void DrawStatisticsOverlay(uint16_t *framebuffer)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuPollingWastedText, 222, 1, gpuPollingWastedColor, 0);
 #endif
 
-#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT >= 290) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH >= 290)
+#if (defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT >= 290) || (!defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH >= 290)
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, cpuMemoryUsedText, 250, 1, RGB565(31,50,21), 0);
   DrawText(framebuffer, gpuFrameWidth, gpuFramebufferScanlineStrideBytes, gpuFrameHeight, gpuMemoryUsedText, 250, 10, RGB565(31,50,31), 0);
 #endif
 
 #ifdef FRAME_COMPLETION_TIME_STATISTICS
 
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
 #define FRAMERATE_GRAPH_WIDTH gpuFrameHeight
 #define FRAMERATE_GRAPH_MIN_Y 20
 #define FRAMERATE_GRAPH_MAX_Y (gpuFrameWidth - 10)
@@ -273,7 +273,7 @@ void RefreshStatisticsOverlayText()
     fpsColor = 0xFFFF;
   }
 
-#if (defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT > 302) || (!defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH > 302)
+#if (defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE) && DISPLAY_DRAWABLE_HEIGHT > 302) || (!defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE) && DISPLAY_DRAWABLE_WIDTH > 302)
 #define HINTSUFFIX "MB"
 #else
 #define HINTSUFFIX ""

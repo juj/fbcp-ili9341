@@ -21,6 +21,26 @@
 #error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON or -DFREEPLAYTECH_WAVESHARE32B=ON (or contribute ports to more displays yourself)
 #endif
 
+// The native display resolution is in portrait/landscape, but we want to display in the opposite landscape/portrait orientation?
+#if ((DISPLAY_NATIVE_WIDTH < DISPLAY_NATIVE_HEIGHT && defined(DISPLAY_OUTPUT_LANDSCAPE)) || (DISPLAY_NATIVE_WIDTH > DISPLAY_NATIVE_HEIGHT && !defined(DISPLAY_OUTPUT_LANDSCAPE)))
+#define DISPLAY_SHOULD_FLIP_ORIENTATION
+#endif
+
+#if defined(DISPLAY_SHOULD_FLIP_ORIENTATION) && !defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE)
+// Need to do orientation flip, but don't want to do it on the CPU, so pretend the display dimensions are of the flipped form,
+// and use display controller initialization sequence to do the flipping
+#define DISPLAY_WIDTH DISPLAY_NATIVE_HEIGHT
+#define DISPLAY_HEIGHT DISPLAY_NATIVE_WIDTH
+#define DISPLAY_FLIP_ORIENTATION_IN_HARDWARE
+#else
+#define DISPLAY_WIDTH DISPLAY_NATIVE_WIDTH
+#define DISPLAY_HEIGHT DISPLAY_NATIVE_HEIGHT
+#endif
+
+#if !defined(DISPLAY_SHOULD_FLIP_ORIENTATION) && defined(DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE)
+#undef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
+#endif
+
 #ifndef DISPLAY_COVERED_LEFT_SIDE
 #define DISPLAY_COVERED_LEFT_SIDE 0
 #endif

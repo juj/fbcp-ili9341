@@ -52,13 +52,8 @@
 // lowest latency, perhaps 61 Hz might give least amount of tearing, although this can be quite subjective.
 #define ILI9341_UPDATE_FRAMERATE ILI9341_FRAMERATE_119_HZ
 
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 240
-#define DISPLAY_HEIGHT 320
-#else
-#define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 240
-#endif
+#define DISPLAY_NATIVE_WIDTH 240
+#define DISPLAY_NATIVE_HEIGHT 320
 
 #ifdef ADAFRUIT_ILI9341_PITFT
 #include "pitft_28r_ili9341.h"

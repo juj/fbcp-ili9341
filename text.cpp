@@ -4,7 +4,7 @@
 
 void DrawText(uint16_t *framebuffer, int framebufferWidth, int framebufferStrideBytes, int framebufferHeight, const char *text, int x, int y, uint16_t color, uint16_t bgColor)
 {
-#ifdef DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   const int W = framebufferHeight;
   const int H = framebufferWidth;
 #define AT(x, y) x*framebufferStrideBytes+y

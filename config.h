@@ -153,11 +153,11 @@
 // cycle runs in, but the scanline refresh always runs in portrait mode in these displays. Not having
 // this defined reduces CPU usage at the expense of more tearing, although it is debatable which
 // effect is better - this can be subjective. Impact is around 0.5-1.0msec of extra CPU time.
-// DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE disabled: diagonal tearing
-// DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
+// DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE disabled: diagonal tearing
+// DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
 // i.e. narrow direction)
-#if !defined(PI_ZERO) && !defined(SSD1351)
-#define DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE
+#if !defined(PI_ZERO)
+#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
 #endif
 
 // If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling

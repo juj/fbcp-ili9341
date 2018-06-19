@@ -17,18 +17,13 @@
 #define DISPLAY_WRITE_PIXELS 0x2C
 
 #ifdef ST7789
-#define DISPLAY_WIDTH 240
-#define DISPLAY_HEIGHT 240
+#define DISPLAY_NATIVE_WIDTH 240
+#define DISPLAY_NATIVE_HEIGHT 240
+#elif defined(ST7735R)
+#define DISPLAY_NATIVE_WIDTH 128
+#define DISPLAY_NATIVE_HEIGHT 160
 #else
-
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 128
-#define DISPLAY_HEIGHT 160
-#else
-#define DISPLAY_WIDTH 160
-#define DISPLAY_HEIGHT 128
-#endif
-
+#error Unknown display controller!
 #endif
 
 #define InitSPIDisplay InitST7735R

@@ -17,13 +17,8 @@ void InitHX8357D(void);
 void TurnDisplayOn(void);
 void TurnDisplayOff(void);
 
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 480
-#else
-#define DISPLAY_WIDTH 480
-#define DISPLAY_HEIGHT 320
-#endif
+#define DISPLAY_NATIVE_WIDTH 320
+#define DISPLAY_NATIVE_HEIGHT 480
 
 #define MUST_SEND_FULL_CURSOR_WINDOW
 

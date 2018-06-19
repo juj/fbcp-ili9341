@@ -12,13 +12,8 @@
 #include "waveshare35b.h"
 #endif
 
-#if defined(DISPLAY_FLIP_OUTPUT_XY_IN_SOFTWARE) || !defined(DISPLAY_OUTPUT_LANDSCAPE)
-#define DISPLAY_WIDTH 320
-#define DISPLAY_HEIGHT 480
-#else
-#define DISPLAY_WIDTH 480
-#define DISPLAY_HEIGHT 320
-#endif
+#define DISPLAY_NATIVE_WIDTH 320
+#define DISPLAY_NATIVE_HEIGHT 480
 
 // On ILI9486 the display bus commands and data are 16 bits rather than the usual 8 bits that most other controllers have.
 #define DISPLAY_SPI_BUS_IS_16BITS_WIDE
