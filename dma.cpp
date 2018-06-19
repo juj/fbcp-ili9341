@@ -435,6 +435,12 @@ void SPIDMATransfer(SPITask *task)
 
     volatile DMAControlBlock *tx = cb++;
     txData[0] = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS | (sendSize << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+    // This is really sad: we must do a memcpy to prepare for DMA controller to be able to do a memcpy. The reason for this is that the DMA source memory area must be in cache bypassing
+    // region of memory, which the SPI source ring buffer is not. It could be allocated to be so however, but bypassing the caches on the SPI ring buffer would cause a massive -51.5%
+    // profiled overall performance drop (tested on Pi3B+ and Tontec 3.5" 480x320 display on gpu test pattern, see branch non_intermediate_memcpy_for_dma). Therefore just keep doing
+    // this memcpy() to prepare for DMA to do its memcpy(), as it is faster overall. (If there was a way to map same physical memory to virtual address space twice, once cached, and
+    // another time uncached, and have writes bypass the cache and only write combine, but have reads follow the cache, then it might work without a perf hit, but not at all sure if
+    // that would be technically possible)
     memcpy((void*)(txData+1), data, sendSize);
     data += sendSize;
     tx->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
