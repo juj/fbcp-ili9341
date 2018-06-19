@@ -484,6 +484,11 @@ void InitGPU()
   // if it was, this signal is not a guaranteed edge trigger for availability of new frames.
   vc_dispmanx_vsync_callback(display, VsyncCallback, 0);
 #else
+  // Record some fake samples to frame rate histogram to fast track it to warm state.
+  uint64_t now = tick();
+  for(int i = 0; i < HISTOGRAM_SIZE; ++i)
+    AddHistogramSample(now - 1000000ULL*(HISTOGRAM_SIZE-i) / TARGET_FRAME_RATE);
+
   int rc = pthread_create(&gpuPollingThread, NULL, gpu_polling_thread, NULL); // After creating the thread, it is assumed to have ownership of the SPI bus, so no SPI chat on the main thread after this.
   if (rc != 0) FATAL_ERROR("Failed to create GPU polling thread!");
 #endif
