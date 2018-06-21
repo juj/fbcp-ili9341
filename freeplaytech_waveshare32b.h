@@ -15,10 +15,10 @@
 // The hidden area is placed under the left edge of the display horizontally, and under top and bottom edges of the display vertically, so reduce those out from the drawable area.
 // Effective display area is then 320-18=302 pixels horizontally, and 202 pixels vertically (in landscape direction).
 
-// These numbers are specified in portrait mode (240x320 direction).
-#define DISPLAY_COVERED_TOP_SIDE 18
-#define DISPLAY_COVERED_LEFT_SIDE 9
-#define DISPLAY_COVERED_RIGHT_SIDE 29
-#define DISPLAY_COVERED_BOTTOM_SIDE 0
+// The meaning of top/left/right/bottom here should be interpreted as the display being oriented in its native direction (which is portrait mode for ILI9341, 240x320 direction).
+#define DISPLAY_NATIVE_COVERED_TOP_SIDE 18
+#define DISPLAY_NATIVE_COVERED_LEFT_SIDE 9
+#define DISPLAY_NATIVE_COVERED_RIGHT_SIDE 29
+#define DISPLAY_NATIVE_COVERED_BOTTOM_SIDE 0
 
 #endif
