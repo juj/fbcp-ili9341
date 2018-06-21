@@ -437,7 +437,7 @@ Second is the consideration about display speed. Below is a performance chart of
 
 In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display controller is rated to run at. The *Obtained Bus Speed* column lists the fastest SPI bus speed that was achieved in practice, and the `core_freq` BCM Core speed and SPI Clock Divider `CDIV` setting that was used to achieve that rate. Note how most display controllers can generally be driven much faster than what they are officially rated at in their spec sheets.
 
-The *Frame Rate* column shows the worst case frame rate when full screen updates are being performed. This occurs for example when watching fullscreen video (that is not a flat colored cartoon). Because `fbcp-ili341` only sends over the pixels that have changed, displays such as HX8357D and ILI9486 can still be used to play many games at 60fps. Retro games work especially well.
+The *Frame Rate* column shows the worst case frame rate when full screen updates are being performed. This occurs for example when watching fullscreen video (that is not a flat colored cartoon). Because fbcp-ili9341 only sends over the pixels that have changed, displays such as HX8357D and ILI9486 can still be used to play many games at 60fps. Retro games work especially well.
 
 All the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs really slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
 
