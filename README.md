@@ -156,7 +156,7 @@ These lines hint native applications about the default display mode, and let the
 
 ##### Tuning Performance
 
-The refresh speed of the display is dictated by the clock speed of the SPI bus that the display is connected to. Due to the way the BCM2835 chip on Raspberry Pi works, there does not exist a simple `speed=xxx Mhz` option that could be set to define the bus speed. Instead, the SPI bus speed is defined by two separate parameters, the core frequency of the BCM2835 SoC (`core_freq` in `/boot/config.txt`), and the SPI peripheral `CDIV` (Clock DIVider) setting. Together, the resulting SPI bus speed is then calculated with the formula `SPI_speed=core_freq/CDIV`.
+The refresh speed of the display is dictated by the clock speed of the SPI bus that the display is connected to. Due to the way the BCM2835 chip on Raspberry Pi works, there does not exist a simple `speed=xxx Mhz` option that could be set to define the bus speed. Instead, the SPI bus speed is derived from two separate parameters: the core frequency of the BCM2835 SoC in general (`core_freq` in `/boot/config.txt`), and the SPI peripheral `CDIV` (Clock DIVider) setting. Together, the resulting SPI bus speed is then calculated with the formula `SPI_speed=core_freq/CDIV`.
 
 To optimize the display to run as fast as possible,
 
