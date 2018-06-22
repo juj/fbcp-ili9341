@@ -17,14 +17,30 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   uint16_t *scanline = framebuffer;
   uint16_t *prevScanline = prevFramebuffer;
 
+  const int WidthAligned4 = (uint32_t)gpuFrameWidth & ~3u;
   while(minY < gpuFrameHeight)
   {
-    for(int x = 0; x < gpuFrameWidth; ++x)
-      if (scanline[x] != prevScanline[x])
+    int x = 0;
+    // diff 4 pixels at a time
+    for(; x < WidthAligned4; x += 4)
+    {
+      uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
+      if (diff)
+      {
+        minX = x + (__builtin_ctz(diff) >> 4);
+        goto found_top;
+      }
+    }
+    // tail unaligned 0-3 pixels one by one
+    for(; x < gpuFrameWidth; ++x)
+    {
+      uint16_t diff = *(scanline+x) ^ *(prevScanline+x);
+      if (diff)
       {
         minX = x;
         goto found_top;
       }
+    }
     scanline += stride;
     prevScanline += stride;
     ++minY;
@@ -39,18 +55,32 @@ found_top:
   int maxY = gpuFrameHeight-1;
   while(maxY >= minY)
   {
-    for(int x = gpuFrameWidth-1; x >= 0; --x)
+    int x = gpuFrameWidth-1;
+    // tail unaligned 0-3 pixels one by one
+    for(; x >= WidthAligned4; --x)
+    {
       if (scanline[x] != prevScanline[x])
       {
         maxX = x;
         goto found_bottom;
-      }      
+      }
+    }
+    // diff 4 pixels at a time
+    x = x & ~3u;
+    for(; x >= 0; x -= 4)
+    {
+      uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
+      if (diff)
+      {
+        maxX = x + 3 - (__builtin_clz(diff) >> 4);
+        goto found_bottom;
+      }
+    }
     scanline -= stride;
     prevScanline -= stride;
     --maxY;
   }
 found_bottom:
-
   scanline = framebuffer + minY*stride;
   prevScanline = prevFramebuffer + minY*stride;
   int lastScanEndX = maxX;
