@@ -7,6 +7,18 @@
 
 Span *spans = 0;
 
+// Naive non-diffing functionality: just submit the whole display contents
+void NoDiffChangedRectangle(Span *&head)
+{
+  head = spans;
+  head->x = 0;
+  head->endX = head->lastScanEndX = gpuFrameWidth;
+  head->y = 0;
+  head->endY = gpuFrameHeight;
+  head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
+  head->next = 0;
+}
+
 void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *prevFramebuffer, Span *&head)
 {
   int minY = 0;

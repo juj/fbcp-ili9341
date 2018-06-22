@@ -94,6 +94,11 @@
 // costs more CPU time). Enabling this requires that ALL_TASKS_SHOULD_DMA is also enabled.
 // #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
 
+// If defined, screen updates are performend without performing diffing at all, i.e. by doing
+// full updates. This is very lightweight on CPU, but excessive on the SPI bus. Enabling this
+// requires that ALL_TASKS_SHOULD_DMA is also enabled.
+// #define UPDATE_FRAMES_WITHOUT_DIFFING
+
 #if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS)
 // These are prerequisites for good performance on Pi Zero
 #ifndef ALL_TASKS_SHOULD_DMA
