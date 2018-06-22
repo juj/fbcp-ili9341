@@ -176,7 +176,9 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 
 - The option `#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE` does cause a bit of extra CPU usage, so disabling it will lighten up the CPU load a bit.
 
-- If your SPI display bus is able to run really fast in comparison to the size of the display and the amount of content changing on the screen, you can try enabling `#define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF` to reduce CPU usage at the expense of increasing the number of bytes sent over the bus. This has been observed to have a big effect on Pi Zero, so is worth checking out especially there.
+- If your SPI display bus is able to run really fast in comparison to the size of the display and the amount of content changing on the screen, you can try enabling `#define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF` option in `config.h` to reduce CPU usage at the expense of increasing the number of bytes sent over the bus. This has been observed to have a big effect on Pi Zero, so is worth checking out especially there.
+
+- If the SPI display bus is able to run really really really fast (or you don't care about frame rate, but just about low CPU usage), you can try enabling `#define UPDATE_FRAMES_WITHOUT_DIFFING` option in `config.h` to forgo the adaptive delta diffing option altogether. This will revert to naive full frame updates for absolutely minimum overall CPU usage.
 
 - The option `#define RUN_WITH_REALTIME_THREAD_PRIORITY` can be enabled to make the driver run at realtime process priority. This can lock up the system however, but still made available for advanced experimentation.
 
