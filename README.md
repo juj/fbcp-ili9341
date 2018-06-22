@@ -398,7 +398,7 @@ If the colors looks off in some other fashion, it is possible that the display i
 
 #### Failed to allocate GPU memory!
 
-fbcp-ili9341 needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64, which has been observed to not leave enough memory for fbcp-ili9341 if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
+fbcp-ili9341 needs a few megabytes of GPU memory to function if DMA transfers are enabled. The [gpu_mem](https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md) boot config option dictates how much of the Pi's memory area is allocated to the GPU. By default this is 64MB, which has been observed to not leave enough memory for fbcp-ili9341 if HDMI is run at 1080p. If this error happens, try increasing GPU memory to e.g. 128MB by adding a line `gpu_mem=128` in `/boot/config.txt`.
 
 #### It does not build, or crashes, or something is obviously out of date
 
