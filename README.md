@@ -121,14 +121,6 @@ On the CMake command line, the following options can be configured:
 
 In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to remove the `#define STATISTICS` line in `config.h`.
 
-##### Tuning CPU Usage
-
-Diffing frames to produce minimal SPI communication task lists takes up some performance, so expect to see a moderate backround CPU load coming from fbcp-ili9341. The default build configuration of fbcp-ili9341 is optimized towards maximum performance on the Pi 3, and towards battery saving on the Pi Zero. Check out the build option `ALL_TASKS_SHOULD_DMA` in `config.h`. Enabling that option in the build optimizes towards saving battery at the expense of performance, whereas building with that option disabled causes fbcp-ili9341 to strive towards maximum screen refresh rate.
-
-To further reduce power consumption beyond enabling `ALL_TASKS_SHOULD_DMA`, try enabling `USE_GPU_VSYNC`, and/or lowering `TARGET_FRAME_RATE` in `display.h` - set it to e.g. 40 or 30. Currently Pi Zero will not likely reach 60fps except in NES games.
-
-If https://github.com/raspberrypi/userland/issues/440 is resolved in the future, CPU usage on Pi Zero is possible to improve.
-
 ##### Launching the display driver at startup
 
 To set up the driver to launch at startup, edit the file `/etc/rc.local` in `sudo` mode, and add a line
@@ -166,7 +158,7 @@ To optimize the display to run as fast as possible,
 
 3. Perhaps a bit counterintuitively, **underclock** the core. Setting a **smaller** core frequency than the default turbo 400MHz can enable using a smaller clock divider to get a higher resulting SPI bus speed. For example, if with default `core_freq=400` SPI `CDIV=8` works (resulting in SPI bus speed `400MHz/8=50MHz`), but `CDIV=6` does not (`400MHz/6=66.67MHz` was too much), you can try lowering `core_freq=360` and set `CDIV=6` to get an effective SPI bus speed of `360MHz/6=60MHz`, a middle ground between the two that might perhaps work. Balancing `core_freq=` and `CDIV` options allows one to find the maximum SPI bus speed up to the last few kHz that the display controller can tolerate. One can also try the opposite direction and overclock, but that does then of course have all the issues that come along when overclocking. Underclocking does have the drawback that it makes the Pi run slower overall, so this is certainly a tradeoff.
 
-##### Reducing CPU Usage
+##### Tuning CPU Usage
 
 On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is allowed to use. The default build settings are tuned to maximize the display refresh rate at the expense of power consumption on Pi 3B. On Pi Zero, the opposite is done, i.e. by default the driver optimizes for battery saving instead of maximal display update speed. The following options can be controlled to balance between these two:
 
