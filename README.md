@@ -290,7 +290,7 @@ Be aware of the following limitations:
 
 ### Statistics Overlay
 
-By default fbcp-ili9341 builds with a statistics overlay enabled because - admit it - when you first run, you like to geek out on all the knobs and numbers anyways. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Remove the `#define STATISTICS` option in `config.h` to disable displaying the statistics.
+By default fbcp-ili9341 builds with a statistics overlay enabled. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Build with CMake option `-DSTATISTICS=0` to disable displaying the statistics. You can also try building with CMake option `-DSTATISTICS=2` to show a more detailed frame delivery timings histogram view, see screenshot and video above.
 
 ### FAQ and Troubleshooting
 
