@@ -294,7 +294,7 @@ Yes, it does, although not quite as well as on Pi 3B. If you'd like it to run be
 
 #### The driver works well, but image is upside down. How do I rotate the display?
 
-Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the display to show up the other way around. Another option is to utilize a `/boot/config.txt` option [display_rotate=2](https://www.raspberrypi.org/forums/viewtopic.php?t=120793)
+Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the SPI display to show up the other way around, while keeping the HDMI connected display orientation unchanged. Another option is to utilize a `/boot/config.txt` option [display_rotate=2](https://www.raspberrypi.org/forums/viewtopic.php?t=120793), which rotates both the SPI output and the HDMI output.
 
 #### How exactly do I edit the build options to e.g. remove the statistics lines or change some other option?
 
