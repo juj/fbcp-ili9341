@@ -440,8 +440,19 @@ int main()
       for(int y = i->y; y < i->endY; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
       {
         int endX = (y + 1 == i->endY) ? i->lastScanEndX : i->endX;
-        for(int x = i->x; x < endX; ++x) *data++ = __builtin_bswap16(scanline[x]); // Write out the RGB565 data, swapping to big endian byte order for the SPI bus
+        int x = i->x;
+        while(x < endX && (x&1)) *data++ = __builtin_bswap16(scanline[x++]);
+        while(x < (endX&~1U))
+        {
+          uint32_t u = *(uint32_t*)(scanline+x);
+          *(uint32_t*)data = ((u & 0xFF00FF00U) >> 8) | ((u & 0x00FF00FFU) << 8);
+          data += 2;
+          x += 2;
+        }
+        while(x < endX) *data++ = __builtin_bswap16(scanline[x++]);
+#ifndef UPDATE_FRAMES_WITHOUT_DIFFING // If not diffing, no need to maintain prev frame.
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
+#endif
       }
       CommitTask(task);
       IN_SINGLE_THREADED_MODE_RUN_TASK();
