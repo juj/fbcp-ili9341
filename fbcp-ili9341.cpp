@@ -339,7 +339,7 @@ int main()
 
 #if defined(ALL_TASKS_SHOULD_DMA) && defined(UPDATE_FRAMES_WITHOUT_DIFFING)
     NoDiffChangedRectangle(head);
-#elif defined(ALL_TASKS_SHOULD_DMA) && defined(UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF))
+#elif defined(ALL_TASKS_SHOULD_DMA) && defined(UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF)
     DiffFramebuffersToSingleChangedRectangle(framebuffer[0], framebuffer[1], head);
 #else
     // Collect all spans in this image
