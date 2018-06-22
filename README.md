@@ -57,121 +57,17 @@ The following LCD displays have been tested:
  - [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
  - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
 
-### About Input Latency
-
-A pleasing aspect of fbcp-ili9341 is that it introduces very little latency overhead: on a 119Hz refreshing ILI9341 display, [fbcp-ili9341 gets pixels as response from GPIO input to screen in well less than 16.66 msecs](https://www.youtube.com/watch?v=EOICdpjiqv8) time. I only have a 120fps recording camera, so can't easily measure delays shorter than that, but rough statistical estimate of slow motion video footage suggests this delay could be as low as 2-3 msecs, dominated by the ~8.4msecs panel refresh rate of the ILI9341.
-
-This does not mean that overall input to display latency in games would be so immediate. Briefly testing a NES emulated game in Retropie suggests a total latency of about 60-80 msecs. This latency is caused by the NES game emulator overhead and extra latency added by Linux, DispmanX and GPU rendering, and [GPU framebuffer snapshotting](https://github.com/raspberrypi/userland/issues/440). (If you ran fbcp-ili9341 as a static library bypassing DispmanX and the GPU stack, directly linking your GPIO input and application logic into fbcp-ili9341, you would be able to get down to this few msecs of overall latency, like shown in the above GPIO input video)
-
-Interestingly, fbcp-ili9341 is about [~33msecs faster than a cheap 3.5" KeDei HDMI display](https://www.youtube.com/watch?v=1yvmvv0KtNs). I do not know if this is a result of the KeDei HDMI display specifically introducing extra latency, or if all HDMI displays connected to the Pi would have similar latency overhead. An interesting question is also how SPI would compare with DPI connected displays on the Pi.
-
-### About Tearing
-
-Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does actually expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
-
-You can however choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE` in `config.h`. When this option is enabled, fbcp-ili9341 produces straight line tearing, and consumes a tiny few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing. Check out the video [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8) to see in slow motion videos how these two tearing modes look like.
-
-Another option that is known to affect how the tearing artifact looks like is the internal panel refresh rate. For ILI9341 displays this refresh rate can be adjusted in `ili9341.h`, and this can be set to range between `ILI9341_FRAMERATE_61_HZ` and `ILI9341_FRAMERATE_119_HZ` (default). Slower refresh rates produce less tearing, but have higher input-to-display latency, whereas higher refresh rates will result in the opposite. Again visually the resulting effect is a bit subjective.
-
-To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that [cheap small 3.5" HDMI displays such as KeDei do also tear](https://www.youtube.com/watch?v=1yvmvv0KtNs) - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
-
-### About Smoothness
-
-Having no vsync is not all bad though, since with the lack of vsync, SPI displays have the opportunity to obtain smoother animation on content that is not updating at 60Hz. It is possible that content on the SPI display will stutter even less than what DPI or HDMI displays on the Pi can currently provide (although I have not been able to test this in detail, except for the KeDei case above).
-
-The main option that affects smoothness of display updates is the `#define USE_GPU_VSYNC` line in `config.h`. If this is enabled, then the internal Pi GPU HDMI vsync clock is used to drive frames onto the display. The Pi GPU clock runs at a fixed rate that is independent of the content. This rate can be discovered by running `tvservice -s` on the Pi console, and is usually 59Hz or 60Hz. If your application renders at this rate, animation will look smooth, but if not, there will be stuttering. For example playing a PAL NES game that updates at 50Hz with HDMI clock set at 60Hz will cause bad microstuttering in video output if `#define USE_GPU_VSYNC` is enabled.
-
-If `USE_GPU_VSYNC` is disabled, then a busy spinning GPU frame snapshotting thread is used to drive the updates. This will produce smoother animation in content that does not maintain a fixed 60Hz rate. Especially in OpenTyrian, a game that renders at a fixed 36fps and has slowly scrolling scenery, the stuttering caused by `USE_GPU_VSYNC` is particularly visible. Running on Pi 3B without `USE_GPU_VSYNC` enabled produces visually smoother looking scrolling on an Adafruit 2.8" ILI9341 PiTFT set to update at 119Hz, compared to enabling `USE_GPU_VSYNC` on the same setup. Without `USE_GPU_VSYNC`, the dedicated frame polling loop thread "finds" the 36Hz update rate of the game, and then pushes pixels to the display at this exact rate. This works nicely since SPI displays disregard vsync - the result is that frames are pushed out to the SPI display immediately as they become available, instead of pulling them at a fixed 60Hz rate like HDMI does.
-
-A drawback is that this kind of polling consumes more CPU time than the vsync option. The extra overhead is around +34% of CPU usage compared to the vsync method. It also requires using a background thread, and because of this, it is not feasible to be used on a single core Pi Zero. [If this polling was unnecessary](https://github.com/raspberrypi/userland/issues/440), this mode would also work on a Pi Zero, and without the added +34% CPU overhead on Pi 3B. See the Known Issues section below for more details.
-
-![PiTFT display](/framerate_smoothness.jpg "Smoothness statistics")
-
-There are two other main options that affect frame delivery timings, `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` and `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`. Check out the video [fbcp-ili9341 frame delivery smoothness test on Pi 3B and Adafruit ILI9341 at 119Hz](https://youtu.be/IqzKT33Rwjc) for a detailed side by side comparison of these different modes. The conclusions drawn from the four tested scenarios in the video are:
-
-**1. vc_dispmanx_vsync_callback() (top left)**, set `#define USE_GPU_VSYNC` and unset `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES`:
-
-This mode uses the DispmanX HDMI vsync signal callback to drive frames to the display.
-
-Pros:
- - least CPU overhead if content runs at 60Hz
- - works on Pi Zero
-
-Cons:
- - animation stutters badly on content that is < 60Hz  but also on 60Hz content
- - excessive +1 vsync interval input to display latency
- - wastes CPU overhead if content runs at less than 60Hz
-
-**2. vc_dispmanx_vsync_callback() + self synchronization (top right)**, set `#define USE_GPU_VSYNC` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES`:
-
-This mode uses the GPU vsync signal, but also aims to find and synchronize to the edge trigger when content is producing frames. This is the default build mode on Pi Zero.
-
-Pros:
- - works on Pi Zero
- - reduced input to display latency compared to previous mode
- - content that runs at 60hz stutters less
-
-Cons:
- - content that runs < 60 Hz still stutters badly
- - wastes CPU overhead if content runs at less than 60Hz
- - consumes slightly extra CPU compared to previous method
-
-**3. gpu polling thread + sleep heuristic (bottom left)**, unset `#define USE_GPU_VSYNC` and set `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
-
-This mode runs a dedicated background thread that drives frames from the GPU to the SPI display. This is the default build mode on Pi 3B.
-
-Pros:
- - smooth animation at all content frame rates
- - low input to display latency
-
-Cons:
- - uses excessive CPU time, around +34% more CPU than the vsync signal based approach
- - uses excessive GPU time, the VideoCore GPU will be downscaling and snapshotting redundant frames
- - when content changes frame rate, has difficulties to adjust quickly - takes a bit of time to ramp to the new frame rate
- - requires a continuously running background thread, not feasible on Pi Zero
-
-**4. gpu polling thread without sleeping (bottom right)**, unset `#define USE_GPU_VSYNC` and unset `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
-
-This mode runs the dedicated GPU thread as fast as possible, without attempting to sleep CPU.
-
-Pros:
- - smoothest animation at all content frame rates
- - lowest input to display latency
- - adapts instantaneously to variable frame rate content
-
-Cons:
- - uses ridiculously much CPU overhead, a full 100% core
- - uses ridiculously much GPU overhead, the VideoCore GPU will be very busy downscaling and snapshotting redundant frames
- - requires a continuously running background thread, not feasible on Pi Zero
-
-
-### Known Issues
-
-Be aware of the following limitations:
-
-###### Specific to BCM2835
- - The codebase has been written with a hardcoded assumption of the ARM BCM2835 chip. Since it bypasses the generic drivers for SPI and GPIO, it will definitely not work out of the box on any other display controllers than the ones mentioned earlier. It might not work on other Pis than the ones mentioned earlier either. The driver also assumes it is the exclusive user of the SPI bus, which means that at the moment, touch controllers are not supported and should be disabled.
-
-###### No rendered frame delivery via events from VideoCore IV GPU
- - The codebase captures screen framebuffers by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not exist an event-based mechanism to get new frames from the GPU as they are produced. The result is inefficient and can easily cause stuttering, since different applications produce frames at different paces. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality does not exist in the current GPU driver stack. In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect. This GPU limitation is discussed at https://github.com/raspberrypi/userland/issues/440. If you'd like to see fbcp-ili9341 operation reduce latency, stuttering and power consumption, please throw a (kind!) comment or a thumbs up emoji in that bug thread to share that you care about this, and perhaps Raspberry Pi engineers might pick the improvement up on the development roadmap. If this issue is resolved, all of the `#define USE_GPU_VSYNC`, `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` hacks from the previous section could be deleted from the driver, hopefully leading to a best of all worlds scenario without drawbacks.
-
-###### Screen resize freezes DispmanX
- - Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
-
-###### CPU Turbo is needed for good SPI bus bandwidth
- - The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
-
 ### Installation
 
-Check the following topics to set up the driver.
+Check the following sections to set up the driver.
 
 ##### Boot configuration
 
-This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) framebuffer driver, so that needs to be disabled if active. That is, if your `/boot/config.txt` file has a line that looks something like `dtoverlay=pitft28r, ...`, `dtoverlay=waveshare32b, ...` or `dtoverlay=flexfb, ...`, it should be removed.
+This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) framebuffer driver, so that needs to be disabled if active. That is, if your `/boot/config.txt` file has lines that look something like `dtoverlay=pitft28r, ...`, `dtoverlay=waveshare32b, ...` or `dtoverlay=flexfb, ...`, those should be removed.
 
 This program neither utilizes the default SPI driver, so a line such as `dtparam=spi=on` in `/boot/config.txt` should also be removed so that it will not cause conflicts.
 
-Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, that should be removed as well to avoid conflicts. It would be possible to add touch support to fbcp-ili9341 if someone wants to take a stab at it.
+Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, those should be removed as well to avoid conflicts. It would be possible to add touch support to fbcp-ili9341 if someone wants to take a stab at it.
 
 ##### Building and running
 
@@ -291,6 +187,109 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 - The option `#define RUN_WITH_REALTIME_THREAD_PRIORITY` can be enabled to make the driver run at realtime process priority. This can lock up the system however, but still made available for advanced experimentation.
 
 - In `display.h` there is an option `#define TARGET_FRAME_RATE <number>`. Setting this to a smaller value, such as 30, will trade refresh rate to reduce CPU consumption.
+
+### About Input Latency
+
+A pleasing aspect of fbcp-ili9341 is that it introduces very little latency overhead: on a 119Hz refreshing ILI9341 display, [fbcp-ili9341 gets pixels as response from GPIO input to screen in well less than 16.66 msecs](https://www.youtube.com/watch?v=EOICdpjiqv8) time. I only have a 120fps recording camera, so can't easily measure delays shorter than that, but rough statistical estimate of slow motion video footage suggests this delay could be as low as 2-3 msecs, dominated by the ~8.4msecs panel refresh rate of the ILI9341.
+
+This does not mean that overall input to display latency in games would be so immediate. Briefly testing a NES emulated game in Retropie suggests a total latency of about 60-80 msecs. This latency is caused by the NES game emulator overhead and extra latency added by Linux, DispmanX and GPU rendering, and [GPU framebuffer snapshotting](https://github.com/raspberrypi/userland/issues/440). (If you ran fbcp-ili9341 as a static library bypassing DispmanX and the GPU stack, directly linking your GPIO input and application logic into fbcp-ili9341, you would be able to get down to this few msecs of overall latency, like shown in the above GPIO input video)
+
+Interestingly, fbcp-ili9341 is about [~33msecs faster than a cheap 3.5" KeDei HDMI display](https://www.youtube.com/watch?v=1yvmvv0KtNs). I do not know if this is a result of the KeDei HDMI display specifically introducing extra latency, or if all HDMI displays connected to the Pi would have similar latency overhead. An interesting question is also how SPI would compare with DPI connected displays on the Pi.
+
+### About Tearing
+
+Unfortunately a limitation of SPI connected displays is that the VSYNC line signal is not available on the display controllers when they are running in SPI mode, so it is not possible to do vsync locked updates even if the SPI bus bandwidth on the display was fast enough. For example, the 4 ILI9341 displays I have can all be run faster than 75MHz so SPI bus bandwidth-wise all of them would be able to update a full frame in less than a vsync interval, but it is not possible to synchronize the updates to vsync since the display controllers do not report it. (If you do know of a display that does actually expose a vsync clock signal even in SPI mode, you can try implementing support to locking on to it)
+
+You can however choose between two distinct types of tearing artifacts: *straight line tearing* and *diagonal tearing*. Whichever looks better is a bit subjective, which is why both options exist. I prefer the straight line tearing artifact, it seems to be less intrusive than the diagonal tearing one. To toggle this, edit the option `#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE` in `config.h`. When this option is enabled, fbcp-ili9341 produces straight line tearing, and consumes a tiny few % more CPU power. By default Pi 3B builds with straight line tearing, and Pi Zero with the faster diagonal tearing. Check out the video [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8) to see in slow motion videos how these two tearing modes look like.
+
+Another option that is known to affect how the tearing artifact looks like is the internal panel refresh rate. For ILI9341 displays this refresh rate can be adjusted in `ili9341.h`, and this can be set to range between `ILI9341_FRAMERATE_61_HZ` and `ILI9341_FRAMERATE_119_HZ` (default). Slower refresh rates produce less tearing, but have higher input-to-display latency, whereas higher refresh rates will result in the opposite. Again visually the resulting effect is a bit subjective.
+
+To get tearing free updates, you should use a DPI display, or a good quality HDMI display. Beware that [cheap small 3.5" HDMI displays such as KeDei do also tear](https://www.youtube.com/watch?v=1yvmvv0KtNs) - that is, even if they are controlled via HDMI, they don't actually seem to implement VSYNC timed internal operation.
+
+### About Smoothness
+
+Having no vsync is not all bad though, since with the lack of vsync, SPI displays have the opportunity to obtain smoother animation on content that is not updating at 60Hz. It is possible that content on the SPI display will stutter even less than what DPI or HDMI displays on the Pi can currently provide (although I have not been able to test this in detail, except for the KeDei case above).
+
+The main option that affects smoothness of display updates is the `#define USE_GPU_VSYNC` line in `config.h`. If this is enabled, then the internal Pi GPU HDMI vsync clock is used to drive frames onto the display. The Pi GPU clock runs at a fixed rate that is independent of the content. This rate can be discovered by running `tvservice -s` on the Pi console, and is usually 59Hz or 60Hz. If your application renders at this rate, animation will look smooth, but if not, there will be stuttering. For example playing a PAL NES game that updates at 50Hz with HDMI clock set at 60Hz will cause bad microstuttering in video output if `#define USE_GPU_VSYNC` is enabled.
+
+If `USE_GPU_VSYNC` is disabled, then a busy spinning GPU frame snapshotting thread is used to drive the updates. This will produce smoother animation in content that does not maintain a fixed 60Hz rate. Especially in OpenTyrian, a game that renders at a fixed 36fps and has slowly scrolling scenery, the stuttering caused by `USE_GPU_VSYNC` is particularly visible. Running on Pi 3B without `USE_GPU_VSYNC` enabled produces visually smoother looking scrolling on an Adafruit 2.8" ILI9341 PiTFT set to update at 119Hz, compared to enabling `USE_GPU_VSYNC` on the same setup. Without `USE_GPU_VSYNC`, the dedicated frame polling loop thread "finds" the 36Hz update rate of the game, and then pushes pixels to the display at this exact rate. This works nicely since SPI displays disregard vsync - the result is that frames are pushed out to the SPI display immediately as they become available, instead of pulling them at a fixed 60Hz rate like HDMI does.
+
+A drawback is that this kind of polling consumes more CPU time than the vsync option. The extra overhead is around +34% of CPU usage compared to the vsync method. It also requires using a background thread, and because of this, it is not feasible to be used on a single core Pi Zero. [If this polling was unnecessary](https://github.com/raspberrypi/userland/issues/440), this mode would also work on a Pi Zero, and without the added +34% CPU overhead on Pi 3B. See the Known Issues section below for more details.
+
+![PiTFT display](/framerate_smoothness.jpg "Smoothness statistics")
+
+There are two other main options that affect frame delivery timings, `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` and `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`. Check out the video [fbcp-ili9341 frame delivery smoothness test on Pi 3B and Adafruit ILI9341 at 119Hz](https://youtu.be/IqzKT33Rwjc) for a detailed side by side comparison of these different modes. The conclusions drawn from the four tested scenarios in the video are:
+
+**1. vc_dispmanx_vsync_callback() (top left)**, set `#define USE_GPU_VSYNC` and unset `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES`:
+
+This mode uses the DispmanX HDMI vsync signal callback to drive frames to the display.
+
+Pros:
+ - least CPU overhead if content runs at 60Hz
+ - works on Pi Zero
+
+Cons:
+ - animation stutters badly on content that is < 60Hz  but also on 60Hz content
+ - excessive +1 vsync interval input to display latency
+ - wastes CPU overhead if content runs at less than 60Hz
+
+**2. vc_dispmanx_vsync_callback() + self synchronization (top right)**, set `#define USE_GPU_VSYNC` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES`:
+
+This mode uses the GPU vsync signal, but also aims to find and synchronize to the edge trigger when content is producing frames. This is the default build mode on Pi Zero.
+
+Pros:
+ - works on Pi Zero
+ - reduced input to display latency compared to previous mode
+ - content that runs at 60hz stutters less
+
+Cons:
+ - content that runs < 60 Hz still stutters badly
+ - wastes CPU overhead if content runs at less than 60Hz
+ - consumes slightly extra CPU compared to previous method
+
+**3. gpu polling thread + sleep heuristic (bottom left)**, unset `#define USE_GPU_VSYNC` and set `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
+
+This mode runs a dedicated background thread that drives frames from the GPU to the SPI display. This is the default build mode on Pi 3B.
+
+Pros:
+ - smooth animation at all content frame rates
+ - low input to display latency
+
+Cons:
+ - uses excessive CPU time, around +34% more CPU than the vsync signal based approach
+ - uses excessive GPU time, the VideoCore GPU will be downscaling and snapshotting redundant frames
+ - when content changes frame rate, has difficulties to adjust quickly - takes a bit of time to ramp to the new frame rate
+ - requires a continuously running background thread, not feasible on Pi Zero
+
+**4. gpu polling thread without sleeping (bottom right)**, unset `#define USE_GPU_VSYNC` and unset `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
+
+This mode runs the dedicated GPU thread as fast as possible, without attempting to sleep CPU.
+
+Pros:
+ - smoothest animation at all content frame rates
+ - lowest input to display latency
+ - adapts instantaneously to variable frame rate content
+
+Cons:
+ - uses ridiculously much CPU overhead, a full 100% core
+ - uses ridiculously much GPU overhead, the VideoCore GPU will be very busy downscaling and snapshotting redundant frames
+ - requires a continuously running background thread, not feasible on Pi Zero
+
+### Known Issues
+
+Be aware of the following limitations:
+
+###### Specific to BCM2835
+ - The codebase has been written with a hardcoded assumption of the ARM BCM2835 chip. Since it bypasses the generic drivers for SPI and GPIO, it will definitely not work out of the box on any other display controllers than the ones mentioned earlier. It might not work on other Pis than the ones mentioned earlier either. The driver also assumes it is the exclusive user of the SPI bus, which means that at the moment, touch controllers are not supported and should be disabled.
+
+###### No rendered frame delivery via events from VideoCore IV GPU
+ - The codebase captures screen framebuffers by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not exist an event-based mechanism to get new frames from the GPU as they are produced. The result is inefficient and can easily cause stuttering, since different applications produce frames at different paces. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality does not exist in the current GPU driver stack. In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect. This GPU limitation is discussed at https://github.com/raspberrypi/userland/issues/440. If you'd like to see fbcp-ili9341 operation reduce latency, stuttering and power consumption, please throw a (kind!) comment or a thumbs up emoji in that bug thread to share that you care about this, and perhaps Raspberry Pi engineers might pick the improvement up on the development roadmap. If this issue is resolved, all of the `#define USE_GPU_VSYNC`, `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` hacks from the previous section could be deleted from the driver, hopefully leading to a best of all worlds scenario without drawbacks.
+
+###### Screen resize freezes DispmanX
+ - Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
+
+###### CPU Turbo is needed for good SPI bus bandwidth
+ - The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
 
 ### Statistics Overlay
 
