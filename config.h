@@ -7,7 +7,6 @@
 
 // How often the on-screen statistics is refreshed (in usecs)
 #define STATISTICS_REFRESH_INTERVAL 200000
-
 // How many usecs worth of past frame rate data do we preserve in the history buffer. Higher values
 // make the frame rate display counter smoother and respond to changes with a delay, whereas smaller
 // values can make the display fluctuate a bit erratically.

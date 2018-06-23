@@ -45,6 +45,8 @@ int excessPixelsRight = 0;
 int excessPixelsTop = 0;
 int excessPixelsBottom = 0;
 
+uint64_t lastFramePollTime = 0;
+
 pthread_t gpuPollingThread;
 
 int RoundUpToMultipleOf(int val, int multiple)
@@ -63,6 +65,7 @@ bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer
 
 void SnapshotFramebuffer(uint16_t *destination)
 {
+  lastFramePollTime = tick();
   // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
   // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
   // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
@@ -125,24 +128,110 @@ void VsyncCallback(DISPMANX_UPDATE_HANDLE_T u, void *arg)
   syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
 }
 
-uint64_t EstimateFrameRateInterval()
-{
-  return 1000000/60;
-}
-
-uint64_t PredictNextFrameArrivalTime()
-{
-  return tick() + EstimateFrameRateInterval();
-}
-
 #else // !USE_GPU_VSYNC
+
+extern volatile bool programRunning;
+
+void *gpu_polling_thread(void*)
+{
+  uint64_t lastNewFrameReceivedTime = tick();
+  while(programRunning)
+  {
+#ifdef SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
+    const int64_t earlyFramePrediction = 500;
+    uint64_t earliestNextFrameArrivaltime = lastNewFrameReceivedTime + 1000000/TARGET_FRAME_RATE - earlyFramePrediction;
+    uint64_t now = tick();
+    if (earliestNextFrameArrivaltime > now)
+      usleep(earliestNextFrameArrivaltime - now);
+#endif
+
+#if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
+    uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
+    int64_t timeToSleep = nextFrameArrivalTime - tick();
+    const int64_t minimumSleepTime = 150; // Don't sleep if the next frame is expected to arrive in less than this much time
+    if (timeToSleep > minimumSleepTime)
+      usleep(timeToSleep - minimumSleepTime);
+#endif
+
+    uint64_t t0 = tick();
+
+#ifdef RANDOM_TEST_PATTERN
+    // Generate random noise that updates each frame
+    // uint32_t randomColor = rand() % 65536;
+    static int col = 0;
+    static int barY = 0;
+    static uint64_t lastTestImage = tick();
+    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
+    now = tick();
+    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
+    {
+      col = (col + 2) & 31;
+      lastTestImage = now;
+    }
+    randomColor = randomColor | (randomColor << 16);
+    uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
+    for(int y = 0; y < gpuFrameHeight; ++y)
+    {
+      int x = 0;
+      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
+      while(x <= gpuFrameWidth>>1)
+      {
+        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
+        {
+          if (y == barY)
+            newfb[x+X] = 0xFFFFFFFF;
+          else if (y == barY+1 || y == barY-1)
+            newfb[x+X] = 0;
+          else
+            newfb[x+X] = randomColor;
+        }
+        x += XX + 6;
+      }
+      newfb += gpuFramebufferScanlineStrideBytes>>2;
+    }
+    barY = (barY + 1) % gpuFrameHeight;
+#else
+    SnapshotFramebuffer(videoCoreFramebuffer[0]);
+#endif
+    // Check the pixel contents of the snapshot to see if we actually received a new frame to render
+    bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
+    if (gotNewFramebuffer)
+    {
+      lastNewFrameReceivedTime = t0;
+      AddHistogramSample(lastNewFrameReceivedTime);
+    }
+
+    uint64_t t1 = tick();
+    if (!gotNewFramebuffer)
+    {
+#ifdef STATISTICS
+      __atomic_fetch_add(&timeWastedPollingGPU, t1-t0, __ATOMIC_RELAXED);
+#endif
+      // We did not get a new frame - halve the eager fast tracking factor geometrically, we are probably
+      // near synchronized to the update rate of the content.
+      eagerFastTrackToSnapshottingFramesEarlierFactor /= 2;
+      continue;
+    }
+    else
+    {
+      // We got a new framebuffer, so linearly increase the driving rate to snapshot next framebuffer a bit earlier, in case
+      // our update rate is too slow for the content.
+      ++eagerFastTrackToSnapshottingFramesEarlierFactor;
+      memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
+      __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
+      syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
+    }
+  }
+  pthread_exit(0);
+}
+
+#endif // ~USE_GPU_VSYNC
 
 // Since we are polling for received GPU frames, run a histogram to predict when the next frame will arrive.
 // The histogram needs to be sufficiently small as to not cause a lag when frame rate suddenly changes on e.g.
 // main menu <-> ingame transitions
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
-uint64_t lastFramePollTime = 0;
 int histogramSize = 0;
 
 // If one first runs content that updates at e.g. 24fps, a video perhaps, the frame rate histogram will lock to that update
@@ -237,108 +326,6 @@ uint64_t PredictNextFrameArrivalTime()
   if (timeNow - timeOfPreviousMissedFrame < interval/3 && timeOfPreviousMissedFrame > mostRecentFrame) return timeNow;
   else return nextFrameArrivalTime;
 }
-
-extern volatile bool programRunning;
-
-void *gpu_polling_thread(void*)
-{
-  uint64_t lastNewFrameReceivedTime = tick();
-  while(programRunning)
-  {
-#ifdef SAVE_BATTERY_BY_SLEEPING_UNTIL_TARGET_FRAME
-    const int64_t earlyFramePrediction = 500;
-    uint64_t earliestNextFrameArrivaltime = lastNewFrameReceivedTime + 1000000/TARGET_FRAME_RATE - earlyFramePrediction;
-    uint64_t now = tick();
-    if (earliestNextFrameArrivaltime > now)
-      usleep(earliestNextFrameArrivaltime - now);
-#endif
-
-#if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
-    uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
-    int64_t timeToSleep = nextFrameArrivalTime - tick();
-    const int64_t minimumSleepTime = 150; // Don't sleep if the next frame is expected to arrive in less than this much time
-    if (timeToSleep > minimumSleepTime)
-      usleep(timeToSleep - minimumSleepTime);
-#endif
-
-    uint64_t t0 = tick();
-
-#ifdef RANDOM_TEST_PATTERN
-    // Generate random noise that updates each frame
-    // uint32_t randomColor = rand() % 65536;
-    static int col = 0;
-    static int barY = 0;
-    static uint64_t lastTestImage = tick();
-    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
-    now = tick();
-    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
-    {
-      col = (col + 2) & 31;
-      lastTestImage = now;
-    }
-    randomColor = randomColor | (randomColor << 16);
-    uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
-    for(int y = 0; y < gpuFrameHeight; ++y)
-    {
-      int x = 0;
-      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
-      while(x <= gpuFrameWidth>>1)
-      {
-        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
-        {
-          if (y == barY)
-            newfb[x+X] = 0xFFFFFFFF;
-          else if (y == barY+1 || y == barY-1)
-            newfb[x+X] = 0;
-          else
-            newfb[x+X] = randomColor;
-        }
-        x += XX + 6;
-      }
-      newfb += gpuFramebufferScanlineStrideBytes>>2;
-    }
-    barY = (barY + 1) % gpuFrameHeight;
-#else
-    SnapshotFramebuffer(videoCoreFramebuffer[0]);
-#endif
-
-#ifndef USE_GPU_VSYNC
-    lastFramePollTime = t0;
-#endif
-
-    // Check the pixel contents of the snapshot to see if we actually received a new frame to render
-    bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
-    if (gotNewFramebuffer)
-    {
-      lastNewFrameReceivedTime = t0;
-      AddHistogramSample(lastNewFrameReceivedTime);
-    }
-
-    uint64_t t1 = tick();
-    if (!gotNewFramebuffer)
-    {
-#ifdef STATISTICS
-      __atomic_fetch_add(&timeWastedPollingGPU, t1-t0, __ATOMIC_RELAXED);
-#endif
-      // We did not get a new frame - halve the eager fast tracking factor geometrically, we are probably
-      // near synchronized to the update rate of the content.
-      eagerFastTrackToSnapshottingFramesEarlierFactor /= 2;
-      continue;
-    }
-    else
-    {
-      // We got a new framebuffer, so linearly increase the driving rate to snapshot next framebuffer a bit earlier, in case
-      // our update rate is too slow for the content.
-      ++eagerFastTrackToSnapshottingFramesEarlierFactor;
-      memcpy(videoCoreFramebuffer[1], videoCoreFramebuffer[0], gpuFramebufferSizeBytes);
-      __atomic_fetch_add(&numNewGpuFrames, 1, __ATOMIC_SEQ_CST);
-      syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0); // Wake the main thread if it was sleeping to get a new frame
-    }
-  }
-  pthread_exit(0);
-}
-
-#endif // ~USE_GPU_VSYNC
 
 void InitGPU()
 {

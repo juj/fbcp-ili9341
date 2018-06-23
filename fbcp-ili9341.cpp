@@ -234,16 +234,24 @@ int main()
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
     bool framebufferHasNewChangedPixels = true;
+    uint64_t frameObtainedTime;
     if (gotNewFramebuffer)
     {
 #ifdef USE_GPU_VSYNC
-      static uint64_t lastFrameObtainedTime = 0;
       // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
       // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
       // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
 
-      uint64_t frameObtainedTime = tick();
+      frameObtainedTime = tick();
       uint64_t framePollingStartTime = frameObtainedTime;
+
+#if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
+    uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
+    int64_t timeToSleep = nextFrameArrivalTime - tick();
+    if (timeToSleep > 0)
+      usleep(timeToSleep);
+#endif
+
       SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
@@ -282,22 +290,14 @@ int main()
       framebufferHasNewChangedPixels = true;
 #endif
 
-      if (framebufferHasNewChangedPixels)
-      {
-        lastFrameObtainedTime = frameObtainedTime;
-        if (!displayOff)
-          RefreshStatisticsOverlayText();
-      }
-
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
+      __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
+
 #ifdef STATISTICS
       now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
-#endif
-      __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
-#ifdef STATISTICS
       uint64_t completelyUnnecessaryTimeWastedPollingGPUStop = tick();
       __atomic_fetch_add(&timeWastedPollingGPU, completelyUnnecessaryTimeWastedPollingGPUStop-completelyUnnecessaryTimeWastedPollingGPUStart, __ATOMIC_RELAXED);
 #endif
@@ -349,6 +349,20 @@ int main()
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
     if (!interlacedUpdate)
       MergeScanlineSpanList(head);
+#endif
+
+#ifdef USE_GPU_VSYNC
+    if (head) // do we have a new frame?
+    {
+      // If using vsync, this main thread is responsible for maintaining the frame histogram. If not using vsync,
+      // but instead are using a dedicated GPU thread, then that dedicated thread maintains the frame histogram,
+      // in which case this is not needed.
+      AddHistogramSample(frameObtainedTime);
+
+      // We got a new frame, so update contents of the statistics overlay as well
+      if (!displayOff)
+        RefreshStatisticsOverlayText();
+    }
 #endif
 
     // Submit spans

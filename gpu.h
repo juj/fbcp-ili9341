@@ -4,7 +4,7 @@
 
 void InitGPU(void);
 void DeinitGPU(void);
-void AddHistogramSample();
+void AddHistogramSample(uint64_t t);
 void SnapshotFramebuffer(uint16_t *destination);
 bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer);
 uint64_t EstimateFrameRateInterval(void);
@@ -35,7 +35,6 @@ struct FrameHistory
 
 extern FrameHistory frameTimeHistory[FRAME_HISTORY_MAX_SIZE];
 
-#if !defined(USE_GPU_VSYNC)
 #define HISTOGRAM_SIZE 240
 extern uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 extern uint64_t frameArrivalTimesTail;
@@ -43,4 +42,3 @@ extern int histogramSize;
 
 // Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
 #define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
-#endif
