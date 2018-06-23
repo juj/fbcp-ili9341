@@ -45,6 +45,15 @@ int excessPixelsRight = 0;
 int excessPixelsTop = 0;
 int excessPixelsBottom = 0;
 
+// If one first runs content that updates at e.g. 24fps, a video perhaps, the frame rate histogram will lock to that update
+// rate and frame snapshots are done at 24fps. Later when user quits watching the video, and returns to e.g. 60fps updated
+// launcher menu, there needs to be some mechanism that detects that update rate has now increased, and synchronizes to the
+// new update rate. If snapshots keep occurring at fixed 24fps, the increase in content update rate would go unnoticed.
+// Therefore maintain a "linear increases/geometric slowdowns" style of factor that pulls the frame snapshotting mechanism
+// to drive itself at faster rates, poking snapshots to be performed more often to discover if the content update rate is
+// more than what is currently expected.
+int eagerFastTrackToSnapshottingFramesEarlierFactor = 0;
+
 uint64_t lastFramePollTime = 0;
 
 pthread_t gpuPollingThread;
@@ -233,15 +242,6 @@ void *gpu_polling_thread(void*)
 uint64_t frameArrivalTimes[HISTOGRAM_SIZE];
 uint64_t frameArrivalTimesTail = 0;
 int histogramSize = 0;
-
-// If one first runs content that updates at e.g. 24fps, a video perhaps, the frame rate histogram will lock to that update
-// rate and frame snapshots are done at 24fps. Later when user quits watching the video, and returns to e.g. 60fps updated
-// launcher menu, there needs to be some mechanism that detects that update rate has now increased, and synchronizes to the
-// new update rate. If snapshots keep occurring at fixed 24fps, the increase in content update rate would go unnoticed.
-// Therefore maintain a "linear increases/geometric slowdowns" style of factor that pulls the frame snapshotting mechanism
-// to drive itself at faster rates, poking snapshots to be performed more often to discover if the content update rate is
-// more than what is currently expected.
-int eagerFastTrackToSnapshottingFramesEarlierFactor = 0;
 
 // If framerate has been high for a long time, but then drops to e.g. 1fps, it would take a very very long time to fill up
 // the histogram of these 1fps intervals, so fbcp-ili9341 would take a long time to go back to sleep. Introduce a max age
