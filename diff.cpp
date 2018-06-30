@@ -252,7 +252,7 @@ void MergeScanlineSpanList(Span *listHead)
       int wastedPixels = newSize - i->size - j->size;
       if (wastedPixels <= SPAN_MERGE_THRESHOLD
 #ifdef MAX_SPI_TASK_SIZE
-        && newSize*DISPLAY_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE
+        && newSize*SPI_BYTESPERPIXEL <= MAX_SPI_TASK_SIZE
 #endif
       )
       {

@@ -329,7 +329,7 @@ int main()
 #elif defined(ALWAYS_INTERLACING)
     interlacedUpdate = (numChangedPixels > 0);
 #else
-    uint32_t bytesToSend = numChangedPixels * DISPLAY_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
+    uint32_t bytesToSend = numChangedPixels * SPI_BYTESPERPIXEL + (DISPLAY_DRAWABLE_HEIGHT<<1);
     interlacedUpdate = ((bytesToSend + spiTaskMemory->spiBytesQueued) * spiUsecsPerByte > tooMuchToUpdateUsecs); // Decide whether to do interlacedUpdate - only updates half of the screen
 #endif
 
@@ -444,7 +444,7 @@ int main()
       }
 
       // Submit the span pixels
-      SPITask *task = AllocTask(i->size*DISPLAY_BYTESPERPIXEL);
+      SPITask *task = AllocTask(i->size*SPI_BYTESPERPIXEL);
       task->cmd = DISPLAY_WRITE_PIXELS;
 
       bytesTransferred += task->size+1;
@@ -455,6 +455,20 @@ int main()
       {
         int endX = (y + 1 == i->endY) ? i->lastScanEndX : i->endX;
         int x = i->x;
+#ifdef DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2
+        // Convert from R5G6B5 to R6X2G6X2B6X2 on the fly
+        while(x < endX)
+        {
+          uint16_t pixel = scanline[x++];
+          uint16_t r = (pixel >> 8) & 0xF8;
+          uint16_t g = (pixel >> 3) & 0xFC;
+          uint16_t b = (pixel << 3) & 0xF8;
+          ((uint8_t*)data)[0] = r | (r >> 5); // On red and blue color channels, need to expand 5 bits to 6 bits. Do that by duplicating the highest bit as lowest bit.
+          ((uint8_t*)data)[1] = g;
+          ((uint8_t*)data)[2] = b | (b >> 5);
+          data = (uint16_t*)((uintptr_t)data + 3);
+        }
+#else
         while(x < endX && (x&1)) *data++ = __builtin_bswap16(scanline[x++]);
         while(x < (endX&~1U))
         {
@@ -464,8 +478,9 @@ int main()
           x += 2;
         }
         while(x < endX) *data++ = __builtin_bswap16(scanline[x++]);
+#endif
 #ifndef UPDATE_FRAMES_WITHOUT_DIFFING // If not diffing, no need to maintain prev frame.
-        memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*DISPLAY_BYTESPERPIXEL);
+        memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*FRAMEBUFFER_BYTESPERPIXEL);
 #endif
       }
       CommitTask(task);

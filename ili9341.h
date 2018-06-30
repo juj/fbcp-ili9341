@@ -24,7 +24,6 @@
 // core_freq=339: CDIV=4, would result in 84.75MHz, would work most of the time, but every few minutes generated random glitched pixels.
 
 // Data specific to the ILI9341 controller
-#define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x2A
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C

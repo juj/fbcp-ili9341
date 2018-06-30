@@ -3,7 +3,6 @@
 #ifdef HX8357D
 
 // Data specific to the HX8357D controller
-#define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x2A
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C

@@ -7,6 +7,8 @@
 
 #ifdef ILI9341
 #include "ili9341.h"
+#elif defined(ILI9486L)
+#include "ili9486l.h"
 #elif defined(ILI9486)
 #include "ili9486.h"
 #elif defined(HX8357D)
@@ -72,10 +74,16 @@
 #define DISPLAY_DRAWABLE_WIDTH (DISPLAY_WIDTH-DISPLAY_COVERED_LEFT_SIDE-DISPLAY_COVERED_RIGHT_SIDE)
 #define DISPLAY_DRAWABLE_HEIGHT (DISPLAY_HEIGHT-DISPLAY_COVERED_TOP_SIDE-DISPLAY_COVERED_BOTTOM_SIDE)
 
-#define DISPLAY_SCANLINE_SIZE (DISPLAY_WIDTH*DISPLAY_BYTESPERPIXEL)
-
 #ifndef DISPLAY_SPI_DRIVE_SETTINGS
 #define DISPLAY_SPI_DRIVE_SETTINGS (0)
+#endif
+
+#ifdef DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2
+// 18 bits per pixel padded to 3 bytes
+#define SPI_BYTESPERPIXEL 3
+#else
+// 16 bits per pixel
+#define SPI_BYTESPERPIXEL 2
 #endif
 
 void ClearScreen(void);

@@ -13,7 +13,6 @@
 // , so the above obtained best refresh rate allows driving the screen at 60fps.
 
 // Data specific to the SSD1351 controller
-#define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x15
 #define DISPLAY_SET_CURSOR_Y 0x75
 #define DISPLAY_WRITE_PIXELS 0x5C

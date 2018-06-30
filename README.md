@@ -53,6 +53,7 @@ The following LCD displays have been tested:
  - [Adafruit PiTFT - Assembled 480x320 3.5" TFT+Touchscreen for Raspberry Pi](https://www.adafruit.com/product/2097) with HX8357D controller
  - [Adafruit 128x96 OLED Breakout Board - 16-bit Color 1.27" w/microSD holder](https://www.adafruit.com/product/1673) with SSD1351 controller
  - [Waveshare 3.5inch RPi LCD (B) 320*480 Resolution Touch Screen IPS TFT Display](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) with ILI9486 controller
+ - [maithoga 3.5 inch 8PIN SPI TFT LCD Color Screen with Adapter Board ILI9486](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) with **ILI9486L** controller
  - [BuyDisplay.com 320x480 Serial SPI 3.2"TFT LCD Module Display](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) with ILI9341 controller
  - [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
  - [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
@@ -112,6 +113,7 @@ On the CMake command line, the following options can be configured:
 - `-DSTATISTICS=number`: Specifies the level of overlay statistics to show on screen. 0: disabled, 1: enabled, 2: enabled, and show frame rate interval graph as well.
 - `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a Waveshare 3.5" 480x320 ILI9486 display.
 - `-DILI9486=ON`: If you have any other generic ILI9486 display, pass this directive.
+- `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have.
 - `-DUSE_DMA_TRANSFERS=OFF`: If specified, disables using DMA transfers. Pass this if DMA is giving some issues.
 - `-DDMA_TX_CHANNEL=<num>`: Specifies the DMA channel number to use for SPI send commands. Change this if you find a DMA channel conflict.
 - `-DDMA_RX_CHANNEL=<num>`: Specifies the DMA channel number to use for SPI receive commands. Change this if you find a DMA channel conflict.
@@ -422,6 +424,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | 15.15MHz | 314MHz/6=52.33MHz | 21.29 fps |
 | [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 360MHz/20=18.00MHz | 91.55 fps |
 | [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 255MHz/8=31.88MHz | 12.97 fps |
+| [maithoga TFT LCD](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) | 3.5" | 320x480 | ILI9486L | 15.15MHz | 400/8=50MHz | 13.56 fps* |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) copy #1 | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) copy #2 | 3.2" | 240x320 | ILI9341 | 10MHz | 300MHz/4=75.00MHz | 61.03 fps |
 | [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 355MHz/6=59.16MHz | 180.56 fps |
@@ -433,6 +436,8 @@ In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display 
 The *Frame Rate* column shows the worst case frame rate when full screen updates are being performed. This occurs for example when watching fullscreen video (that is not a flat colored cartoon). Because fbcp-ili9341 only sends over the pixels that have changed, displays such as HX8357D and ILI9486 can still be used to play many games at 60fps. Retro games work especially well.
 
 All the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5" 320x480 ILI9486 display runs really slow compared to its pixel resolution, ~32MHz only. See [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) for a video of this display in action. Adafruit's 320x480 3.5" HX8357D PiTFTs is ~64% faster in comparison.
+
+The ILI9486L controller based maithoga display runs a bit faster than ILI9486 WaveShare, 50MHz versus 31.88MHz, i.e. +56.8% bandwidth increase. However fps-wise maithoga reaches only 13.56 vs WaveShare 12.97 fps, because the bandwidth advantage is fully lost in pixel format differences: ILI9486L requires transmitting 24 bits per each pixel (R6G6B6 mode), whereas ILI9486 supports 16 bits per pixel R5G6B5 mode. This is reflected in the above chart refresh rate for the maithoga display (marked with a star).
 
 If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, they indeed are slow.
 

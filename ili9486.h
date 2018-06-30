@@ -3,7 +3,6 @@
 #include "config.h"
 
 // Data specific to the ILI9486 controller
-#define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x2A
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C
@@ -16,6 +15,7 @@
 #define DISPLAY_NATIVE_HEIGHT 480
 
 // On ILI9486 the display bus commands and data are 16 bits rather than the usual 8 bits that most other controllers have.
+// (On ILI9486L however the command width is 8 bits, so they are quite different)
 #define DISPLAY_SPI_BUS_IS_16BITS_WIDE
 
 // ILI9486 does not behave well if one sends partial commands, but must finish each command or the command does not apply

@@ -11,7 +11,6 @@
 // core_freq=281: CDIV=2, results in 140.50MHz, works, but oddly there is a certain shade of brown color on the ground of OpenTyrian that then starts flickering faintly red - everything else seemed fine. (At 142.5MHz very noticeable)
 
 // Data specific to the MZ61581 controller
-#define DISPLAY_BYTESPERPIXEL 2
 #define DISPLAY_SET_CURSOR_X 0x2A
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C

@@ -1,6 +1,6 @@
 #include "config.h"
 
-#ifdef ILI9486
+#if defined(ILI9486) || defined(ILI9486L)
 
 #include "spi.h"
 
@@ -34,10 +34,17 @@ void InitILI9486()
 #endif
     SPI_TRANSFER(0x11/*Sleep OUT*/);
     usleep(120*1000);
-#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
-    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x00, 0x55/*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/); // This can be switched from 0x55 to 0x66 for 18bits/pixel instead.
+
+#ifdef DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2
+    const uint8_t pixelFormat = 0x66; /*DPI(RGB Interface)=18bits/pixel, DBI(CPU Interface)=18bits/pixel*/
 #else
-    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x55/*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/); // This can be switched from 0x55 to 0x66 for 18bits/pixel instead.
+    const uint8_t pixelFormat = 0x55; /*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/
+#endif
+
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x00, pixelFormat);
+#else
+    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, pixelFormat);
 #endif
 
     // Oddly, WaveShare 3.5" (B) seems to need Display Inversion ON, whereas WaveShare 3.5" (A) seems to need Display Inversion OFF for proper image. See https://github.com/juj/fbcp-ili9341/issues/8

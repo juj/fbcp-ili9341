@@ -42,3 +42,6 @@ extern int histogramSize;
 
 // Returns Nth most recent entry in the frame times histogram, 0 = most recent, (histogramSize-1) = oldest
 #define GET_HISTOGRAM(idx) frameArrivalTimes[(frameArrivalTimesTail - 1 - (idx) + HISTOGRAM_SIZE) % HISTOGRAM_SIZE]
+
+// Source framebuffer captured from DispmanX is (currently) always 16-bits R5G6B5
+#define FRAMEBUFFER_BYTESPERPIXEL 2
