@@ -42,6 +42,7 @@ The driver has been worked on the following systems:
  - Raspberry Pi 3 Model B+ with Raspbian Stretch (GCC 6.3.0)
  - Raspberry Pi 3 Model B Rev 1.2 with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
  - Raspberry Pi Zero W with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
+ - Raspberry Pi 2 Model B
 
 ### Tested Displays
 
@@ -312,7 +313,7 @@ Likewise, the X windowing system should be configured to render to framebuffer 0
 
 #### Does fbcp-ili9341 work on Raspberry Pi 1 or Pi 2?
 
-I don't know, I don't currently have any to test. Perhaps the code does need some model specific configuration, or perhaps it might work out of the box. I only have Pi 3B, Pi 3B+, Pi Zero W and a Pi 3 Compute Module based systems to experiment on.
+I don't know, I don't currently have any to test. Perhaps the code does need some model specific configuration, or perhaps it might work out of the box. I only have Pi 3B, Pi 3B+, Pi Zero W and a Pi 3 Compute Module based systems to experiment on. Pi 2 B has been reported to work by users ([#17](https://github.com/juj/fbcp-ili9341/issues/17)).
 
 #### Does fbcp-ili9341 work on display XYZ?
 
