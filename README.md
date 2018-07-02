@@ -424,7 +424,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | [Adafruit PiTFT](https://www.adafruit.com/product/2097) | 3.5" | 320x480 | HX8357D | 15.15MHz | 314MHz/6=52.33MHz | 21.29 fps |
 | [Adafruit OLED](https://www.adafruit.com/product/1673) | 1.27" | 128x96 | SSD1351 |  20 MHz | 360MHz/20=18.00MHz | 91.55 fps |
 | [Waveshare RPi LCD (B) IPS](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) | 3.5" | 320x480 | ILI9486 | 15.15MHz | 255MHz/8=31.88MHz | 12.97 fps |
-| [maithoga TFT LCD](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) | 3.5" | 320x480 | ILI9486L | 15.15MHz | 400/8=50MHz | 13.56 fps* |
+| [maithoga TFT LCD](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) | 3.5" | 320x480 | ILI9486L | 15.15MHz | 400MHz/8=50.00MHz | 13.56 fps* |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) copy #1 | 3.2" | 240x320 | ILI9341 | 10MHz | 310MHz/4=77.50MHz | 63.07 fps |
 | [BuyDisplay.com SPI TFT](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) copy #2 | 3.2" | 240x320 | ILI9341 | 10MHz | 300MHz/4=75.00MHz | 61.03 fps |
 | [Arduino A000096 LCD](https://store.arduino.cc/arduino-lcd-screen) | 1.77" | 128x160 | ST7735R | 15.15MHz | 355MHz/6=59.16MHz | 180.56 fps |
