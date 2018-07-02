@@ -313,7 +313,7 @@ int main()
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
 #ifdef PI_ZERO
     const double timesliceToUseForScreenUpdates = 250000;
-#elif defined(ILI9486) || defined(HX8357D)
+#elif defined(ILI9486) || defined(ILI9486L) ||defined(HX8357D)
     const double timesliceToUseForScreenUpdates = 750000;
 #else
     const double timesliceToUseForScreenUpdates = 1500000;
