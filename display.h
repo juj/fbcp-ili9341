@@ -87,6 +87,12 @@
 #endif
 
 void ClearScreen(void);
+
+void TurnBacklightOn(void);
+void TurnBacklightOff(void);
+void TurnDisplayOn(void);
+void TurnDisplayOff(void);
+
 void DeinitSPIDisplay(void);
 
 #if !defined(SPI_BUS_CLOCK_DIVISOR)

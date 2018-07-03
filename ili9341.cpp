@@ -99,8 +99,7 @@ void InitILI9341()
 
 #if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
-    SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
-    SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
+    TurnBacklightOn();
 #endif
 
     // Some wonky effects to try out:
@@ -118,6 +117,14 @@ void InitILI9341()
   // And speed up to the desired operation speed finally after init is done.
   usleep(10 * 1000); // Delay a bit before restoring CLK, or otherwise this has been observed to cause the display not init if done back to back after the clear operation above.
   spi->clk = SPI_BUS_CLOCK_DIVISOR;
+}
+
+void TurnBacklightOn()
+{
+#if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
+  SET_GPIO_MODE(GPIO_TFT_BACKLIGHT, 0x01); // Set backlight pin to digital 0/1 output mode (0x01) in case it had been PWM controlled
+  SET_GPIO(GPIO_TFT_BACKLIGHT); // And turn the backlight on.
+#endif
 }
 
 void TurnBacklightOff()

@@ -171,7 +171,7 @@
 // If defined, enables code to manage the backlight.
 // #define BACKLIGHT_CONTROL
 
-#if defined(ADAFRUIT_ILI9341_PITFT) && defined(BACKLIGHT_CONTROL)
+#if defined(BACKLIGHT_CONTROL)
 
 // If enabled, the display backlight will be turned off after this many usecs of no activity on screen.
 #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY (1 * 60 * 1000000)
