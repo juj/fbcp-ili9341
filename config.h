@@ -181,7 +181,7 @@
 // If less than this much % of the screen changes per frame, the screen is considered to be inactive, and
 // the display backlight can automatically turn off, if TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY is 
 // defined.
-#define DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE (0.5 / 100.0)
+#define DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE (5.0 / 100.0)
 
 #ifndef KERNEL_MODULE
 

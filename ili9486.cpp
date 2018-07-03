@@ -142,9 +142,11 @@ void TurnDisplayOff()
 
 void TurnDisplayOn()
 {
+  TurnBacklightOff();
   QUEUE_SPI_TRANSFER(0x11/*Sleep Out*/);
   usleep(120 * 1000);
   QUEUE_SPI_TRANSFER(0x29/*Display ON*/);
+  usleep(120 * 1000);
   TurnBacklightOn();
 }
 
