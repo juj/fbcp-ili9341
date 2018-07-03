@@ -156,14 +156,13 @@ void DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFrameb
     uint16_t *scanlineEnd = scanline + gpuFrameWidth;
     while(scanline < scanlineEnd)
     {
-      uint32_t diff;
       uint16_t *spanStart;
       uint16_t *spanEnd;
       int numConsecutiveUnchangedPixels = 0;
 
       if (scanline + 1 < scanlineEnd)
       {
-        diff = (*(uint32_t *)scanline) ^ (*(uint32_t *)prevScanline);
+        uint32_t diff = (*(uint32_t *)scanline) ^ (*(uint32_t *)prevScanline);
         scanline += 2;
         prevScanline += 2;
 
@@ -185,32 +184,32 @@ void DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFrameb
           else
           {
             spanEnd = scanline - 1;
-            ++numConsecutiveUnchangedPixels;
+            numConsecutiveUnchangedPixels = 1;
+          }
+        }
+
+        // We've found a start of a span of different pixels on this scanline, now find where this span ends
+        while(scanline < scanlineEnd)
+        {
+          if (*scanline++ != *prevScanline++)
+          {
+            spanEnd = scanline;
+            numConsecutiveUnchangedPixels = 0;
+          }
+          else
+          {
+            if (++numConsecutiveUnchangedPixels > SPAN_MERGE_THRESHOLD)
+              break;
           }
         }
       }
-      else
+      else // handle the single last pixel on the row
       {
         if (*scanline++ == *prevScanline++)
-          continue;
+          break;
 
         spanStart = scanline - 1;
         spanEnd = scanline;
-      }
-
-      // We've found a start of a span of different pixels on this scanline, now find where this span ends
-      while(scanline < scanlineEnd)
-      {
-        if (*scanline++ != *prevScanline++)
-        {
-          spanEnd = scanline;
-          numConsecutiveUnchangedPixels = 0;
-        }
-        else
-        {
-          if (++numConsecutiveUnchangedPixels > SPAN_MERGE_THRESHOLD)
-            break;
-        }
       }
 
       // Submit the span update task
