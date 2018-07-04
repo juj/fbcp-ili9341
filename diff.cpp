@@ -39,7 +39,7 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
       uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
       if (diff)
       {
-        minX = x + (__builtin_ctz(diff) >> 4);
+        minX = x + (__builtin_ctzll(diff) >> 4);
         goto found_top;
       }
     }
@@ -84,7 +84,7 @@ found_top:
       uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
       if (diff)
       {
-        maxX = x + 3 - (__builtin_clz(diff) >> 4);
+        maxX = x + 3 - (__builtin_clzll(diff) >> 4);
         goto found_bottom;
       }
     }
@@ -160,7 +160,7 @@ void DiffFramebuffersToScanlineSpansFastAndCoarse4Wide(uint16_t *framebuffer, ui
     {
       if (scanline[x] != prevScanline[x])
       {
-        uint16_t *spanStart = (uint16_t *)(scanline + x);// + (__builtin_ctzll(scanline[x] ^ prevScanline[x]) >> 4);
+        uint16_t *spanStart = (uint16_t *)(scanline + x) + (__builtin_ctzll(scanline[x] ^ prevScanline[x]) >> 4);
         ++x;
 
         // We've found a start of a span of different pixels on this scanline, now find where this span ends
@@ -176,7 +176,7 @@ void DiffFramebuffersToScanlineSpansFastAndCoarse4Wide(uint16_t *framebuffer, ui
             }
             else
             {
-              spanEnd = (uint16_t *)(scanline + x);// + 1 - (__builtin_clzll(scanline[x-1] ^ prevScanline[x-1]) >> 4);
+              spanEnd = (uint16_t *)(scanline + x) + 1 - (__builtin_clzll(scanline[x-1] ^ prevScanline[x-1]) >> 4);
               ++x;
               break;
             }
