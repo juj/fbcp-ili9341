@@ -51,19 +51,23 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mf
 option(ARMV6Z "Target a Raspberry Pi with ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W)" ${DEFAULT_TO_ARMV6Z})
 if (ARMV6Z)
   message(STATUS "Enabling optimization flags that target ARMv6Z instruction set (Pi Model A, Pi Model B, Compute Module 1, Pi Zero/Zero W)")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv6z -mcpu=armv6z -mtune=armv6z -mfpu=vfpv2")
+  # Currently disabled, no test data to know if this would be faster
+#  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv6z -mcpu=armv6z -mtune=armv6z -mfpu=vfpv2")
 endif()
 
 option(ARMV7A "Target a Raspberry Pi with ARMv7-A instruction set (Pi 2B < rev 1.2)" ${DEFAULT_TO_ARMV7A})
 if (ARMV7A)
   message(STATUS "Enabling optimization flags that target ARMv7-A instruction set (Pi 2B < rev 1.2)")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=cortex-a7 -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4")
+  # Currently disabled, no test data to know if this would be faster
+#  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=cortex-a7 -mcpu=cortex-a7 -mtune=cortex-a7 -mfpu=neon-vfpv4")
 endif()
 
 option(ARMV8A "Target a Raspberry Pi with ARMv8-A instruction set (Pi 2B >= rev. 1.2, 3B, 3B+, CM3 or CM3 lite)" ${DEFAULT_TO_ARMV8A})
 if (ARMV8A)
   message(STATUS "Enabling optimization flags that target ARMv8-A instruction set (Pi 2B >= rev. 1.2, 3B, 3B+, CM3 or CM3 lite)")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a+crc -mcpu=cortex-a53 -mtune=cortex-a53 -mfpu=neon-fp-armv8")
+  # N.B. Here should be possible to set -mfpu=neon-vfpv4, though for some reason that generates really slow code, tested on gcc (Raspbian 6.3.0-18+rpi1+deb9u1) 6.3.0 20170516
+  # Currently disabled, seems to be a tiny 1-2% slower (or no difference, drown in noise)
+#  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8-a+crc -mcpu=cortex-a53 -mtune=cortex-a53")
 endif()
 
 set(GPIO_TFT_DATA_CONTROL 0 CACHE STRING "Explicitly specify the Data/Control GPIO pin (sometimes also called Register Select)")
