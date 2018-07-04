@@ -1,6 +1,6 @@
 # Introduction
 
-This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi 3 and Zero.
+This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi A, B, 2, 3 and Zero.
 
 ![PiTFT display](/example.jpg "Adafruit PiTFT 2.8 with ILI9341 controller")
 
@@ -37,12 +37,15 @@ The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usu
 
 ### Tested Devices
 
-The driver has been worked on the following systems:
+The driver has been checked to work (at least some point in the past) on the following systems:
 
  - Raspberry Pi 3 Model B+ with Raspbian Stretch (GCC 6.3.0)
  - Raspberry Pi 3 Model B Rev 1.2 with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
  - Raspberry Pi Zero W with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
  - Raspberry Pi 2 Model B
+ - Raspberry Pi B Rev. 2.0 (old board from Q4 2012, board revision ID 000e)
+
+although not all boards are actively tested on, so ymmv especially on older boards. (Bug fixes welcome, use https://elinux.org/RPi_HardwareHistory to identify which board you are running on)
 
 ### Tested Displays
 
