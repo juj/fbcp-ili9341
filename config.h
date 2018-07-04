@@ -101,6 +101,14 @@
 // requires that ALL_TASKS_SHOULD_DMA is also enabled.
 // #define UPDATE_FRAMES_WITHOUT_DIFFING
 
+// If per-pixel diffing is enabled (neither of the above two #defines are enabled), the following variable
+// controls whether to lean towards more precise pixel diffing, or faster, but coarser pixel diffing.
+// Coarse method is twice as fast than the precise method, but submits slightly more pixels. In most
+// cases it is better to use the coarse method, since the increase in pixel counts is small (~5%-10%),
+// so enabled by default. If your display is very constrained on SPI bus speed, and don't mind increased
+// CPU consumption, comment this out to use the precise algorithm.
+#define FAST_BUT_COARSE_PIXEL_DIFF
+
 #if defined(SINGLE_CORE_BOARD) && defined(USE_DMA_TRANSFERS)
 // These are prerequisites for good performance on Pi Zero
 #ifndef ALL_TASKS_SHOULD_DMA

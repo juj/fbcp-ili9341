@@ -139,7 +139,85 @@ found_right:
   head->next = 0;
 }
 
-void DiffFramebuffersToScanlineSpans(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
+void DiffFramebuffersToScanlineSpansFastAndCoarse4Wide(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
+{
+  int numSpans = 0;
+  int y = interlacedDiff ? interlacedFieldParity : 0;
+  int yInc = interlacedDiff ? 2 : 1;
+  // If doing an interlaced update, skip over every second scanline.
+  int scanlineInc = interlacedDiff ? (gpuFramebufferScanlineStrideBytes>>2) : (gpuFramebufferScanlineStrideBytes>>3);
+  uint64_t *scanline = (uint64_t *)(framebuffer + y*(gpuFramebufferScanlineStrideBytes>>1));
+  uint64_t *prevScanline = (uint64_t *)(prevFramebuffer + y*(gpuFramebufferScanlineStrideBytes>>1)); // (same scanline from previous frame, not preceding scanline)
+
+  const int W = gpuFrameWidth>>2;
+
+  Span *span = spans;
+  while(y < gpuFrameHeight)
+  {
+    uint16_t *scanlineStart = (uint16_t *)scanline;
+
+    for(int x = 0; x < W;)
+    {
+      if (scanline[x] != prevScanline[x])
+      {
+        uint16_t *spanStart = (uint16_t *)(scanline + x);// + (__builtin_ctzll(scanline[x] ^ prevScanline[x]) >> 4);
+        ++x;
+
+        // We've found a start of a span of different pixels on this scanline, now find where this span ends
+        uint16_t *spanEnd;
+        for(;;)
+        {
+          if (x < W)
+          {
+            if (scanline[x] != prevScanline[x])
+            {
+              ++x;
+              continue;
+            }
+            else
+            {
+              spanEnd = (uint16_t *)(scanline + x);// + 1 - (__builtin_clzll(scanline[x-1] ^ prevScanline[x-1]) >> 4);
+              ++x;
+              break;
+            }
+          }
+          else
+          {
+            spanEnd = scanlineStart + gpuFrameWidth;
+            break;
+          }
+        }
+
+        // Submit the span update task
+        span->x = spanStart - scanlineStart;
+        span->endX = span->lastScanEndX = spanEnd - scanlineStart;
+        span->y = y;
+        span->endY = y+1;
+        span->size = spanEnd - spanStart;
+        span->next = span+1;
+        ++span;
+        ++numSpans;
+      }
+      else
+      {
+        ++x;
+      }
+    }
+    y += yInc;
+    scanline += scanlineInc;
+    prevScanline += scanlineInc;
+  }
+
+  if (numSpans > 0)
+  {
+    head = &spans[0];
+    spans[numSpans-1].next = 0;
+  }
+  else
+    head = 0;
+}
+
+void DiffFramebuffersToScanlineSpansExact(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
 {
   int numSpans = 0;
   int y = interlacedDiff ? interlacedFieldParity : 0;

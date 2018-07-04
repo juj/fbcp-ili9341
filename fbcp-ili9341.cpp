@@ -346,7 +346,15 @@ int main()
 #else
     // Collect all spans in this image
     if (framebufferHasNewChangedPixels || prevFrameWasInterlacedUpdate)
-      DiffFramebuffersToScanlineSpans(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head);
+    {
+      // If possible, utilize a faster 4-wide pixel diffing method
+#ifdef FAST_BUT_COARSE_PIXEL_DIFF
+      if (gpuFrameWidth % 4 == 0 && gpuFramebufferScanlineStrideBytes % 8 == 0)
+        DiffFramebuffersToScanlineSpansFastAndCoarse4Wide(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head);
+      else
+#endif
+        DiffFramebuffersToScanlineSpansExact(framebuffer[0], framebuffer[1], interlacedUpdate, frameParity, head); // If disabled, or framebuffer width is not compatible, use the exact method
+    }
 
     // Merge spans together on adjacent scanlines - works only if doing a progressive update
     if (!interlacedUpdate)
