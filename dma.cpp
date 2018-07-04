@@ -139,11 +139,7 @@ GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason)
 {
   GpuMemory mem;
   mem.sizeBytes = ALIGN_UP(numBytes, PAGE_SIZE);
-#ifdef PI_ZERO
   uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT | MEM_ALLOC_FLAG_COHERENT;
-#else
-  uint32_t allocationFlags = MEM_ALLOC_FLAG_DIRECT;
-#endif
   mem.allocationHandle = Mailbox(MEM_ALLOC_MESSAGE, /*size=*/mem.sizeBytes, /*alignment=*/PAGE_SIZE, /*flags=*/allocationFlags);
   if (!mem.allocationHandle) FATAL_ERROR("Failed to allocate GPU memory! Try increasing gpu_mem allocation in /boot/config.txt. See https://www.raspberrypi.org/documentation/configuration/config-txt/memory.md");
   mem.busAddress = Mailbox(MEM_LOCK_MESSAGE, mem.allocationHandle);
