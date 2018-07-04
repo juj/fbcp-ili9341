@@ -31,11 +31,14 @@
 // #define USE_GPU_VSYNC
 
 // Always enable GPU VSync on the Pi Zero. Even though it is suboptimal and can cause stuttering, it saves battery.
-#if defined(PI_ZERO) && !defined(USE_GPU_VSYNC)
+#if defined(SINGLE_CORE_BOARD)
+
+#if !defined(USE_GPU_VSYNC)
 #define USE_GPU_VSYNC
 #endif
 
-#ifndef PI_ZERO
+#else // Multicore Pi boards (Pi 2, 3)
+
 // If defined, communication with the SPI bus is handled with a dedicated thread. On the Pi Zero, this does
 // not gain much, since it only has one hardware thread.
 #define USE_SPI_THREAD
@@ -98,7 +101,7 @@
 // requires that ALL_TASKS_SHOULD_DMA is also enabled.
 // #define UPDATE_FRAMES_WITHOUT_DIFFING
 
-#if defined(PI_ZERO) && defined(USE_DMA_TRANSFERS)
+#if defined(SINGLE_CORE_BOARD) && defined(USE_DMA_TRANSFERS)
 // These are prerequisites for good performance on Pi Zero
 #ifndef ALL_TASKS_SHOULD_DMA
 #define ALL_TASKS_SHOULD_DMA
@@ -160,7 +163,7 @@
 // DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE disabled: diagonal tearing
 // DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
 // i.e. narrow direction)
-#if !defined(PI_ZERO)
+#if !defined(SINGLE_CORE_BOARD)
 #define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
 #endif
 

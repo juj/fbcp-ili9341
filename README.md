@@ -95,7 +95,10 @@ There are generally two ways to configure build options, at CMake command line, 
 
 On the CMake command line, the following options can be configured:
 
-- `-DPI_ZERO=ON`: Pass this option if you are running on a Pi Zero. If not present, Pi 3 Model B is assumed.
+- `-DSINGLE_CORE_BOARD=ON`: Pass this option if you are running on a Pi that has only one hardware thread (Pi Model A, Pi Model B, Compute Module 1, Pi Zero/Zero W). If not present, autodetected.
+- `-DARMV6Z=ON`: Pass this option to specifically optimize for ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W). If not present, autodetected.
+- `-DARMV7A=ON`: Pass this option to specifically optimize for ARMv7-A instruction set (Pi 2B < rev 1.2). If not present, autodetected.
+- `-DARMV8A=ON`: Pass this option to specifically optimize for ARMv8-A instruction set (Pi 2B >= rev. 1.2, 3B, 3B+, CM3 or CM3 lite). If not present, autodetected.
 - `-DADAFRUIT_ILI9341_PITFT=ON`: If you are running on the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display, pass this flag.
 - `-DFREEPLAYTECH_WAVESHARE32B=ON`: If you are running on the [Freeplay CM3 or Zero](https://www.freeplaytech.com/product/freeplay-cm3-diy-kit/) device, pass this flag.
 - `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag. When this flag is passed, you must also specify the flags `-DGPIO_TFT_DATA_CONTROL=number` and `-DGPIO_TFT_DATA_CONTROL=number` below.

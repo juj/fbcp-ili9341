@@ -313,7 +313,7 @@ int main()
     // If too many pixels have changed on screen, drop adaptively to interlaced updating to keep up the frame rate.
     double inputDataFps = 1000000.0 / EstimateFrameRateInterval();
     double desiredTargetFps = MAX(1, MIN(inputDataFps, TARGET_FRAME_RATE));
-#ifdef PI_ZERO
+#ifdef SINGLE_CORE_BOARD
     const double timesliceToUseForScreenUpdates = 250000;
 #elif defined(ILI9486) || defined(ILI9486L) ||defined(HX8357D)
     const double timesliceToUseForScreenUpdates = 750000;
