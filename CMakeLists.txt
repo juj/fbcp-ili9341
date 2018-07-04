@@ -33,7 +33,7 @@ if (BOARD_REVISION MATCHES "(0002)|(0003)|(0004)|(0005)|(0006)|(0007)|(0008)|(00
 elseif(BOARD_REVISION MATCHES "(a01041)|(a21041)")
 	message(STATUS "Detected this board to be a Pi 2 Model B < rev 1.2 with ARMv7-A instruction set CPU.")
 	set(DEFAULT_TO_ARMV7A ON)
-elseif(BOARD_REVISION MATCHES "(a02082)|(a22082)")
+elseif(BOARD_REVISION MATCHES "(a02082)|(a22082)|(a020d3)")
 	message(STATUS "Detected this Pi to be one of: Pi 2B rev. 1.2, 3B, 3B+, CM3 or CM3 lite, with 4 hardware cores and ARMv8-A instruction set CPU.")
 	set(DEFAULT_TO_ARMV8A ON)
 else()
