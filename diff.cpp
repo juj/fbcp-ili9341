@@ -15,7 +15,7 @@ void NoDiffChangedRectangle(Span *&head)
   head->endX = head->lastScanEndX = gpuFrameWidth;
   head->y = 0;
   head->endY = gpuFrameHeight;
-  head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
+  head->size = gpuFrameWidth*gpuFrameHeight;
   head->next = 0;
 }
 

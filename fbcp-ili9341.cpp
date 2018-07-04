@@ -489,7 +489,7 @@ int main()
         }
         while(x < endX) *data++ = __builtin_bswap16(scanline[x++]);
 #endif
-#ifndef UPDATE_FRAMES_WITHOUT_DIFFING // If not diffing, no need to maintain prev frame.
+#if !(defined(ALL_TASKS_SHOULD_DMA) && defined(UPDATE_FRAMES_WITHOUT_DIFFING)) // If not diffing, no need to maintain prev frame.
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*FRAMEBUFFER_BYTESPERPIXEL);
 #endif
       }
