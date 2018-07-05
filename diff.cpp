@@ -19,7 +19,8 @@ void NoDiffChangedRectangle(Span *&head)
   head->next = 0;
 }
 
-// Coarse diffing of two framebuffers with tight stride, 16 pixels at a time (reports coarse result back aligned down to 8 pixels boundary)
+// Coarse diffing of two framebuffers with tight stride, 16 pixels at a time
+// Finds the first changed pixel, coarse result aligned down to 8 pixels boundary
 static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, uint16_t *framebufferEnd)
 {
   uint16_t *endPtr;
@@ -61,12 +62,66 @@ static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, 
     "b done\n"
 
   "end:\n"
-    "sub r1, r1, #16\n" // ldmia r1! increments r1 after load, so subtract back the last increment, which shoots past the first changed pixels
+    "sub r1, r1, #16\n" // ldmia r1! increments r1 after load, so subtract back the last increment in order to not shoot past the first changed pixels
 
   "done:\n"
     "mov %[endPtr], r1\n" // output endPtr back to C code
     : [endPtr]"=r"(endPtr)
     : [framebuffer]"r"(framebuffer), [prevFramebuffer]"r"(prevFramebuffer), [framebufferEnd]"r"(framebufferEnd)
+    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"
+  );
+  return endPtr - framebuffer;
+}
+
+// Same as coarse_linear_diff, but finds the last changed pixel in linear order instead of first, i.e.
+// Finds the last changed pixel, coarse result aligned up to 8 pixels boundary
+static int coarse_backwards_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, uint16_t *framebufferEnd)
+{
+  uint16_t *endPtr;
+  asm volatile(
+    "mov r0, %[framebufferBegin]\n" // r0 <- pointer to beginning of current framebuffer
+    "mov r1, %[framebuffer]\n"   // r1 <- current framebuffer (starting from end of framebuffer)
+    "mov r2, %[prevFramebuffer]\n" // r2 <- framebuffer of previous frame (starting from end of framebuffer)
+
+  "start2:\n"
+    "pld [r1, #-128]\n" // preload data caches for both current and previous framebuffers 128 bytes ahead of time
+    "pld [r2, #-128]\n"
+
+    "ldmdb r1!, {r3,r4,r5,r6}\n" // load 4x32-bit elements (8 pixels) of current framebuffer
+    "ldmdb r2!, {r7,r8,r9,r10}\n" // load corresponding 4x32-bit elements (8 pixels) of previous framebuffer
+    "cmp r3, r7\n" // compare all 8 pixels if they are different
+    "bne end2\n" // if we found a difference, we are done
+    "cmp r4, r8\n"
+    "bne end2\n"
+    "cmp r5, r9\n"
+    "bne end2\n"
+    "cmp r6, r10\n"
+    "bne end2\n"
+
+    // Unroll once for another set of 4x32-bit elements. On Raspberry Pi Zero, data cache line is 32 bytes in size, so one iteration
+    // of the loop computes a single data cache line, with preloads in place at the top.
+    "ldmdb r1!, {r3,r4,r5,r6}\n"
+    "ldmdb r2!, {r7,r8,r9,r10}\n"
+    "cmp r3, r7\n"
+    "bne end2\n"
+    "cmp r4, r8\n"
+    "bne end2\n"
+    "cmp r5, r9\n"
+    "bne end2\n"
+    "cmp r6, r10\n"
+    "bne end2\n"
+
+    "cmp r0, r1\n" // framebuffer == framebufferEnd? did we finish through the array?
+    "bne start2\n"
+    "b done2\n"
+
+  "end2:\n"
+    "add r1, r1, #16\n" // ldmdb r1! decrements r1 before load, so add back the last decrement in order to not shoot past the first changed pixels
+
+  "done2:\n"
+    "mov %[endPtr], r1\n" // output endPtr back to C code
+    : [endPtr]"=r"(endPtr)
+    : [framebuffer]"r"(framebufferEnd), [prevFramebuffer]"r"(prevFramebuffer+(framebufferEnd-framebuffer)), [framebufferBegin]"r"(framebuffer)
     : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"
   );
   return endPtr - framebuffer;
@@ -78,11 +133,10 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   int minX = -1;
 
   const int stride = gpuFramebufferScanlineStrideBytes>>1; // Stride as uint16 elements.
+  const int WidthAligned4 = (uint32_t)gpuFrameWidth & ~3u;
 
   uint16_t *scanline = framebuffer;
   uint16_t *prevScanline = prevFramebuffer;
-
-  const int WidthAligned4 = (uint32_t)gpuFrameWidth & ~3u;
 
   static const bool framebufferSizeCompatibleWithCoarseDiff = gpuFramebufferScanlineStrideBytes == gpuFrameWidth*2 && gpuFramebufferScanlineStrideBytes*gpuFrameHeight % 32 == 0;
   if (framebufferSizeCompatibleWithCoarseDiff)
@@ -130,39 +184,54 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   }
 found_top:
 
-  scanline = framebuffer + (gpuFrameHeight - 1)*stride;
-  prevScanline = prevFramebuffer + (gpuFrameHeight - 1)*stride; // (same scanline from previous frame, not preceding scanline)
-
   int maxX = -1;
   int maxY = gpuFrameHeight-1;
-  while(maxY >= minY)
+
+  if (framebufferSizeCompatibleWithCoarseDiff)
   {
-    int x = gpuFrameWidth-1;
-    // tail unaligned 0-3 pixels one by one
-    for(; x >= WidthAligned4; --x)
+    int numPixels = gpuFrameWidth*gpuFrameHeight;
+    int firstDiff = coarse_backwards_linear_diff(framebuffer, prevFramebuffer, framebuffer + numPixels);
+    // Coarse diff computes a diff at 8 adjacent pixels at a time, and returns the point to the 8-pixel aligned coordinate where the pixels began to differ.
+    // Compute the precise diff position here.
+    while(firstDiff > 0 && framebuffer[firstDiff] == prevFramebuffer[firstDiff]) --firstDiff;
+    maxX = firstDiff % gpuFrameWidth;
+    maxY = firstDiff / gpuFrameWidth;
+  }
+  else
+  {
+    scanline = framebuffer + (gpuFrameHeight - 1)*stride;
+    prevScanline = prevFramebuffer + (gpuFrameHeight - 1)*stride; // (same scanline from previous frame, not preceding scanline)
+
+    while(maxY >= minY)
     {
-      if (scanline[x] != prevScanline[x])
+      int x = gpuFrameWidth-1;
+      // tail unaligned 0-3 pixels one by one
+      for(; x >= WidthAligned4; --x)
       {
-        maxX = x;
-        goto found_bottom;
+        if (scanline[x] != prevScanline[x])
+        {
+          maxX = x;
+          goto found_bottom;
+        }
       }
-    }
-    // diff 4 pixels at a time
-    x = x & ~3u;
-    for(; x >= 0; x -= 4)
-    {
-      uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
-      if (diff)
+      // diff 4 pixels at a time
+      x = x & ~3u;
+      for(; x >= 0; x -= 4)
       {
-        maxX = x + 3 - (__builtin_clzll(diff) >> 4);
-        goto found_bottom;
+        uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
+        if (diff)
+        {
+          maxX = x + 3 - (__builtin_clzll(diff) >> 4);
+          goto found_bottom;
+        }
       }
+      scanline -= stride;
+      prevScanline -= stride;
+      --maxY;
     }
-    scanline -= stride;
-    prevScanline -= stride;
-    --maxY;
   }
 found_bottom:
+
   scanline = framebuffer + minY*stride;
   prevScanline = prevFramebuffer + minY*stride;
   int lastScanEndX = maxX;
