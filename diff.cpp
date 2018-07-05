@@ -19,6 +19,59 @@ void NoDiffChangedRectangle(Span *&head)
   head->next = 0;
 }
 
+// Coarse diffing of two framebuffers with tight stride, 16 pixels at a time (reports coarse result back aligned down to 8 pixels boundary)
+static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, uint16_t *framebufferEnd)
+{
+  uint16_t *endPtr;
+  asm volatile(
+    "mov r0, %[framebufferEnd]\n" // r0 <- pointer to end of current framebuffer
+    "mov r1, %[framebuffer]\n"   // r1 <- current framebuffer
+    "mov r2, %[prevFramebuffer]\n" // r2 <- framebuffer of previous frame
+
+  "start:\n"
+    "pld [r1, #128]\n" // preload data caches for both current and previous framebuffers 128 bytes ahead of time
+    "pld [r2, #128]\n"
+
+    "ldmia r1!, {r3,r4,r5,r6}\n" // load 4x32-bit elements (8 pixels) of current framebuffer
+    "ldmia r2!, {r7,r8,r9,r10}\n" // load corresponding 4x32-bit elements (8 pixels) of previous framebuffer
+    "cmp r3, r7\n" // compare all 8 pixels if they are different
+    "bne end\n" // if we found a difference, we are done
+    "cmp r4, r8\n"
+    "bne end\n"
+    "cmp r5, r9\n"
+    "bne end\n"
+    "cmp r6, r10\n"
+    "bne end\n"
+
+    // Unroll once for another set of 4x32-bit elements. On Raspberry Pi Zero, data cache line is 32 bytes in size, so one iteration
+    // of the loop computes a single data cache line, with preloads in place at the top.
+    "ldmia r1!, {r3,r4,r5,r6}\n"
+    "ldmia r2!, {r7,r8,r9,r10}\n"
+    "cmp r3, r7\n"
+    "bne end\n"
+    "cmp r4, r8\n"
+    "bne end\n"
+    "cmp r5, r9\n"
+    "bne end\n"
+    "cmp r6, r10\n"
+    "bne end\n"
+
+    "cmp r0, r1\n" // framebuffer == framebufferEnd? did we finish through the array?
+    "bne start\n"
+    "b done\n"
+
+  "end:\n"
+    "sub r1, r1, #16\n" // ldmia r1! increments r1 after load, so subtract back the last increment, which shoots past the first changed pixels
+
+  "done:\n"
+    "mov %[endPtr], r1\n" // output endPtr back to C code
+    : [endPtr]"=r"(endPtr)
+    : [framebuffer]"r"(framebuffer), [prevFramebuffer]"r"(prevFramebuffer), [framebufferEnd]"r"(framebufferEnd)
+    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"
+  );
+  return endPtr - framebuffer;
+}
+
 void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *prevFramebuffer, Span *&head)
 {
   int minY = 0;
@@ -30,34 +83,51 @@ void DiffFramebuffersToSingleChangedRectangle(uint16_t *framebuffer, uint16_t *p
   uint16_t *prevScanline = prevFramebuffer;
 
   const int WidthAligned4 = (uint32_t)gpuFrameWidth & ~3u;
-  while(minY < gpuFrameHeight)
+
+  static const bool framebufferSizeCompatibleWithCoarseDiff = gpuFramebufferScanlineStrideBytes == gpuFrameWidth*2 && gpuFramebufferScanlineStrideBytes*gpuFrameHeight % 32 == 0;
+  if (framebufferSizeCompatibleWithCoarseDiff)
   {
-    int x = 0;
-    // diff 4 pixels at a time
-    for(; x < WidthAligned4; x += 4)
-    {
-      uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
-      if (diff)
-      {
-        minX = x + (__builtin_ctzll(diff) >> 4);
-        goto found_top;
-      }
-    }
-    // tail unaligned 0-3 pixels one by one
-    for(; x < gpuFrameWidth; ++x)
-    {
-      uint16_t diff = *(scanline+x) ^ *(prevScanline+x);
-      if (diff)
-      {
-        minX = x;
-        goto found_top;
-      }
-    }
-    scanline += stride;
-    prevScanline += stride;
-    ++minY;
+    int numPixels = gpuFrameWidth*gpuFrameHeight;
+    int firstDiff = coarse_linear_diff(framebuffer, prevFramebuffer, framebuffer + numPixels);
+    if (firstDiff == numPixels)
+      return; // No pixels changed, nothing to do.
+    // Coarse diff computes a diff at 8 adjacent pixels at a time, and returns the point to the 8-pixel aligned coordinate where the pixels began to differ.
+    // Compute the precise diff position here.
+    while(framebuffer[firstDiff] == prevFramebuffer[firstDiff]) ++firstDiff;
+    minX = firstDiff % gpuFrameWidth;
+    minY = firstDiff / gpuFrameWidth;
   }
-  return; // No pixels changed, nothing to do.
+  else
+  {
+    while(minY < gpuFrameHeight)
+    {
+      int x = 0;
+      // diff 4 pixels at a time
+      for(; x < WidthAligned4; x += 4)
+      {
+        uint64_t diff = *(uint64_t*)(scanline+x) ^ *(uint64_t*)(prevScanline+x);
+        if (diff)
+        {
+          minX = x + (__builtin_ctzll(diff) >> 4);
+          goto found_top;
+        }
+      }
+      // tail unaligned 0-3 pixels one by one
+      for(; x < gpuFrameWidth; ++x)
+      {
+        uint16_t diff = *(scanline+x) ^ *(prevScanline+x);
+        if (diff)
+        {
+          minX = x;
+          goto found_top;
+        }
+      }
+      scanline += stride;
+      prevScanline += stride;
+      ++minY;
+    }
+    return; // No pixels changed, nothing to do.
+  }
 found_top:
 
   scanline = framebuffer + (gpuFrameHeight - 1)*stride;

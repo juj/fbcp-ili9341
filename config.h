@@ -114,6 +114,11 @@
 #ifndef NO_INTERLACING
 #define NO_INTERLACING
 #endif
+// This saves a lot of CPU, but if you don't care and your SPI display does not have much bandwidth, try uncommenting this for more performant
+// screen updates
+#ifndef UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
+#define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
+#endif
 #endif
 
 // If per-pixel diffing is enabled (neither UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF or UPDATE_FRAMES_WITHOUT_DIFFING
