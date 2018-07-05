@@ -2,7 +2,12 @@
 
 // Build options: Uncomment any of these, or set at the command line to configure:
 
-// If defined, renders a performance overlay on top of the screen
+// If defined, renders a performance overlay on top of the screen. This option is passed from CMake
+// configuration script. If you are getting statistics printed on screen
+// even when this is uncommented, pass -DSTATISTICS=0 to CMake invocation line. You can also try
+// building with
+//   'make VERBOSE=1'
+// to see which config flags are coming from CMake to the build.
 // #define STATISTICS
 
 // How often the on-screen statistics is refreshed (in usecs)

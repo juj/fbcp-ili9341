@@ -128,7 +128,7 @@ On the CMake command line, the following options can be configured:
 - `-DDISPLAY_ROTATE_180_DEGREES=ON`: If set, display is rotated 180 degrees. This does not affect HDMI output, only the SPI display output.
 - `-DSPI_BUS_CLOCK_DIVISOR=even_number`: Sets the clock divisor number which along with the Pi [core_freq=](https://www.raspberrypi.org/documentation/configuration/config-txt/overclocking.md) option in `/boot/config.txt` specifies the overall speed that the display SPI communication bus is driven at. `SPI_frequency = core_freq/divisor`. `SPI_BUS_CLOCK_DIVISOR` must be an even number. Default Pi 3B and Zero W `core_freq` is 400MHz, and generally a value `-DSPI_BUS_CLOCK_DIVISOR=6` seems to be good safe and performant baseline for ILI9341 displays. Try a larger value if the display shows corrupt output, or a smaller value to get higher bandwidth. See [ili9341.h](https://github.com/juj/fbcp-ili9341/blob/master/ili9341.h#L13) and [waveshare35b.h](https://github.com/juj/fbcp-ili9341/blob/master/waveshare35b.h#L10) for data points on tuning the maximum SPI performance.
 
-In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to remove the `#define STATISTICS` line in `config.h`.
+In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to build with `-DSTATISTICS=0` option in CMake configuration line.
 
 ##### Launching the display driver at startup
 
@@ -175,7 +175,7 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 
 - The CMake option `-DUSE_DMA_TRANSFERS=ON` should always be enabled for good low CPU usage. If DMA transfers are disabled, the driver will run in Polled SPI mode, which generally utilizes a full dedicated single core of CPU time. If DMA transfers are causing issues, try adjusting the DMA send and receive channels to use for SPI communication with `-DDMA_TX_CHANNEL=<num>` and `-DDMA_RX_CHANNEL=<num>` CMake options.
 
-- The statistics overlay prints out quite detailed information about execution state. Removing `#define STATISTICS` in config.h improves performance and reduces CPU usage. If you want to keep printing statistics, you can try increasing the interval with the `#define STATISTICS_REFRESH_INTERVAL <timeInMicroseconds>` option.
+- The statistics overlay prints out quite detailed information about execution state. Disabling the overlay with `-DSTATISTICS=0` option to CMake improves performance and reduces CPU usage. If you want to keep printing statistics, you can try increasing the interval with the `#define STATISTICS_REFRESH_INTERVAL <timeInMicroseconds>` option in config.h.
 
 - Enabling `#define USE_GPU_VSYNC` reduces CPU consumption, but because of https://github.com/raspberrypi/userland/issues/440 can cause stuttering. Disabling `#defined USE_GPU_VSYNC` produces less stuttering, but because of https://github.com/raspberrypi/userland/issues/440, increases CPU power consumption.
 
@@ -309,9 +309,11 @@ Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This shoul
 
 #### How exactly do I edit the build options to e.g. remove the statistics lines or change some other option?
 
-Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the line `#define STATISTICS` in there. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
+Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the appropriate line in the file. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
 
 After having edited and saved the file, reissue `make -j` in the build directory and restart fbcp-ili9341.
+
+Some options are passed to the build from the CMake configuration script. You can run with `make VERBOSE=1` to see which configuration items the CMake build is passing. See the above *Configuring Build Options* section to customize the CMake configure items. For example, to remove the statistics overlay, pass `-DSTATISTICS=0` directive to CMake.
 
 #### Does fbcp-ili9341 work with linux command line terminal or X windowing system?
 
