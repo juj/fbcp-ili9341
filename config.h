@@ -196,6 +196,14 @@
 
 #if defined(BACKLIGHT_CONTROL)
 
+// If enabled, reads keyboard for input events to detect when the system has gone inactive and backlight
+// can be turned off
+#define BACKLIGHT_CONTROL_FROM_KEYBOARD
+
+// This device file is used to capture keyboard input. This may be "/dev/input/event0" or something else
+// on some Pis
+#define KEYBOARD_INPUT_FILE "/dev/input/event1"
+
 // If enabled, the display backlight will be turned off after this many usecs of no activity on screen.
 #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY (1 * 60 * 1000000)
 
