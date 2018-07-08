@@ -29,42 +29,36 @@ static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, 
     "mov r1, %[framebuffer]\n"   // r1 <- current framebuffer
     "mov r2, %[prevFramebuffer]\n" // r2 <- framebuffer of previous frame
 
-  "start:\n"
+  "start_%=:\n"
     "pld [r1, #128]\n" // preload data caches for both current and previous framebuffers 128 bytes ahead of time
     "pld [r2, #128]\n"
 
     "ldmia r1!, {r3,r4,r5,r6}\n" // load 4x32-bit elements (8 pixels) of current framebuffer
     "ldmia r2!, {r7,r8,r9,r10}\n" // load corresponding 4x32-bit elements (8 pixels) of previous framebuffer
     "cmp r3, r7\n" // compare all 8 pixels if they are different
-    "bne end\n" // if we found a difference, we are done
-    "cmp r4, r8\n"
-    "bne end\n"
-    "cmp r5, r9\n"
-    "bne end\n"
-    "cmp r6, r10\n"
-    "bne end\n"
+    "cmpeq r4, r8\n"
+    "cmpeq r5, r9\n"
+    "cmpeq r6, r10\n"
+    "bne end_%=\n" // if we found a difference, we are done
 
     // Unroll once for another set of 4x32-bit elements. On Raspberry Pi Zero, data cache line is 32 bytes in size, so one iteration
     // of the loop computes a single data cache line, with preloads in place at the top.
     "ldmia r1!, {r3,r4,r5,r6}\n"
     "ldmia r2!, {r7,r8,r9,r10}\n"
     "cmp r3, r7\n"
-    "bne end\n"
-    "cmp r4, r8\n"
-    "bne end\n"
-    "cmp r5, r9\n"
-    "bne end\n"
-    "cmp r6, r10\n"
-    "bne end\n"
+    "cmpeq r4, r8\n"
+    "cmpeq r5, r9\n"
+    "cmpeq r6, r10\n"
+    "bne end_%=\n" // if we found a difference, we are done
 
     "cmp r0, r1\n" // framebuffer == framebufferEnd? did we finish through the array?
-    "bne start\n"
-    "b done\n"
+    "bne start_%=\n"
+    "b done_%=\n"
 
-  "end:\n"
+  "end_%=:\n"
     "sub r1, r1, #16\n" // ldmia r1! increments r1 after load, so subtract back the last increment in order to not shoot past the first changed pixels
 
-  "done:\n"
+  "done_%=:\n"
     "mov %[endPtr], r1\n" // output endPtr back to C code
     : [endPtr]"=r"(endPtr)
     : [framebuffer]"r"(framebuffer), [prevFramebuffer]"r"(prevFramebuffer), [framebufferEnd]"r"(framebufferEnd)
@@ -83,42 +77,36 @@ static int coarse_backwards_linear_diff(uint16_t *framebuffer, uint16_t *prevFra
     "mov r1, %[framebuffer]\n"   // r1 <- current framebuffer (starting from end of framebuffer)
     "mov r2, %[prevFramebuffer]\n" // r2 <- framebuffer of previous frame (starting from end of framebuffer)
 
-  "start2:\n"
+  "start_%=:\n"
     "pld [r1, #-128]\n" // preload data caches for both current and previous framebuffers 128 bytes ahead of time
     "pld [r2, #-128]\n"
 
     "ldmdb r1!, {r3,r4,r5,r6}\n" // load 4x32-bit elements (8 pixels) of current framebuffer
     "ldmdb r2!, {r7,r8,r9,r10}\n" // load corresponding 4x32-bit elements (8 pixels) of previous framebuffer
     "cmp r3, r7\n" // compare all 8 pixels if they are different
-    "bne end2\n" // if we found a difference, we are done
-    "cmp r4, r8\n"
-    "bne end2\n"
-    "cmp r5, r9\n"
-    "bne end2\n"
-    "cmp r6, r10\n"
-    "bne end2\n"
+    "cmpeq r4, r8\n"
+    "cmpeq r5, r9\n"
+    "cmpeq r6, r10\n"
+    "bne end_%=\n" // if we found a difference, we are done
 
     // Unroll once for another set of 4x32-bit elements. On Raspberry Pi Zero, data cache line is 32 bytes in size, so one iteration
     // of the loop computes a single data cache line, with preloads in place at the top.
     "ldmdb r1!, {r3,r4,r5,r6}\n"
     "ldmdb r2!, {r7,r8,r9,r10}\n"
     "cmp r3, r7\n"
-    "bne end2\n"
-    "cmp r4, r8\n"
-    "bne end2\n"
-    "cmp r5, r9\n"
-    "bne end2\n"
-    "cmp r6, r10\n"
-    "bne end2\n"
+    "cmpeq r4, r8\n"
+    "cmpeq r5, r9\n"
+    "cmpeq r6, r10\n"
+    "bne end_%=\n" // if we found a difference, we are done
 
     "cmp r0, r1\n" // framebuffer == framebufferEnd? did we finish through the array?
-    "bne start2\n"
-    "b done2\n"
+    "bne start_%=\n"
+    "b done_%=\n"
 
-  "end2:\n"
+  "end_%=:\n"
     "add r1, r1, #16\n" // ldmdb r1! decrements r1 before load, so add back the last decrement in order to not shoot past the first changed pixels
 
-  "done2:\n"
+  "done_%=:\n"
     "mov %[endPtr], r1\n" // output endPtr back to C code
     : [endPtr]"=r"(endPtr)
     : [framebuffer]"r"(framebufferEnd), [prevFramebuffer]"r"(prevFramebuffer+(framebufferEnd-framebuffer)), [framebufferBegin]"r"(framebuffer)
