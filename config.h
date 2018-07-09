@@ -198,12 +198,6 @@
 // If defined, enables code to manage the backlight.
 // #define BACKLIGHT_CONTROL
 
-#if defined(ALL_TASKS_SHOULD_DMA) &&!defined(USE_SPI_THREAD) && defined(USE_GPU_VSYNC) && !defined(DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2)
-// If conditions are suitable, defer moving pixels until the very last moment in dma.cpp when we are about
-// to kick off DMA tasks.
-#define OFFLOAD_PIXEL_COPY_TO_DMA_CPP
-#endif
-
 #if defined(BACKLIGHT_CONTROL)
 
 // If enabled, reads keyboard for input events to detect when the system has gone inactive and backlight

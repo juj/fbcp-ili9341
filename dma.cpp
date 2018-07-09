@@ -463,6 +463,12 @@ static void memcpy_to_dma_and_prev_framebuffer(uint16_t *dstDma, uint16_t **dstP
 
 static void memcpy_to_dma_and_prev_framebuffer_in_c(uint16_t *dstDma, uint16_t **dstPrevFramebuffer, uint16_t **srcFramebuffer, int numBytes, int *taskStartX, int width, int stride)
 {
+  static bool performanceWarningPrinted = false;
+  if (!performanceWarningPrinted)
+  {
+    printf("Performance warning: using slow memcpy_to_dma_and_prev_framebuffer_in_c() function. Check conditions in display.h that enable OFFLOAD_PIXEL_COPY_TO_DMA_CPP and configure to use that instead.\n");
+    performanceWarningPrinted = true;
+  }
   int numPixels = numBytes>>1;
   int endStridePixels = (stride>>1) - width;
   uint16_t *prevData = *dstPrevFramebuffer;
@@ -501,12 +507,16 @@ void SPIDMATransfer(SPITask *task)
   volatile DMAControlBlock *tx0 = &cb[0];
   volatile DMAControlBlock *rx0 = &cb[1];
 
+#ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   uint8_t *data = task->fb;
   uint8_t *prevData = task->prevFb;
+  const bool taskAndFramebufferSizesCompatibleWithTightMemcpy = (task->size % 32 == 0) && (task->width % 16 == 0);
+#else
+  uint8_t *data = task->data;
+#endif
 
   int bytesLeft = task->size;
   int taskStartX = 0;
-  const bool taskAndFramebufferSizesCompatibleWithTightMemcpy = (task->size % 32 == 0) && (task->width % 16 == 0);
 
   while(bytesLeft > 0)
   {
@@ -525,6 +535,7 @@ void SPIDMATransfer(SPITask *task)
 
     // If task->prevFb is present, the DMA backend is responsible for streaming pixel data from current framebuffer to old framebuffer, and the DMA task buffer.
     // If not present, then that preparation has been already done by the caller.
+#ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
     if (prevData)
     {
       // For 2D pixel data, do a "everything in one pass"
@@ -534,6 +545,7 @@ void SPIDMATransfer(SPITask *task)
         memcpy_to_dma_and_prev_framebuffer_in_c((uint16_t*)txPtr, (uint16_t**)&prevData, (uint16_t**)&data, sendSize, &taskStartX, task->width, gpuFramebufferScanlineStrideBytes);
     }
     else
+#endif
     {
       memcpy(txPtr, data, sendSize);
       data += sendSize;
