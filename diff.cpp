@@ -62,7 +62,7 @@ static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, 
     "mov %[endPtr], r1\n" // output endPtr back to C code
     : [endPtr]"=r"(endPtr)
     : [framebuffer]"r"(framebuffer), [prevFramebuffer]"r"(prevFramebuffer), [framebufferEnd]"r"(framebufferEnd)
-    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"
+    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "cc"
   );
   return endPtr - framebuffer;
 }
@@ -110,7 +110,7 @@ static int coarse_backwards_linear_diff(uint16_t *framebuffer, uint16_t *prevFra
     "mov %[endPtr], r1\n" // output endPtr back to C code
     : [endPtr]"=r"(endPtr)
     : [framebuffer]"r"(framebufferEnd), [prevFramebuffer]"r"(prevFramebuffer+(framebufferEnd-framebuffer)), [framebufferBegin]"r"(framebuffer)
-    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"
+    : "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "cc"
   );
   return endPtr - framebuffer;
 }
