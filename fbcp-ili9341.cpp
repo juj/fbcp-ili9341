@@ -131,6 +131,7 @@ int main()
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
   OpenKeyboard();
+  printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
     prevFrameWasInterlacedUpdate = interlacedUpdate;
