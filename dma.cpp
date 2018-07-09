@@ -15,6 +15,7 @@
 #include "config.h"
 #include "dma.h"
 #include "spi.h"
+#include "gpu.h"
 #include "util.h"
 #include "mailbox.h"
 
@@ -403,12 +404,90 @@ void WaitForDMAFinished()
 
 #ifdef ALL_TASKS_SHOULD_DMA
 
+// This function does a memcpy from one source buffer to two destination buffers simultaneously.
+// It saves a lot of time on ARMv6 by avoiding to have to do two separate memory copies, because the ARMv6 L1 cache is so tiny (4K) that it cannot fit a whole framebuffer
+// in memory at a time. Streaming through it only once instead of twice helps memory bandwidth immensely, this is profiled to be ~4x faster than a pair of memcpys or a simple CPU loop.
+// In addition, this does a little endian->big endian conversion when copying data out to dstDma.
+static void memcpy_to_dma_and_prev_framebuffer(uint16_t *dstDma, uint16_t **dstPrevFramebuffer, uint16_t **srcFramebuffer, int numBytes, int *taskStartX, int width, int stride)
+{
+  int strideEnd = stride - width*2;
+  int xLeft = width-*taskStartX;
+
+  uint16_t *Src = *srcFramebuffer;
+  uint16_t *Dst1 = *dstPrevFramebuffer;
+
+  // TODO: Do the loops in aligned order with unaligned head and tail separate, and ensure that dstDma, dstPrevFramebuffer and srcFramebuffer are in same alignment phase.
+  asm volatile(
+  "start_%=:\n"
+    "ldrd r0, r1, [%[srcFramebuffer]], #8\n"
+    "pld [%[srcFramebuffer], #248]\n"
+    "strd r0, r1, [%[dstPrevFramebuffer]], #8\n"
+    "rev16 r0, r0\n"
+    "rev16 r1, r1\n"
+    "strd r0, r1, [%[dstDma]], #8\n"
+
+    "ldrd r0, r1, [%[srcFramebuffer]], #8\n"
+    "strd r0, r1, [%[dstPrevFramebuffer]], #8\n"
+    "rev16 r0, r0\n"
+    "rev16 r1, r1\n"
+    "strd r0, r1, [%[dstDma]], #8\n"
+
+    "ldrd r0, r1, [%[srcFramebuffer]], #8\n"
+    "strd r0, r1, [%[dstPrevFramebuffer]], #8\n"
+    "rev16 r0, r0\n"
+    "rev16 r1, r1\n"
+    "strd r0, r1, [%[dstDma]], #8\n"
+
+    "ldrd r0, r1, [%[srcFramebuffer]], #8\n"
+    "strd r0, r1, [%[dstPrevFramebuffer]], #8\n"
+    "rev16 r0, r0\n"
+    "rev16 r1, r1\n"
+    "strd r0, r1, [%[dstDma]], #8\n"
+
+    "subs %[xLeft], %[xLeft], #16\n"
+    "addls %[xLeft], %[xLeft], %[width]\n"
+    "addls %[dstPrevFramebuffer], %[dstPrevFramebuffer], %[strideEnd]\n"
+    "addls %[srcFramebuffer], %[srcFramebuffer], %[strideEnd]\n"
+
+    "subs %[numBytes], %[numBytes], #32\n"
+    "bhi start_%=\n"
+
+    : [dstDma]"+r"(dstDma), [dstPrevFramebuffer]"+r"(Dst1), [srcFramebuffer]"+r"(Src), [xLeft]"+r"(xLeft), [numBytes]"+r"(numBytes)
+    : [strideEnd]"r"(strideEnd), [width]"r"(width)
+    : "r0", "r1", "memory", "cc"
+  );
+  *taskStartX = width - xLeft;
+  *srcFramebuffer = Src;
+  *dstPrevFramebuffer = Dst1;
+}
+
+static void memcpy_to_dma_and_prev_framebuffer_in_c(uint16_t *dstDma, uint16_t **dstPrevFramebuffer, uint16_t **srcFramebuffer, int numBytes, int *taskStartX, int width, int stride)
+{
+  int numPixels = numBytes>>1;
+  int endStridePixels = (stride>>1) - width;
+  uint16_t *prevData = *dstPrevFramebuffer;
+  uint16_t *data = *srcFramebuffer;
+  for(int i = 0; i < numPixels; ++i)
+  {
+    *prevData++ = *data;
+    dstDma[i] = __builtin_bswap16(*data++);
+    if (++*taskStartX >= width)
+    {
+      *taskStartX = 0;
+      data += endStridePixels;
+      prevData += endStridePixels;
+    }
+  }
+  *srcFramebuffer = data;
+  *dstPrevFramebuffer = prevData;
+}
+
 void SPIDMATransfer(SPITask *task)
 {
 // There is a limit to how many bytes can be sent in one DMA-based SPI task, so if the task
 // is larger than this, we'll split the send into multiple individual DMA SPI transfers
-// and chain them together.
-#define MAX_DMA_SPI_TASK_SIZE 65528
+// and chain them together. This should be a multiple of 32 bytes to keep tasks cache aligned on ARMv6.
+#define MAX_DMA_SPI_TASK_SIZE 65504
 
   const int numDMASendTasks = (task->size + MAX_DMA_SPI_TASK_SIZE - 1) / MAX_DMA_SPI_TASK_SIZE;
 
@@ -422,8 +501,13 @@ void SPIDMATransfer(SPITask *task)
   volatile DMAControlBlock *tx0 = &cb[0];
   volatile DMAControlBlock *rx0 = &cb[1];
 
-  uint8_t *data = (uint8_t*)&task->data[0];
+  uint8_t *data = task->fb;
+  uint8_t *prevData = task->prevFb;
+
   int bytesLeft = task->size;
+  int taskStartX = 0;
+  const bool taskAndFramebufferSizesCompatibleWithTightMemcpy = (task->size % 32 == 0) && (task->width % 16 == 0);
+
   while(bytesLeft > 0)
   {
     int sendSize = MIN(bytesLeft, MAX_DMA_SPI_TASK_SIZE);
@@ -437,8 +521,24 @@ void SPIDMATransfer(SPITask *task)
     // this memcpy() to prepare for DMA to do its memcpy(), as it is faster overall. (If there was a way to map same physical memory to virtual address space twice, once cached, and
     // another time uncached, and have writes bypass the cache and only write combine, but have reads follow the cache, then it might work without a perf hit, but not at all sure if
     // that would be technically possible)
-    memcpy((void*)(txData+1), data, sendSize);
-    data += sendSize;
+    uint16_t *txPtr = (uint16_t*)(txData+1);
+
+    // If task->prevFb is present, the DMA backend is responsible for streaming pixel data from current framebuffer to old framebuffer, and the DMA task buffer.
+    // If not present, then that preparation has been already done by the caller.
+    if (prevData)
+    {
+      // For 2D pixel data, do a "everything in one pass"
+      if (taskAndFramebufferSizesCompatibleWithTightMemcpy)
+        memcpy_to_dma_and_prev_framebuffer((uint16_t*)txPtr, (uint16_t**)&prevData, (uint16_t**)&data, sendSize, &taskStartX, task->width, gpuFramebufferScanlineStrideBytes);
+      else
+        memcpy_to_dma_and_prev_framebuffer_in_c((uint16_t*)txPtr, (uint16_t**)&prevData, (uint16_t**)&data, sendSize, &taskStartX, task->width, gpuFramebufferScanlineStrideBytes);
+    }
+    else
+    {
+      memcpy(txPtr, data, sendSize);
+      data += sendSize;
+    }
+
     tx->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
     tx->src = VIRT_TO_BUS(dmaSourceBuffer, txData);
     tx->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral

@@ -101,6 +101,10 @@
 // costs more CPU time). Enabling this requires that ALL_TASKS_SHOULD_DMA is also enabled.
 // #define UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
 
+// If UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF is used, controls whether the generated tasks are aligned for
+// ARMv6 cache lines. This is good to be enabled for ARMv6 Pis, doesn't make much difference on ARMv7 and ARMv8 Pis.
+#define ALIGN_DIFF_TASKS_FOR_32B_CACHE_LINES
+
 // If defined, screen updates are performend without performing diffing at all, i.e. by doing
 // full updates. This is very lightweight on CPU, but excessive on the SPI bus. Enabling this
 // requires that ALL_TASKS_SHOULD_DMA is also enabled.
@@ -193,6 +197,12 @@
 
 // If defined, enables code to manage the backlight.
 // #define BACKLIGHT_CONTROL
+
+#if defined(ALL_TASKS_SHOULD_DMA) &&!defined(USE_SPI_THREAD) && defined(USE_GPU_VSYNC) && !defined(DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2)
+// If conditions are suitable, defer moving pixels until the very last moment in dma.cpp when we are about
+// to kick off DMA tasks.
+#define OFFLOAD_PIXEL_COPY_TO_DMA_CPP
+#endif
 
 #if defined(BACKLIGHT_CONTROL)
 

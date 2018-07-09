@@ -11,8 +11,12 @@
 
 #define SWAPU32(x, y) { uint32_t tmp = x; x = y; y = tmp; }
 
+#ifndef ALIGN_DOWN
+#define ALIGN_DOWN(ptr, alignment) (((ptr)) & ~((alignment)-1))
+#endif
+
 #ifndef ALIGN_UP
-#define ALIGN_UP(ptr, alignment) ((ptr) + ((alignment)-1)) & ~((alignment)-1);
+#define ALIGN_UP(ptr, alignment) (((ptr) + ((alignment)-1)) & ~((alignment)-1))
 #endif
 
 #ifdef KERNEL_MODULE

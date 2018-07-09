@@ -461,6 +461,17 @@ int main()
       bytesTransferred += task->size+1;
       uint16_t *scanline = framebuffer[0] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
       uint16_t *prevScanline = framebuffer[1] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
+
+#ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
+      // If running a singlethreaded build without a separate SPI thread, we can offload the whole flow of the pixel data out to the code in the dma.cpp backend,
+      // which does the pixel task handoff out to DMA in inline assembly. This is done mainly to save an extra memcpy() when passing data off from GPU to SPI,
+      // since in singlethreaded mode, snapshotting GPU and sending data to SPI is done sequentially in this main loop.
+      // In multithreaded builds, this approach cannot be used, since after we snapshot a frame, we need to send it off to SPI thread to process, and make a copy
+      // anways to ensure it does not get overwritten.
+      task->fb = (uint8_t*)(scanline + i->x);
+      task->prevFb = (uint8_t*)(prevScanline + i->x);
+      task->width = i->endX - i->x;
+#else
       uint16_t *data = (uint16_t*)task->data;
       for(int y = i->y; y < i->endY; ++y, scanline += gpuFramebufferScanlineStrideBytes>>1, prevScanline += gpuFramebufferScanlineStrideBytes>>1)
       {
@@ -494,6 +505,7 @@ int main()
         memcpy(prevScanline+i->x, scanline+i->x, (endX - i->x)*FRAMEBUFFER_BYTESPERPIXEL);
 #endif
       }
+#endif
       CommitTask(task);
       IN_SINGLE_THREADED_MODE_RUN_TASK();
     }

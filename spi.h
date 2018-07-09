@@ -98,6 +98,11 @@ typedef struct __attribute__((packed)) SPITask
   uint32_t size;
   uint8_t cmd;
   uint32_t dmaSpiHeader;
+#ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
+  uint8_t *fb;
+  uint8_t *prevFb;
+  uint16_t width;
+#endif
   uint8_t data[];
 } SPITask;
 
@@ -274,6 +279,10 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 
   SPITask *task = (SPITask*)(spiTaskMemory->buffer + tail);
   task->size = bytes;
+#ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
+  task->fb = &task->data[0];
+  task->prevFb = 0;
+#endif
   return task;
 }
 

@@ -262,6 +262,16 @@ found_right:
   head->lastScanEndX = lastScanEndX+1;
   head->y = minY;
   head->endY = maxY+1;
+
+#if defined(ALIGN_DIFF_TASKS_FOR_32B_CACHE_LINES) && defined(ALL_TASKS_SHOULD_DMA)
+  // Make sure the task is a multiple of 32 bytes wide so we can use a fast DMA copy
+  // algorithm later on. Currently this is only exploited in dma.cpp if ALL_TASKS_SHOULD_DMA
+  // option is enabled, so only enable it there.
+  head->x = MAX(0, ALIGN_DOWN(head->x, 16));
+  head->endX = MIN(gpuFrameWidth, ALIGN_UP(head->endX, 16));
+  head->lastScanEndX = ALIGN_UP(head->lastScanEndX, 16);
+#endif
+
   head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
   head->next = 0;
 }
