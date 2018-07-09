@@ -75,6 +75,43 @@ bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer
 void SnapshotFramebuffer(uint16_t *destination)
 {
   lastFramePollTime = tick();
+
+#ifdef RANDOM_TEST_PATTERN
+    // Generate random noise that updates each frame
+    // uint32_t randomColor = rand() % 65536;
+    static int col = 0;
+    static int barY = 0;
+    static uint64_t lastTestImage = tick();
+    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
+    uint64_t now = tick();
+    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
+    {
+      col = (col + 2) & 31;
+      lastTestImage = now;
+    }
+    randomColor = randomColor | (randomColor << 16);
+    uint32_t *newfb = (uint32_t*)destination;
+    for(int y = 0; y < gpuFrameHeight; ++y)
+    {
+      int x = 0;
+      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
+      while(x <= gpuFrameWidth>>1)
+      {
+        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
+        {
+          if (y == barY)
+            newfb[x+X] = 0xFFFFFFFF;
+          else if (y == barY+1 || y == barY-1)
+            newfb[x+X] = 0;
+          else
+            newfb[x+X] = randomColor;
+        }
+        x += XX + 6;
+      }
+      newfb += gpuFramebufferScanlineStrideBytes>>2;
+    }
+    barY = (barY + 1) % gpuFrameHeight;
+#else
   // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
   // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
   // Currently this implemented method just takes a snapshot of the most current GPU framebuffer contents,
@@ -121,6 +158,8 @@ void SnapshotFramebuffer(uint16_t *destination)
     for(int x = 0; x < gpuFrameWidth; ++x)
       destination[y*(gpuFramebufferScanlineStrideBytes>>1)+x] = tempTransposeBuffer[x*(stride>>1)+y];
 #endif
+
+#endif
 }
 
 #ifdef USE_GPU_VSYNC
@@ -164,44 +203,7 @@ void *gpu_polling_thread(void*)
 
     uint64_t t0 = tick();
 
-#ifdef RANDOM_TEST_PATTERN
-    // Generate random noise that updates each frame
-    // uint32_t randomColor = rand() % 65536;
-    static int col = 0;
-    static int barY = 0;
-    static uint64_t lastTestImage = tick();
-    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
-    now = tick();
-    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
-    {
-      col = (col + 2) & 31;
-      lastTestImage = now;
-    }
-    randomColor = randomColor | (randomColor << 16);
-    uint32_t *newfb = (uint32_t*)videoCoreFramebuffer[0];
-    for(int y = 0; y < gpuFrameHeight; ++y)
-    {
-      int x = 0;
-      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
-      while(x <= gpuFrameWidth>>1)
-      {
-        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
-        {
-          if (y == barY)
-            newfb[x+X] = 0xFFFFFFFF;
-          else if (y == barY+1 || y == barY-1)
-            newfb[x+X] = 0;
-          else
-            newfb[x+X] = randomColor;
-        }
-        x += XX + 6;
-      }
-      newfb += gpuFramebufferScanlineStrideBytes>>2;
-    }
-    barY = (barY + 1) % gpuFrameHeight;
-#else
     SnapshotFramebuffer(videoCoreFramebuffer[0]);
-#endif
     // Check the pixel contents of the snapshot to see if we actually received a new frame to render
     bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
     if (gotNewFramebuffer)
