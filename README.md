@@ -112,9 +112,9 @@ When using one of the displays that stack on top of the Pi that are already reco
 
 ###### If you wired the display to the Pi yourself
 
-If you connected wires directly on the Pi instead of using one of the above configuration directives for preconfigured Hats, you will need to use the configuration directives below. In addition to specifying the display, you will also need to tell fbcp-ili9341 which GPIO pins you wired the connections to. To configure the display controller, pass one of:
+If you connected wires directly on the Pi instead of using a Hat from the above list, you will need to use the configuration directives below. In addition to specifying the display, you will also need to tell fbcp-ili9341 which GPIO pins you wired the connections to. To configure the display controller, pass one of:
 
-- `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag. When this flag is passed, you must also specify the flags `-DGPIO_TFT_DATA_CONTROL=number` and `-DGPIO_TFT_DATA_CONTROL=number` below.
+- `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag.
 - `-DHX8357D=ON`: If you have a HX8357D display, pass this directive.
 - `-DSSD1351=ON`: If you have a SSD1351 OLED display, use this.
 - `-DST7735R=ON`: If you have a ST7735R display, use this.
