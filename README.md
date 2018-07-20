@@ -112,17 +112,17 @@ When using one of the displays that stack on top of the Pi that are already reco
 
 ###### If you wired the display to the Pi yourself
 
-When you just connected wires directly on the Pi, in addition to specifying the display, you will need to tell fbcp-ili9341 which GPIO pins you wired the connections to. To configure the display controller, pass one of:
+If you connected wires directly on the Pi instead of using one of the above configuration directives for preconfigured Hats, you will need to use the configuration directives below. In addition to specifying the display, you will also need to tell fbcp-ili9341 which GPIO pins you wired the connections to. To configure the display controller, pass one of:
 
 - `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag. When this flag is passed, you must also specify the flags `-DGPIO_TFT_DATA_CONTROL=number` and `-DGPIO_TFT_DATA_CONTROL=number` below.
-- `-DHX8357D=ON`: If you have any other generic HX8357D display, pass this directive.
-- `-DST7735R=ON`: If you have a ST7735R display, use this.
+- `-DHX8357D=ON`: If you have a HX8357D display, pass this directive.
 - `-DSSD1351=ON`: If you have a SSD1351 OLED display, use this.
+- `-DST7735R=ON`: If you have a ST7735R display, use this.
 - `-DST7789=ON`: If you have a ST7789 display, use this.
 - `-DILI9486=ON`: If you have a ILI9486 display, pass this directive.
 - `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have. (or just try both, should not break if you misidentified)
 
-In addition to this, pass the following to customize the GPIO pin assignments you used:
+And additionally, pass the following to customize the GPIO pin assignments you used:
 
 - `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers.
 - `-DGPIO_TFT_RESET_PIN=number`: Specifies/overrides which GPIO pin to use for the display Reset line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a Reset pin, and is always on.
@@ -132,7 +132,7 @@ fbcp-ili9341 always uses the hardware SPI0 port, so the MISO, MOSI, CLK and CE0 
 
 ###### Specifying display speed
 
-fbcp-ili9341 will drive the displays far out above the rated speed specs. Due to this, you will need to explicitly configure the target speed you want to drive the display at, because due to manufacturing variances each display copy reaches a different maximum speed. This is done via the option
+To get good performance out of the displays, you will drive the displays far out above the rated speed specs (the rated specs yield about ~10fps depending on display). Due to this, you will need to explicitly configure the target speed you want to drive the display at, because due to manufacturing variances each display copy reaches a different maximum speed. There is no "default speed" that fbcp-ili9341 would use. Setting the speed is done via the option
 
 - `-DSPI_BUS_CLOCK_DIVISOR=even_number`: Sets the clock divisor number which along with the Pi [core_freq=](https://www.raspberrypi.org/documentation/configuration/config-txt/overclocking.md) option in `/boot/config.txt` specifies the overall speed that the display SPI communication bus is driven at. `SPI_frequency = core_freq/divisor`. `SPI_BUS_CLOCK_DIVISOR` must be an even number. Default Pi 3B and Zero W `core_freq` is 400MHz, and generally a value `-DSPI_BUS_CLOCK_DIVISOR=6` seems to be good safe and performant baseline for ILI9341 displays. Try a larger value if the display shows corrupt output, or a smaller value to get higher bandwidth. See [ili9341.h](https://github.com/juj/fbcp-ili9341/blob/master/ili9341.h#L13) and [waveshare35b.h](https://github.com/juj/fbcp-ili9341/blob/master/waveshare35b.h#L10) for data points on tuning the maximum SPI performance.
 
