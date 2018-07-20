@@ -349,6 +349,10 @@ By default fbcp-ili9341 builds with a statistics overlay enabled. See the video 
 
 ### FAQ and Troubleshooting
 
+#### Why is the project named fbcp-ili9341?
+
+The `fbcp` part in the name means *framebuffer copy*; specifically for the ILI9341 controller. fbcp-ili9341 is not actually a framebuffer copying driver, it does not create a secondary framebuffer that it would copy bytes across to from the primary framebuffer. It is also no longer a driver only for the ILI9341 controller. A more appropriate name might be *userland-raspi-spi-display-driver* or something like that, but the original name stuck.
+
 #### Does fbcp-ili9341 work on Pi Zero?
 
 Yes, it does, although not quite as well as on Pi 3B. If you'd like it to run better on a Pi Zero, leave a thumbs up at https://github.com/raspberrypi/userland/issues/440 - hard problems are difficult to justify prioritizing unless it is known that many people care about them.
