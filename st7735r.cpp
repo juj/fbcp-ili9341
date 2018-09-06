@@ -27,11 +27,15 @@ void InitST7735R()
 
   BEGIN_SPI_COMMUNICATION();
   {
+#ifndef ST7789VW // For some reason, ST7789VW does not want to accept the Software Reset command, but screen stays black if SWRESET is sent to it.
     SPI_TRANSFER(0x01/*Software Reset*/);
-    usleep(5*1000);
+#endif
+    usleep(120*1000);
     SPI_TRANSFER(0x11/*Sleep Out*/);
     usleep(120 * 1000);
+#ifndef ST7789VW // This is disabled on ST7789VW because it was observed to look visually bad, makes colors a bit too contrasty/deep
     SPI_TRANSFER(0x26/*Gamma Curve Select*/, 0x04/*Gamma curve 3 (2.5x if GS=1, 2.2x otherwise)*/);
+#endif
     SPI_TRANSFER(0x3A/*COLMOD: Pixel Format Set*/, 0x05/*16bpp*/);
     usleep(20 * 1000);
 
@@ -51,10 +55,17 @@ void InitST7735R()
 #if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
     madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
 #endif
+
     madctl |= MADCTL_ROW_ADDRESS_ORDER_SWAP;
+
+#ifdef WAVESHARE_ST7789VW_HAT
+    madctl ^= MADCTL_ROTATE_180_DEGREES;
+#endif
+
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
+
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
     usleep(10*1000);
 
@@ -84,11 +95,33 @@ void InitST7735R()
       SPI_TRANSFER(0x37/*VSCSAD: Vertical Scroll Start Address of RAM*/, 0, 80);
 #endif
 
+    // TODO: The 0xB1 command is not Frame Rate Control for ST7789VW, 0xB3 is (add support to it)
+#ifndef ST7789VW
     // Frame rate = 850000 / [ (2*RTNA+40) * (162 + FPA+BPA)]
     SPI_TRANSFER(0xB1/*FRMCTR1:Frame Rate Control*/, /*RTNA=*/6, /*FPA=*/1, /*BPA=*/1); // This should set frame rate = 99.67 Hz
+#endif
 
     SPI_TRANSFER(/*Display ON*/0x29);
     usleep(100 * 1000);
+
+#if 0
+    // TODO: ST7789VW Python example suggests following, check them against datasheet if there's anything interesting
+    SPI_TRANSFER(0xB2, 0xc, 0xc, 0, 0x33, 0x33);
+    SPI_TRANSFER(0xB7, 0x35);
+    SPI_TRANSFER(0xBb, 0x19);
+    SPI_TRANSFER(0xc0, 0x2c);
+    SPI_TRANSFER(0xc2, 0x01);
+    SPI_TRANSFER(0xc3, 0x12);
+    SPI_TRANSFER(0xc4, 0x20);
+    SPI_TRANSFER(0xc6, 0x0f);
+    SPI_TRANSFER(0xd0, 0xa4, 0xa1);
+    SPI_TRANSFER(0xe0, 0xd0, 0x04, 0x0d, 0x11, 0x13, 0x2b, 0x3f, 0x54, 0x4c, 0x18, 0x0d, 0x0b, 0x1f, 0x23);
+    SPI_TRANSFER(0xe1, 0xd0, 0x04, 0x0c, 0x11, 0x13, 0x2c, 0x3f, 0x44, 0x51, 0x2f, 0x1f, 0x1f, 0x20, 0x23);
+    SPI_TRANSFER(0x21);
+    SPI_TRANSFER(0x11);
+    SPI_TRANSFER(0x29);
+    usleep(100 * 1000);
+#endif
 
 #if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
