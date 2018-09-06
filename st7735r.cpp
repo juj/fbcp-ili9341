@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if defined(ST7735R) || defined(ST7789)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
 
 #include "spi.h"
 
@@ -58,7 +58,7 @@ void InitST7735R()
 
     madctl |= MADCTL_ROW_ADDRESS_ORDER_SWAP;
 
-#ifdef WAVESHARE_ST7789VW_HAT
+#if defined(WAVESHARE_ST7789VW_HAT) || defined(WAVESHARE_ST7735S_HAT)
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
 

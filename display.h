@@ -13,14 +13,14 @@
 #include "ili9486.h"
 #elif defined(HX8357D)
 #include "hx8357d.h"
-#elif defined(ST7735R) || defined(ST7789)
+#elif defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW)
 #include "st7735r.h"
 #elif defined(SSD1351)
 #include "ssd1351.h"
 #elif defined(MZ61581)
 #include "mz61581.h"
 #else
-#error Please reconfigure CMake with -DADAFRUIT_ILI9341_PITFT=ON or -DFREEPLAYTECH_WAVESHARE32B=ON (or contribute ports to more displays yourself)
+#error Please reconfigure CMake with your display controller directive set!
 #endif
 
 // The native display resolution is in portrait/landscape, but we want to display in the opposite landscape/portrait orientation?
