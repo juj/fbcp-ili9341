@@ -46,7 +46,7 @@ void InitST7735R()
 #define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
 
     uint8_t madctl = 0;
-#ifdef ST7735R
+#if defined(ST7735R) || defined(ST7735S)
     madctl |= MADCTL_BGR_PIXEL_ORDER;
 #endif
 #ifdef DISPLAY_SWAP_BGR
