@@ -14,6 +14,8 @@
 #include "statistics.h"
 #include "mem_alloc.h"
 
+bool MarkProgramQuitting(void);
+
 // Uncomment these build options to make the display output a random performance test pattern instead of the actual
 // display content. Used to debug/measure performance.
 // #define RANDOM_TEST_PATTERN
@@ -72,45 +74,45 @@ bool IsNewFramebuffer(uint16_t *possiblyNewFramebuffer, uint16_t *oldFramebuffer
   return false;
 }
 
-void SnapshotFramebuffer(uint16_t *destination)
+bool SnapshotFramebuffer(uint16_t *destination)
 {
   lastFramePollTime = tick();
 
 #ifdef RANDOM_TEST_PATTERN
-    // Generate random noise that updates each frame
-    // uint32_t randomColor = rand() % 65536;
-    static int col = 0;
-    static int barY = 0;
-    static uint64_t lastTestImage = tick();
-    uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
-    uint64_t now = tick();
-    if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
+  // Generate random noise that updates each frame
+  // uint32_t randomColor = rand() % 65536;
+  static int col = 0;
+  static int barY = 0;
+  static uint64_t lastTestImage = tick();
+  uint32_t randomColor = ((31 + ABS(col - 32)) << 5);
+  uint64_t now = tick();
+  if (now - lastTestImage >= 1000000/RANDOM_TEST_PATTERN_FRAME_RATE)
+  {
+    col = (col + 2) & 31;
+    lastTestImage = now;
+  }
+  randomColor = randomColor | (randomColor << 16);
+  uint32_t *newfb = (uint32_t*)destination;
+  for(int y = 0; y < gpuFrameHeight; ++y)
+  {
+    int x = 0;
+    const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
+    while(x <= gpuFrameWidth>>1)
     {
-      col = (col + 2) & 31;
-      lastTestImage = now;
-    }
-    randomColor = randomColor | (randomColor << 16);
-    uint32_t *newfb = (uint32_t*)destination;
-    for(int y = 0; y < gpuFrameHeight; ++y)
-    {
-      int x = 0;
-      const int XX = RANDOM_TEST_PATTERN_STRIPE_WIDTH>>1;
-      while(x <= gpuFrameWidth>>1)
+      for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
       {
-        for(int X = 0; x+X < gpuFrameWidth>>1; ++X)
-        {
-          if (y == barY)
-            newfb[x+X] = 0xFFFFFFFF;
-          else if (y == barY+1 || y == barY-1)
-            newfb[x+X] = 0;
-          else
-            newfb[x+X] = randomColor;
-        }
-        x += XX + 6;
+        if (y == barY)
+          newfb[x+X] = 0xFFFFFFFF;
+        else if (y == barY+1 || y == barY-1)
+          newfb[x+X] = 0;
+        else
+          newfb[x+X] = randomColor;
       }
-      newfb += gpuFramebufferScanlineStrideBytes>>2;
+      x += XX + 6;
     }
-    barY = (barY + 1) % gpuFrameHeight;
+    newfb += gpuFramebufferScanlineStrideBytes>>2;
+  }
+  barY = (barY + 1) % gpuFrameHeight;
 #else
   // Grab a new frame from the GPU. TODO: Figure out a way to get a frame callback for each GPU-rendered frame,
   // that would be vastly superior for lower latency, reduced stuttering and lighter processing overhead.
@@ -122,7 +124,8 @@ void SnapshotFramebuffer(uint16_t *destination)
   if (failed)
   {
     printf("vc_dispmanx_snapshot() failed with return code %d!\n", failed);
-    exit(failed);
+    MarkProgramQuitting();
+    return false;
   }
   // BUG in vc_dispmanx_resource_read_data(!!): If one is capturing a small subrectangle of a large screen resource rectangle, the destination pointer 
   // is in vc_dispmanx_resource_read_data() incorrectly still taken to point to the top-left corner of the large screen resource, instead of the top-left
@@ -148,7 +151,8 @@ void SnapshotFramebuffer(uint16_t *destination)
   if (failed)
   {
     printf("vc_dispmanx_resource_read_data failed with return code %d!\n", failed);
-    exit(failed);
+    MarkProgramQuitting();
+    return false;
   }
 #ifdef DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
   // Transpose the snapshotted frame from landscape to portrait. The following takes around 0.5-1.0 msec
@@ -160,6 +164,7 @@ void SnapshotFramebuffer(uint16_t *destination)
 #endif
 
 #endif
+  return true;
 }
 
 #ifdef USE_GPU_VSYNC
@@ -203,9 +208,9 @@ void *gpu_polling_thread(void*)
 
     uint64_t t0 = tick();
 
-    SnapshotFramebuffer(videoCoreFramebuffer[0]);
+    bool gotNewFramebuffer = SnapshotFramebuffer(videoCoreFramebuffer[0]);
     // Check the pixel contents of the snapshot to see if we actually received a new frame to render
-    bool gotNewFramebuffer = IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
+    gotNewFramebuffer = gotNewFramebuffer && IsNewFramebuffer(videoCoreFramebuffer[0], videoCoreFramebuffer[1]);
     if (gotNewFramebuffer)
     {
       lastNewFrameReceivedTime = t0;

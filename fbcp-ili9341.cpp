@@ -59,6 +59,11 @@ const char *SignalToString(int signal)
   return "?";
 }
 
+void MarkProgramQuitting()
+{
+  programRunning = false;
+}
+
 void ProgramInterruptHandler(int signal)
 {
   printf("Signal %s(%d) received, quitting\n", SignalToString(signal), signal);
@@ -68,7 +73,7 @@ void ProgramInterruptHandler(int signal)
     printf("Ctrl-C handler invoked five times, looks like fbcp-ili9341 is not gracefully quitting - performing a forcible shutdown!\n");
     exit(1);
   }
-  programRunning = false;
+  MarkProgramQuitting();
   __sync_synchronize();
   // Wake the SPI thread if it was sleeping so that it can gracefully quit
   if (spiTaskMemory)
@@ -255,7 +260,7 @@ int main()
       usleep(timeToSleep);
 #endif
 
-      SnapshotFramebuffer(framebuffer[0]);
+      framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
@@ -279,15 +284,15 @@ int main()
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
 #ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
-      framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
+      framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
       while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
       {
         usleep(2000);
         frameObtainedTime = tick();
-        SnapshotFramebuffer(framebuffer[0]);
+        framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
-        framebufferHasNewChangedPixels = IsNewFramebuffer(framebuffer[0], framebuffer[1]);
+        framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
 #else
       framebufferHasNewChangedPixels = true;
