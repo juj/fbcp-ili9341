@@ -230,4 +230,4 @@ endif()
 
 add_executable(fbcp-ili9341 ${sourceFiles})
 
-target_link_libraries(fbcp-ili9341 pthread bcm_host)
+target_link_libraries(fbcp-ili9341 pthread bcm_host atomic)
