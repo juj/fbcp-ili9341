@@ -488,6 +488,17 @@ static void memcpy_to_dma_and_prev_framebuffer_in_c(uint16_t *dstDma, uint16_t *
   *dstPrevFramebuffer = prevData;
 }
 
+#if defined(ALL_TASKS_SHOULD_DMA) && defined(SPI_3WIRE)
+// Bug: there is something about the chained DMA transfer mechanism that makes write window coordinate set commands not go through properly
+// on 3-wire displays, but do not yet know what. (Remove this #error statement to debug)
+#error ALL_TASKS_SHOULD_DMA and SPI_3WIRE are currently not mutually compatible!
+#endif
+
+#if defined(OFFLOAD_PIXEL_COPY_TO_DMA_CPP) && defined(SPI_3WIRE)
+// We would have to convert 8-bit tasks to 9-bit tasks immediately after offloaded memcpy has been done below to implement this.
+#error OFFLOAD_PIXEL_COPY_TO_DMA_CPP and SPI_3WIRE are not mutually compatible!
+#endif
+
 void SPIDMATransfer(SPITask *task)
 {
 // There is a limit to how many bytes can be sent in one DMA-based SPI task, so if the task
@@ -495,9 +506,9 @@ void SPIDMATransfer(SPITask *task)
 // and chain them together. This should be a multiple of 32 bytes to keep tasks cache aligned on ARMv6.
 #define MAX_DMA_SPI_TASK_SIZE 65504
 
-  const int numDMASendTasks = (task->size + MAX_DMA_SPI_TASK_SIZE - 1) / MAX_DMA_SPI_TASK_SIZE;
+  const int numDMASendTasks = (task->PayloadSize() + MAX_DMA_SPI_TASK_SIZE - 1) / MAX_DMA_SPI_TASK_SIZE;
 
-  volatile uint32_t *dmaData = (volatile uint32_t *)GrabFreeDMASourceBytes(4*(numDMASendTasks-1)+4*numDMASendTasks+task->size);
+  volatile uint32_t *dmaData = (volatile uint32_t *)GrabFreeDMASourceBytes(4*(numDMASendTasks-1)+4*numDMASendTasks+task->PayloadSize());
   volatile uint32_t *setDMATxAddressData = dmaData;
   volatile uint32_t *txData = dmaData+numDMASendTasks-1;
 
@@ -510,12 +521,12 @@ void SPIDMATransfer(SPITask *task)
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   uint8_t *data = task->fb;
   uint8_t *prevData = task->prevFb;
-  const bool taskAndFramebufferSizesCompatibleWithTightMemcpy = (task->size % 32 == 0) && (task->width % 16 == 0);
+  const bool taskAndFramebufferSizesCompatibleWithTightMemcpy = (task->PayloadSize() % 32 == 0) && (task->width % 16 == 0);
 #else
-  uint8_t *data = task->data;
+  uint8_t *data = task->PayloadStart();
 #endif
 
-  int bytesLeft = task->size;
+  int bytesLeft = task->PayloadSize();
   int taskStartX = 0;
 
   while(bytesLeft > 0)
@@ -629,10 +640,12 @@ void SPIDMATransfer(SPITask *task)
   }
   if (!programRunning) return;
 
-  pendingTaskBytes = task->size;
+  pendingTaskBytes = task->PayloadSize();
 
   // First send the SPI command byte in Polled SPI mode
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
+
+#ifdef SPI_4WIRE
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   spi->fifo = 0;
@@ -647,6 +660,8 @@ void SPIDMATransfer(SPITask *task)
 #endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
+#endif
+
   spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
   dmaTx->cbAddr = VIRT_TO_BUS(dmaCb, tx0);
@@ -663,20 +678,21 @@ void SPIDMATransfer(SPITask *task)
 {
   // Transition the SPI peripheral to enable the use of DMA
   spi->cs = BCM2835_SPI0_CS_DMAEN | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
-  task->dmaSpiHeader = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS | (task->size << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
+  uint32_t *headerAddr = task->DmaSpiHeaderAddress();
+  *headerAddr = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS | (task->PayloadSize() << 16); // The first four bytes written to the SPI data register control the DLEN and CS,CPOL,CPHA settings.
 
   // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer from 'task' pointer. However
   // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
   // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to an intermediate 'dmaSourceMemory' memory area to perform
   // the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
-  memcpy(dmaSourceBuffer.virtualAddr, (void*)&task->dmaSpiHeader, task->size + 4);
+  memcpy(dmaSourceBuffer.virtualAddr, headerAddr, task->PayloadSize() + 4);
 
   volatile DMAControlBlock *cb = (volatile DMAControlBlock *)dmaCb.virtualAddr;
   volatile DMAControlBlock *txcb = &cb[0];
   txcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_TX) | BCM2835_DMA_TI_DEST_DREQ | BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_WAIT_RESP;
   txcb->src = dmaSourceBuffer.busAddress;
   txcb->dst = DMA_SPI_FIFO_PHYS_ADDRESS; // Write out to the SPI peripheral 
-  txcb->len = task->size + 4;
+  txcb->len = task->PayloadSize() + 4;
   txcb->stride = 0;
   txcb->next = 0;
   txcb->debug = 0;
@@ -687,7 +703,7 @@ void SPIDMATransfer(SPITask *task)
   rxcb->ti = BCM2835_DMA_TI_PERMAP(BCM2835_DMA_TI_PERMAP_SPI_RX) | BCM2835_DMA_TI_SRC_DREQ | BCM2835_DMA_TI_DEST_IGNORE;
   rxcb->src = DMA_SPI_FIFO_PHYS_ADDRESS;
   rxcb->dst = 0;
-  rxcb->len = task->size;
+  rxcb->len = task->PayloadSize();
   rxcb->stride = 0;
   rxcb->next = 0;
   rxcb->debug = 0;
@@ -699,7 +715,7 @@ void SPIDMATransfer(SPITask *task)
   dmaRx->cs = BCM2835_DMA_CS_ACTIVE;
   __sync_synchronize();
 
-  double pendingTaskUSecs = task->size * spiUsecsPerByte;
+  double pendingTaskUSecs = task->PayloadSize() * spiUsecsPerByte;
   if (pendingTaskUSecs > 70)
     usleep(pendingTaskUSecs-70);
 

@@ -130,7 +130,7 @@ If you connected wires directly on the Pi instead of using a Hat from the above 
 
 And additionally, pass the following to customize the GPIO pin assignments you used:
 
-- `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers.
+- `-DGPIO_TFT_DATA_CONTROL=number`: Specifies/overrides which GPIO pin to use for the Data/Control (DC) line on the 4-wire SPI communication. This pin number is specified in BCM pin numbers. If you have a 3-wire SPI display that does not have a Data/Control line, **set this value to -1**, i.e. `-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 to target 3-wire ("9-bit") SPI communication.
 - `-DGPIO_TFT_RESET_PIN=number`: Specifies/overrides which GPIO pin to use for the display Reset line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a Reset pin, and is always on.
 - `-DGPIO_TFT_BACKLIGHT=number`: Specifies/overrides which GPIO pin to use for the display backlight line. This pin number is specified in BCM pin numbers. If omitted, it is assumed that the display does not have a GPIO-controlled backlight pin, and is always on. If setting this, also see the `#define BACKLIGHT_CONTROL` option in `config.h`.
 
@@ -395,7 +395,13 @@ If fbcp-ili9341 does not support your display controller, you will have to write
 
 #### Does fbcp-ili9341 work with 3-wire SPI displays?
 
-No, only 4-wire SPI displays work. Make sure the display has a Data/Control (DC) GPIO pin to connect.
+Yes! This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-D-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
+
+Current limitations of 3-wire communication are:
+ - The performance option `ALL_TASKS_SHOULD_DMA` is currently not supported, there is an issue with DMA chaining that prevents this from being enabled. As result, CPU usage on 3-wire displays will be slightly higher than on 4-wire displays.
+ - The performance option `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` is currently not supported. As a result, 3-wire displays may not work that well on single core Pis like Pi Zero.
+ - This has only been tested on my Adafruit SSD1351 128x96 RGB OLED display, which can be soldered to operate in 3-wire SPI mode, so testing has not been particularly extensive.
+ - Displays that have a 16-bit wide command word, such as ILI9486, do not currently work in 3-wire ("17-bit") mode. (But ILI9486L has 8-bit command word, so that does work)
 
 #### Does fbcp-ili9341 work with I2C, DPI, MIPI DSI or USB connected displays?
 
@@ -433,7 +439,7 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 - double check that the display controller is really what you expected. Trying to drive with the display with wrong initialization code usually results in the display not reacting, and the screen stays white,
 - shut down and physically power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to reset,
 - if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving fbcp-ili9341 without specifying the reset pin,
-- make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode.
+- make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode. Support for 3-wire SPI displays does exist, but it is more limited and a bit experimental.
 
 #### The display stays blank at boot without lighting up
 
@@ -481,7 +487,7 @@ You can also try looking through the commit history to find changes related to y
 
 #### Which SPI display should I buy to make sure it works best with fbcp-ili9341?
 
-First, make sure the display is a 4-wire SPI and not a 3-wire one. fbcp-ili9341 does not currently support 3-wire SPI. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting.
+First, make sure the display is a 4-wire SPI and not a 3-wire one. A display is 4-wire SPI if it has a Data/Control (DC) GPIO line that needs connecting. Sometimes the D/C pin is labeled RS (Register Select). Support for 3-wire SPI displays does exist, but it is experimental and not nearly as well tested as 4-wire displays.
 
 Second is the consideration about display speed. Below is a performance chart of the different displays I have tested. Note that these are sample sizes of one, I don't know how much sample variance there exists. Also I don't know if it is likely that there exists big differences between displays with same controller from different manufacturers. At least the different ILI9341 displays that I have are all quite consistent on performance, whether they are from Adafruit or WaveShare or from BuyDisplay.com.
 

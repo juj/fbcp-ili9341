@@ -463,7 +463,7 @@ int main()
       SPITask *task = AllocTask(i->size*SPI_BYTESPERPIXEL);
       task->cmd = DISPLAY_WRITE_PIXELS;
 
-      bytesTransferred += task->size+1;
+      bytesTransferred += task->PayloadSize()+1;
       uint16_t *scanline = framebuffer[0] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
       uint16_t *prevScanline = framebuffer[1] + i->y * (gpuFramebufferScanlineStrideBytes>>1);
 

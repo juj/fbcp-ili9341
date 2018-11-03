@@ -87,6 +87,9 @@ extern volatile SPIRegisterFile *spi;
 #define SHARED_MEMORY_SIZE (DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT*SPI_BYTESPERPIXEL*3)
 #define SPI_QUEUE_SIZE (SHARED_MEMORY_SIZE - sizeof(SharedMemory))
 
+// Need a bit of padding for 8-bit -> 9-bit expansion for performance
+#define SPI_9BIT_TASK_PADDING_BYTES 1
+
 // Defines the maximum size of a single SPI task, in bytes. This excludes the command byte. If MAX_SPI_TASK_SIZE
 // is not defined, there is no length limit that applies. (In ALL_TASKS_SHOULD_DMA version of DMA transfer,
 // there is DMA chaining, so SPI tasks can be arbitrarily long)
@@ -96,7 +99,10 @@ extern volatile SPIRegisterFile *spi;
 
 typedef struct __attribute__((packed)) SPITask
 {
-  uint32_t size;
+  uint32_t size; // Size, including both 8-bit and 9-bit tasks
+#ifdef SPI_3WIRE
+  uint32_t size9BitTaskWithPadding; // Size of the 9-bit task. The 9-bit task starts at address spiTask->data + spiTask->size - spiTask->size9BitTaskWithPadding;
+#endif
   uint8_t cmd;
   uint32_t dmaSpiHeader;
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
@@ -104,7 +110,20 @@ typedef struct __attribute__((packed)) SPITask
   uint8_t *prevFb;
   uint16_t width;
 #endif
-  uint8_t data[];
+  uint8_t data[]; // Contains both 8-bit and 9-bit tasks back to back, 8-bit first, then 9-bit.
+
+#ifdef SPI_4WIRE
+  inline uint8_t *PayloadStart() { return data; }
+  inline uint8_t *PayloadEnd() { return data + size; }
+  inline uint32_t PayloadSize() const { return size; }
+  inline uint32_t *DmaSpiHeaderAddress() { return &dmaSpiHeader; }
+#else
+  inline uint8_t *PayloadStart() { return data + (size - size9BitTaskWithPadding); }
+  inline uint8_t *PayloadEnd() { return data + (size - SPI_9BIT_TASK_PADDING_BYTES); }
+  inline uint32_t PayloadSize() const { return size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; }
+  inline uint32_t *DmaSpiHeaderAddress() { return (uint32_t*)(PayloadStart()-4); }
+#endif
+
 } SPITask;
 
 #define BEGIN_SPI_COMMUNICATION() do { spi->cs = BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS; } while(0)
@@ -231,9 +250,27 @@ extern volatile int spiThreadSleeping;
 
 extern int mem_fd;
 
+#ifdef SPI_3WIRE
+
+// Converts the given SPI task in-place from an 8-bit task to a 9-bit task.
+void Interleave8BitSPITaskTo9Bit(SPITask *task);
+
+// If the given display is a 3-wire SPI display (9 bits/task instead of 8 bits/task), this function computes the byte size of the 8-bit task when it is converted to a 9-bit task.
+uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask);
+
+#endif
+
 static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new SPI task block, called on main thread
 {
-  uint32_t bytesToAllocate = sizeof(SPITask) + bytes;
+#ifdef SPI_3WIRE
+  // For 3-wire/9-bit tasks, store the converted task right at the end of the 8-bit task.
+  uint32_t size9BitTaskWithPadding = NumBytesNeededFor9BitSPITask(bytes) + SPI_9BIT_TASK_PADDING_BYTES;
+  bytes += size9BitTaskWithPadding;
+#else
+//  const uint32_t totalBytesFor9BitTask = 0;
+#endif
+
+  uint32_t bytesToAllocate = sizeof(SPITask) + bytes;// + totalBytesFor9BitTask;
   uint32_t tail = spiTaskMemory->queueTail;
   uint32_t newTail = tail + bytesToAllocate;
   // Is the new task too large to write contiguously into the ring buffer, that it's split into two parts? We never split,
@@ -280,6 +317,9 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 
   SPITask *task = (SPITask*)(spiTaskMemory->buffer + tail);
   task->size = bytes;
+#ifdef SPI_3WIRE
+  task->size9BitTaskWithPadding = size9BitTaskWithPadding;
+#endif
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   task->fb = &task->data[0];
   task->prevFb = 0;
@@ -289,12 +329,15 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 
 static inline void CommitTask(SPITask *task) // Advertises the given SPI task from main thread to worker, called on main thread
 {
+#ifdef SPI_3WIRE
+  Interleave8BitSPITaskTo9Bit(task);
+#endif
   __sync_synchronize();
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
   uint32_t tail = spiTaskMemory->queueTail;
 #endif
   spiTaskMemory->queueTail = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
-  __atomic_fetch_add(&spiTaskMemory->spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
+  __atomic_fetch_add(&spiTaskMemory->spiBytesQueued, task->PayloadSize()+1, __ATOMIC_RELAXED);
   __sync_synchronize();
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)
   if (spiTaskMemory->queueHead == tail) syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAKE, 1, 0, 0, 0); // Wake the SPI thread if it was sleeping to get new tasks

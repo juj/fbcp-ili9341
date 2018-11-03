@@ -19,6 +19,11 @@
 #include "mailbox.h"
 #include "mem_alloc.h"
 
+#if defined(DISPLAY_SPI_BUS_IS_16BITS_WIDE) && defined(SPI_3WIRE)
+// I do not have any 3-wire ILI9486 displays to test support for this
+#error TODO: 3-wire displays that have 16-bits wide command word are not currently implemented! (that is, ILI9486 does not work in 3-wire configuration) (Only 3-wire displays with 8-bit wide command words are currently supported)
+#endif
+
 int mem_fd = -1;
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
@@ -82,6 +87,131 @@ void SetRealtimeThreadPriority()
 bool previousTaskWasSPI = true;
 #endif
 
+#ifdef SPI_3WIRE
+
+uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask)
+{
+  uint32_t numOutBits = (byteSizeFor8BitTask + 1) * 9;
+  // The number of bits we send out in a command must be a multiple of 9 bits, because each byte is 1 data/command bit plus 8 payload bits
+  // But the number of bits sent out in a command must also be a multiple of 8 bits, because BCM2835 SPI peripheral only deals with sending out full bytes.
+  // Therefore the bits written out must be a multiple of lcm(9*8)=72bits.
+  numOutBits = ((numOutBits + 71) / 72) * 72;
+  uint32_t numOutBytes = numOutBits >> 3;
+  return numOutBytes;
+}
+
+// N.B. BCM2835 hardware always clocks bytes out most significant bit (MSB) first, so when interleaving, the command bit needs to start out in the
+// highest byte of the outgoing buffer.
+void Interleave8BitSPITaskTo9Bit(SPITask *task)
+{
+  const uint32_t size8BitTask = task->size - task->size9BitTaskWithPadding;
+
+  // 9-bit SPI task lives right at the end of the 8-bit task
+  uint8_t *dst = task->data + size8BitTask;
+
+  // Pre-clear the 9*8=72 bit tail end of the memory to all zeroes to avoid having to pad source data to multiples of 9. (plus padding bytes, just to be safe)
+  memset(dst + task->size9BitTaskWithPadding - 9 - SPI_9BIT_TASK_PADDING_BYTES, 0, 9 + SPI_9BIT_TASK_PADDING_BYTES);
+
+  // Fill first command byte xxxxxxxx -> 0xxxxxxx x: (low 0 bit to indicate a command byte)
+  dst[0] = task->cmd >> 1;
+  dst[1] = task->cmd << 7;
+  int dstByte = 1;
+  int dstBitsUsed = 1;
+
+  int src = 0;
+
+  // Command bit above produced one byte. If there are at least 7 bytes in the data set, we can complete a set of 8 transferred bytes. Fast track
+  // that:
+  if (size8BitTask >= 7)
+  {
+    dst[1] |= 0x40 |                        (task->data[0] >> 2);
+    dst[2]  = 0x20 | (task->data[0] << 6) | (task->data[1] >> 3);
+    dst[3]  = 0x10 | (task->data[1] << 5) | (task->data[2] >> 4);
+    dst[4]  = 0x08 | (task->data[2] << 4) | (task->data[3] >> 5);
+    dst[5]  = 0x04 | (task->data[3] << 3) | (task->data[4] >> 6);
+    dst[6]  = 0x02 | (task->data[4] << 2) | (task->data[5] >> 7);
+    dst[7]  = 0x01 | (task->data[5] << 1);
+    dst[8]  =        (task->data[6]     );
+    dstByte = 9;
+    dstBitsUsed = 0;
+    src = 7;
+
+    // More fast tracking: As long as we have multiples of 8 bytes left, fast fill them in
+    while(src <= size8BitTask - 8)
+    {
+      uint8_t *d = dst + dstByte;
+      dstByte += 9;
+      const uint8_t *s = task->data + src;
+      src += 8;
+
+      d[0] = 0x80 |               (s[0] >> 1);
+      d[1] = 0x40 | (s[0] << 7) | (s[1] >> 2);
+      d[2] = 0x20 | (s[1] << 6) | (s[2] >> 3);
+      d[3] = 0x10 | (s[2] << 5) | (s[3] >> 4);
+      d[4] = 0x08 | (s[3] << 4) | (s[4] >> 5);
+      d[5] = 0x04 | (s[4] << 3) | (s[5] >> 6);
+      d[6] = 0x02 | (s[5] << 2) | (s[6] >> 7);
+      d[7] = 0x01 | (s[6] << 1);
+      d[8] = (s[7]     );
+    }
+
+    // Pre-clear the next byte to be written - the slow loop below assumes it is continuing a middle of byte sequence
+    // N.B. This write could happen to memory that is not part of the task, so memory allocation of the 9-bit task needs to allocate one byte of padding
+    dst[dstByte] = 0;
+  }
+
+  // Fill tail data bytes, slow path
+  while(src < size8BitTask)
+  {
+    uint8_t data = task->data[src++];
+
+    // High 1 bit to indicate a data byte
+    dst[dstByte] |= 1 << (7 - dstBitsUsed);
+    ++dstBitsUsed;
+    if (dstBitsUsed == 8) // Written data bit completes a full byte?
+    {
+      ++dstByte; // Advance to next byte
+      dstBitsUsed = 0;
+      // Now we are aligned, so can write the data byte directly
+      dst[dstByte++] = data;
+      dst[dstByte] = 0; // Clear old contents of the next byte to write
+    }
+    else
+    {
+      // 8 data bits
+      dst[dstByte++] |= data >> dstBitsUsed;
+      // This is the first write to the next byte, that should occur without ORring to clear old data in memory
+      // N.B. This write could happen to memory that is not part of the task, so memory allocation of the 9-bit task needs to allocate one byte of padding
+      dst[dstByte] = data << (8 - dstBitsUsed);
+    }
+  }
+
+#if 0 // Enable to debug correctness:
+
+#define BYTE_TO_BINARY_PATTERN "%c%c%c%c%c%c%c%c"
+#define BYTE_TO_BINARY(byte)  \
+  (byte & 0x80 ? '1' : '0'), \
+  (byte & 0x40 ? '1' : '0'), \
+  (byte & 0x20 ? '1' : '0'), \
+  (byte & 0x10 ? '1' : '0'), \
+  (byte & 0x08 ? '1' : '0'), \
+  (byte & 0x04 ? '1' : '0'), \
+  (byte & 0x02 ? '1' : '0'), \
+  (byte & 0x01 ? '1' : '0')
+
+  printf("Interleaving result: 8-bit task of size %d bytes became %d bytes:\n", task->size - task->size9BitTaskWithPadding, task->size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES);
+  printf("8-bit c" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(task->cmd));
+  for(int i = 0; i < task->size - task->size9BitTaskWithPadding; ++i)
+    printf("d" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(task->data[i]));
+  printf("\n9-bit ");
+  for(int i = 0; i < task->size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; ++i)
+    printf(BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(dst[i]));
+  printf("\n\n");
+#endif
+
+}
+#endif // ~SPI_3WIRE
+
 void WaitForPolledSPITransferToFinish()
 {
   uint32_t cs;
@@ -98,16 +228,18 @@ void WaitForPolledSPITransferToFinish()
 void RunSPITask(SPITask *task)
 {
   uint32_t cs;
-  uint8_t *tStart = task->data;
-  uint8_t *tEnd = task->data + task->size;
+  uint8_t *tStart = task->PayloadStart();
+  uint8_t *tEnd = task->PayloadEnd();
+  const uint32_t payloadSize = tEnd - tStart;
+  uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
 
 #define TASK_SIZE_TO_USE_DMA 4
   // Do a DMA transfer if this task is suitable in size for DMA to handle
-  if (task->size >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
+  if (payloadSize >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
   {
     if (previousTaskWasSPI)
       WaitForPolledSPITransferToFinish();
-//    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
+//    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
     SPIDMATransfer(task);
     previousTaskWasSPI = false;
   }
@@ -123,7 +255,10 @@ void RunSPITask(SPITask *task)
     else
       WaitForPolledSPITransferToFinish();
 
-//    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->size);
+//    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
+
+  // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
+#ifdef SPI_4WIRE
     CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
@@ -132,7 +267,6 @@ void RunSPITask(SPITask *task)
 #endif
     spi->fifo = task->cmd;
 
-    uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
     while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
     spi->fifo;
@@ -142,7 +276,9 @@ void RunSPITask(SPITask *task)
 #endif
 
     SET_GPIO(GPIO_TFT_DATA_CONTROL);
+#endif
 
+    // Send the data payload:
     while(tStart < tPrefillEnd) spi->fifo = *tStart++;
     while(tStart < tEnd)
     {
@@ -156,6 +292,7 @@ void RunSPITask(SPITask *task)
   }
 }
 #else
+
 void RunSPITask(SPITask *task)
 {
   WaitForPolledSPITransferToFinish();
@@ -168,6 +305,13 @@ void RunSPITask(SPITask *task)
   BEGIN_SPI_COMMUNICATION();
 #endif
 
+  uint8_t *tStart = task->PayloadStart();
+  uint8_t *tEnd = task->PayloadEnd();
+  const uint32_t payloadSize = tEnd - tStart;
+  uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
+
+  // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
+#ifdef SPI_4WIRE
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
@@ -177,9 +321,6 @@ void RunSPITask(SPITask *task)
 #endif
   spi->fifo = task->cmd;
 
-  uint8_t *tStart = task->data;
-  uint8_t *tEnd = task->data + task->size;
-  uint8_t *tPrefillEnd = task->data + MIN(15, task->size);
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
   spi->fifo;
@@ -189,6 +330,7 @@ void RunSPITask(SPITask *task)
 #endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
+#endif // ~SPI_4WIRE
 
 // For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
 // For larger transfers though that are more than this amount of bytes, using DMA is faster.
@@ -222,7 +364,6 @@ void RunSPITask(SPITask *task)
 }
 #endif
 
-
 SharedMemory *spiTaskMemory = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
@@ -247,7 +388,7 @@ SPITask *GetTask() // Returns the first task in the queue, called in worker thre
 
 void DoneTask(SPITask *task) // Frees the first SPI task from the queue, called in worker thread
 {
-  __atomic_fetch_sub(&spiTaskMemory->spiBytesQueued, task->size+1, __ATOMIC_RELAXED);
+  __atomic_fetch_sub(&spiTaskMemory->spiBytesQueued, task->PayloadSize()+1, __ATOMIC_RELAXED);
   spiTaskMemory->queueHead = (uint32_t)((uint8_t*)task - spiTaskMemory->buffer) + sizeof(SPITask) + task->size;
   __sync_synchronize();
 }
@@ -345,7 +486,9 @@ int InitSPI()
 
 #if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
+#ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
+#endif
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0x04);
   SET_GPIO_MODE(GPIO_SPI0_CLK, 0x04);
@@ -441,7 +584,9 @@ void DeinitSPI()
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
 #ifndef KERNEL_MODULE_CLIENT
+#ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
+#endif
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0);
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0);
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
