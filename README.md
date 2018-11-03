@@ -395,7 +395,7 @@ If fbcp-ili9341 does not support your display controller, you will have to write
 
 #### Does fbcp-ili9341 work with 3-wire SPI displays?
 
-Yes! This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-D-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
+Yes! This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
 
 Current limitations of 3-wire communication are:
  - The performance option `ALL_TASKS_SHOULD_DMA` is currently not supported, there is an issue with DMA chaining that prevents this from being enabled. As result, CPU usage on 3-wire displays will be slightly higher than on 4-wire displays.
