@@ -19,7 +19,7 @@
 #include "mailbox.h"
 #include "mem_alloc.h"
 
-#if defined(DISPLAY_SPI_BUS_IS_16BITS_WIDE) && defined(SPI_3WIRE)
+#if defined(DISPLAY_SPI_BUS_IS_16BITS_WIDE) && defined(SPI_3WIRE_PROTOCOL)
 // I do not have any 3-wire ILI9486 displays to test support for this
 #error TODO: 3-wire displays that have 16-bits wide command word are not currently implemented! (that is, ILI9486 does not work in 3-wire configuration) (Only 3-wire displays with 8-bit wide command words are currently supported)
 #endif
@@ -87,7 +87,7 @@ void SetRealtimeThreadPriority()
 bool previousTaskWasSPI = true;
 #endif
 
-#ifdef SPI_3WIRE
+#ifdef SPI_3WIRE_PROTOCOL
 
 uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask)
 {
@@ -210,7 +210,7 @@ void Interleave8BitSPITaskTo9Bit(SPITask *task)
 #endif
 
 }
-#endif // ~SPI_3WIRE
+#endif // ~SPI_3WIRE_PROTOCOL
 
 void WaitForPolledSPITransferToFinish()
 {
@@ -258,7 +258,7 @@ void RunSPITask(SPITask *task)
 //    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
 
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
-#ifdef SPI_4WIRE
+#ifndef SPI_3WIRE_PROTOCOL
     CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
@@ -311,7 +311,7 @@ void RunSPITask(SPITask *task)
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
 
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
-#ifdef SPI_4WIRE
+#ifndef SPI_3WIRE_PROTOCOL
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 
@@ -330,7 +330,7 @@ void RunSPITask(SPITask *task)
 #endif
 
   SET_GPIO(GPIO_TFT_DATA_CONTROL);
-#endif // ~SPI_4WIRE
+#endif // ~!SPI_3WIRE_PROTOCOL
 
 // For small transfers, using DMA is not worth it, but pushing through with polled SPI gives better bandwidth.
 // For larger transfers though that are more than this amount of bytes, using DMA is faster.

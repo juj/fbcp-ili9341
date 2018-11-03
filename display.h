@@ -87,7 +87,7 @@
 #define SPI_BYTESPERPIXEL 2
 #endif
 
-#if (DISPLAY_DRAWABLE_WIDTH % 16 == 0) && defined(ALL_TASKS_SHOULD_DMA) &&!defined(USE_SPI_THREAD) && defined(USE_GPU_VSYNC) && !defined(DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2) && !defined(SPI_3WIRE)
+#if (DISPLAY_DRAWABLE_WIDTH % 16 == 0) && defined(ALL_TASKS_SHOULD_DMA) &&!defined(USE_SPI_THREAD) && defined(USE_GPU_VSYNC) && !defined(DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2) && !defined(SPI_3WIRE_PROTOCOL)
 // If conditions are suitable, defer moving pixels until the very last moment in dma.cpp when we are about
 // to kick off DMA tasks.
 // TODO: 3-wire SPI displays are not yet compatible with this path. Implement support for this to optimize performance of 3-wire SPI displays on Pi Zero. (Pi 3B does not care that much)
@@ -107,6 +107,6 @@ void DeinitSPIDisplay(void);
 #error Please define -DSPI_BUS_CLOCK_DIVISOR=<some even number> on the CMake command line! This parameter along with core_freq=xxx in /boot/config.txt defines the SPI display speed. (spi speed = core_freq / SPI_BUS_CLOCK_DIVISOR)
 #endif
 
-#if !defined(GPIO_TFT_DATA_CONTROL) && !defined(SPI_3WIRE)
+#if !defined(GPIO_TFT_DATA_CONTROL) && !defined(SPI_3WIRE_PROTOCOL)
 #error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
 #endif

@@ -488,15 +488,15 @@ static void memcpy_to_dma_and_prev_framebuffer_in_c(uint16_t *dstDma, uint16_t *
   *dstPrevFramebuffer = prevData;
 }
 
-#if defined(ALL_TASKS_SHOULD_DMA) && defined(SPI_3WIRE)
+#if defined(ALL_TASKS_SHOULD_DMA) && defined(SPI_3WIRE_PROTOCOL)
 // Bug: there is something about the chained DMA transfer mechanism that makes write window coordinate set commands not go through properly
 // on 3-wire displays, but do not yet know what. (Remove this #error statement to debug)
-#error ALL_TASKS_SHOULD_DMA and SPI_3WIRE are currently not mutually compatible!
+#error ALL_TASKS_SHOULD_DMA and SPI_3WIRE_PROTOCOL are currently not mutually compatible!
 #endif
 
-#if defined(OFFLOAD_PIXEL_COPY_TO_DMA_CPP) && defined(SPI_3WIRE)
+#if defined(OFFLOAD_PIXEL_COPY_TO_DMA_CPP) && defined(SPI_3WIRE_PROTOCOL)
 // We would have to convert 8-bit tasks to 9-bit tasks immediately after offloaded memcpy has been done below to implement this.
-#error OFFLOAD_PIXEL_COPY_TO_DMA_CPP and SPI_3WIRE are not mutually compatible!
+#error OFFLOAD_PIXEL_COPY_TO_DMA_CPP and SPI_3WIRE_PROTOCOL are not mutually compatible!
 #endif
 
 void SPIDMATransfer(SPITask *task)
@@ -645,7 +645,7 @@ void SPIDMATransfer(SPITask *task)
   // First send the SPI command byte in Polled SPI mode
   spi->cs = BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
-#ifdef SPI_4WIRE
+#ifndef SPI_3WIRE_PROTOCOL
   CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   spi->fifo = 0;
