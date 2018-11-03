@@ -75,7 +75,7 @@ if (GPIO_TFT_DATA_CONTROL GREATER 0)
 	message(STATUS "Using 4-wire SPI mode of communication, with GPIO pin ${GPIO_TFT_DATA_CONTROL} for Data/Control line")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_DATA_CONTROL=${GPIO_TFT_DATA_CONTROL}")
 elseif (GPIO_TFT_DATA_CONTROL LESS 0)
-	message(STATUS "Using 3-wire SPI mode of communication, i.e. a display that does not havea a Data/Control line")
+	message(STATUS "Using 3-wire SPI mode of communication, i.e. a display that does not have a Data/Control line")
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSPI_3WIRE_PROTOCOL=1")
 endif()
 
