@@ -556,6 +556,7 @@ If you would like to help push Raspberry Pi SPI display support further, there a
  - Implement a kernel module that enables userland programs to allocate DMA channels, which fbcp-ili9341 could use to amicably reserve its own DMA channels without danger of conflicting.
  - Implement support for touch control while fbcp-ili9341 is active. ([#33](https://github.com/juj/fbcp-ili9341/issues/33))
  - Implement support for SPI-based SD card readers that are sometimes attached to displays.
+ - Port fbcp-ili9341 to work with I2C displays.
  - Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
  - Add support to building fbcp-ili9341 on another operating system than Raspbian.
  - Port fbcp-ili9341 over to a new single-board computer hardware. (e.g. [#30](https://github.com/juj/fbcp-ili9341/issues/30))
