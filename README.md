@@ -537,6 +537,36 @@ The following links proved helpful when writing this:
  - [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf), a useful research paper about merging monochrome bitmap images to rectangles, which gave good ideas for optimizing SPI span merges across multiple scan lines,
  - [VC DispmanX source code](https://github.com/raspberrypi/userland/blob/master/interface/vmcs_host/vc_vchi_dispmanx.c) (more or less the only official documentation bit on DispmanX I could ever find)
 
+### I Want To Contribute / Future Work / TODOs
+
+If you would like to help push Raspberry Pi SPI display support further, there are always more things to do in the project. Here is a list of ideas and TODOs for recognized work items to contribute, roughly rated in order of increasing difficulty.
+
+ - Vote up issue [raspberrypi/userland/#440](https://github.com/raspberrypi/userland/issues/440) if you would like to see Raspberry Pi Foundation improve CPU performance and reduce latency of the Pi when used with SPI displays.
+ - Vote up issue [raspberrypi/userland/#461](https://github.com/raspberrypi/userland/issues/461) if you would like to see fbcp-ili9341 not die (due to DispmanX dying) when HDMI display resolution changes.
+ - Vote up issue [raspberrypi/firmware/#992](https://github.com/raspberrypi/firmware/issues/992) if you would like to see Raspberry Pi SPI bus to have high throughput even when the Pi CPU is not under heavy CPU load (better SPI throughput with lower power consumption), a performance feature only SDHOST on the Pi currently enjoys.
+ - Benchmark fbcp-ili9341 performance in your use case with CPU tool `top`/`htop`, or with a power meter off the wall and report the results.
+ - Do you have a display with an unlisted or unknown display controller? Post close up photos of it to an issue in the tracker, and report if you were able to make it work with fbcp-ili9341?
+ - Did you have to do something unexpected or undocumented to get fbcp-ili9341 to work in your environment or use case? Write up a tutorial or record a video to let people know about the gotchas.
+ - If you have access to a high frequency scope/logic analyzer (~128MHz), benchmark the effective utilization rate % of the SPI MOSI bus that fbcp-ili9341 is able to achieve. (at high speeds this is unknown to me, expectation is 95%+, but I only have a cheap logic analyzer that can do ~16MHz)
+ - Port fbcp-ili9341 to work as a static code library that one can link to another application for CPU-based drawing directly to display, bypassing inefficiencies and latency of the general purpose Linux DispmanX/graphics stack.
+ - Improve existing display initialization routines with options to control e.g. gamma curves, color saturation, driving voltages, refresh rates or other potentially useful features that the display controller protocols expose.
+ - Add support to fbcp-ili9341 to a new display controller. (e.g. #26)
+ - Implement support for reading the MISO line for display identification numbers/strings for potentially interesting statistics (could some of the displays be autodetected this way?)
+ - Add support for other color modes, like RGB666 or RGB888. Currently fbcp-ili9341 is hardcoded to only use RGB565 display mode.
+ - Implement a kernel module that enables userland programs to allocate DMA channels, which fbcp-ili9341 could use to amicably reserve its own DMA channels without danger of conflicting.
+ - Implement support for touch control while fbcp-ili9341 is active. (#33)
+ - Implement support for SPI-based SD card readers that are sometimes attached to displays.
+ - Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
+ - Add support to building fbcp-ili9341 on another operating system than Raspbian.
+ - Port fbcp-ili9341 over to a new single-board computer hardware. (e.g. #30)
+ - Improve support for 3-wire displays, e.g. for 1) "17-bit" 3-wire communication, 2) fix up `SPI_3WIRE_PROTOCOL` + `ALL_TASKS_SHOULD_DMA` to work together, or 3) fix up `SPI_3WIRE_PROTOCOL` + `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` to work together.
+ - Optimize away unnecessary zero padding that 3-wire communication currently incurs, by keeping a queue of leftover untransmitted partial bits of a byte, and piggybacking them onto the next transfer that comes in.
+ - Port the high performance DMA-based SPI communication technique from fbcp-ili9341 over to another project that uses the SPI bus for something else, for close to 100% saturation of the SPI bus in the project.
+ - Improve the implementation of chaining DMA transfers to not only chain transfers within a single SPI task, but also across multiple SPI tasks.
+ - Optimize `ALL_TASKS_SHOULD_DMA` mode to be always superior in performance and CP usage so that the non-`ALL_TASKS_SHOULD_DMA` path can be dropped from the codebase. (probably requires the above chaining to function efficiently)
+ - If you are knowledgeable with BCM2835 DMA, investigate whether the hacky dance where two DMA channels need to be used to reset and resume DMA SPI transfers when chaining, can be avoided?
+ - If you have contacts with Broadcom, ask them to promote use of the SoC hardware with DMA chaining + mixed SPI & non-SPI tasks as a first class tested use case. Current DMA SPI hardware behavior of BCM2835 is, to say the least, surprising.
+
 ### License
 
 This driver is licensed under the MIT License. See LICENSE.txt. In nonlegal terms, it's yours for both free and commercial projects, DIY packages, kickstarters, Etsys and Ebays, and you don't owe back a dime. Feel free to apply and derive as you wish.
