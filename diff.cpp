@@ -7,6 +7,7 @@
 
 Span *spans = 0;
 
+#ifdef UPDATE_FRAMES_WITHOUT_DIFFING
 // Naive non-diffing functionality: just submit the whole display contents
 void NoDiffChangedRectangle(Span *&head)
 {
@@ -18,7 +19,9 @@ void NoDiffChangedRectangle(Span *&head)
   head->size = gpuFrameWidth*gpuFrameHeight;
   head->next = 0;
 }
+#endif
 
+#ifdef UPDATE_FRAMES_IN_SINGLE_RECTANGULAR_DIFF
 // Coarse diffing of two framebuffers with tight stride, 16 pixels at a time
 // Finds the first changed pixel, coarse result aligned down to 8 pixels boundary
 static int coarse_linear_diff(uint16_t *framebuffer, uint16_t *prevFramebuffer, uint16_t *framebufferEnd)
@@ -275,6 +278,7 @@ found_right:
   head->size = (head->endX-head->x)*(head->endY-head->y-1) + (head->lastScanEndX - head->x);
   head->next = 0;
 }
+#endif
 
 void DiffFramebuffersToScanlineSpansFastAndCoarse4Wide(uint16_t *framebuffer, uint16_t *prevFramebuffer, bool interlacedDiff, int interlacedFieldParity, Span *&head)
 {
