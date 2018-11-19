@@ -173,6 +173,7 @@ In addition to the above CMake directives, there are various defines scattered a
 Here is a full example of what to type to build and run, if you have the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) with ILI9341 controller:
 
 ```bash
+cd ~
 git clone https://github.com/juj/fbcp-ili9341.git
 cd fbcp-ili9341
 mkdir build
@@ -195,6 +196,14 @@ sudo /path/to/fbcp-ili9341/build/fbcp-ili9341 &
 ````
 
 to the end. Make note of the needed ampersand `&` at the end of that line.
+
+For example, if you used the command line steps listed above to build, the file `/etc/rc.local` would receive a line
+
+```bash
+sudo /home/pi/fbcp-ili9341/build/fbcp-ili9341 &
+````
+
+If the user name of your Raspberry Pi installation is something else than the default `pi`, change the directory accordingly to point to the user's home directory. (Use `pwd` to find out the current directory in terminal)
 
 ##### Configuring HDMI and TFT display sizes
 
