@@ -358,6 +358,9 @@ Be aware of the following limitations:
 ###### CPU Turbo is needed for good SPI bus bandwidth
  - The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
 
+###### Raspbian + 32-bit only(?)
+ - At the moment fbcp-ili9341 is only likely to work on 32-bit OSes, on Raspbian/Ubuntu/Debian family of distributions, where Broadcom and DispmanX libraries are available. 64-bit operating systems do not currently work (see [issue #43](https://github.com/juj/fbcp-ili9341/issues/43)). It should be possible to port the driver to 64-bit and other OSes, though the amount of work has not been explored.
+
 ### Statistics Overlay
 
 By default fbcp-ili9341 builds with a statistics overlay enabled. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Build with CMake option `-DSTATISTICS=0` to disable displaying the statistics. You can also try building with CMake option `-DSTATISTICS=2` to show a more detailed frame delivery timings histogram view, see screenshot and video above.
@@ -567,7 +570,8 @@ If you would like to help push Raspberry Pi SPI display support further, there a
  - Implement support for SPI-based SD card readers that are sometimes attached to displays.
  - Port fbcp-ili9341 to work with I2C displays.
  - Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
- - Add support to building fbcp-ili9341 on another operating system than Raspbian.
+ - Add support to building fbcp-ili9341 on another operating system than Raspbian. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
+ - Add support for building on 64-bit operating systems. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
  - Port fbcp-ili9341 over to a new single-board computer hardware. (e.g. [#30](https://github.com/juj/fbcp-ili9341/issues/30))
  - Improve support for 3-wire displays, e.g. for 1) "17-bit" 3-wire communication, 2) fix up `SPI_3WIRE_PROTOCOL` + `ALL_TASKS_SHOULD_DMA` to work together, or 3) fix up `SPI_3WIRE_PROTOCOL` + `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` to work together.
  - Optimize away unnecessary zero padding that 3-wire communication currently incurs, by keeping a queue of leftover untransmitted partial bits of a byte, and piggybacking them onto the next transfer that comes in.
