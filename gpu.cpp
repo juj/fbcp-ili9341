@@ -1,10 +1,10 @@
-#include <bcm_host.h>
+#include <bcm_host.h> // bcm_host_init, bcm_host_deinit
 
-#include <linux/futex.h>
-#include <sys/syscall.h>
-#include <syslog.h>
-#include <stdio.h>
-#include <math.h>
+#include <linux/futex.h> // FUTEX_WAKE
+#include <sys/syscall.h> // SYS_futex
+#include <syslog.h> // syslog, LOG_ERR
+#include <stdio.h> // fprintf
+#include <math.h> // floor
 
 #include "config.h"
 #include "gpu.h"

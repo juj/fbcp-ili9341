@@ -1,16 +1,7 @@
-#include <linux/input.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <syslog.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <pthread.h>
-#include <errno.h>
-#include <bcm_host.h>
+#include <linux/input.h> // input_event
+#include <fcntl.h> // O_RDONLY, O_NONBLOCK
+#include <stdio.h> // printf
+#include <stdint.h> // uint64_t
 
 #include "config.h"
 #include "keyboard.h"

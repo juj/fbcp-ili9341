@@ -1,15 +1,10 @@
 #ifndef KERNEL_MODULE
-#include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <inttypes.h>
-#include <syslog.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <bcm_host.h>
+#include <stdio.h> // fprintf, stderr
+#include <stdlib.h> // exit
+#include <memory.h> // memset, memcpy
+#include <inttypes.h> // uint32_t
+#include <syslog.h> // syslog
+#include <sys/mman.h> // mmap, munmap, PROT_READ, PROT_WRITE
 #endif
 
 #include "config.h"

@@ -1,15 +1,10 @@
 #ifndef KERNEL_MODULE
-#include <stdio.h>
-#include <stdlib.h>
-#include <memory.h>
-#include <syslog.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <sys/mman.h>
-#include <pthread.h>
-#include <errno.h>
-#include <bcm_host.h>
+#include <stdio.h> // printf, stderr
+#include <syslog.h> // syslog
+#include <fcntl.h> // open, O_RDWR, O_SYNC
+#include <sys/mman.h> // mmap, munmap
+#include <pthread.h> // pthread_create
+#include <bcm_host.h> // bcm_host_get_peripheral_address, bcm_host_get_peripheral_size, bcm_host_get_sdram_address
 #endif
 
 #include "config.h"
