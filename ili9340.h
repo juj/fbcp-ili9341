@@ -54,14 +54,6 @@
 #define DISPLAY_NATIVE_WIDTH 240
 #define DISPLAY_NATIVE_HEIGHT 320
 
-#ifdef ADAFRUIT_ILI9340_PITFT
-#include "pitft_28r_ili9340.h"
-#elif defined(ADAFRUIT_HX8357D_PITFT)
-#include "pitft_35r_hx8357d.h"
-#elif defined(FREEPLAYTECH_WAVESHARE32B)
-#include "freeplaytech_waveshare32b.h"
-#endif
-
 #define InitSPIDisplay InitILI9340
 
 void InitILI9340(void);
