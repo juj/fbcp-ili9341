@@ -7,6 +7,17 @@
 #include <memory.h>
 #include <stdio.h>
 
+void ChipSelectHigh()
+{
+  WAIT_SPI_FINISHED();
+  CLEAR_GPIO(GPIO_SPI0_CE0);
+//    for(int i = 0; i < 10; ++i) __sync_synchronize();
+  SET_GPIO(GPIO_SPI0_CE0);
+  SET_GPIO(GPIO_SPI0_CE1); // Disable Display
+//    for(int i = 0; i < 10; ++i) __sync_synchronize();
+  CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+}
+
 void InitILI9486()
 {
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
@@ -21,12 +32,129 @@ void InitILI9486()
   usleep(120 * 1000);
 #endif
 
+  // For sanity, start with both Chip selects high to ensure that the display will see a high->low enable transition when we start.
+  SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
+  SET_GPIO(GPIO_SPI0_CE1); // Disable Display
+  usleep(1000);
+
   // Do the initialization with a very low SPI bus speed, so that it will succeed even if the bus speed chosen by the user is too high.
   spi->clk = 34;
   __sync_synchronize();
 
   BEGIN_SPI_COMMUNICATION();
   {
+/*
+    CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
+    SET_GPIO(GPIO_SPI0_CE1); // Disable Display
+
+    // Original driver sends the command 0xE7 42 times with odd timings and Chip Select combinations, does not seem to be necessary.
+    for(int i = 0; i < 21; ++i)
+    {
+      WAIT_SPI_FINISHED();
+      SET_GPIO(GPIO_SPI0_CE0); // Enable Touch
+      CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
+      SPI_TRANSFER(0x0000E700);
+    }
+    usleep(50*1000);
+    for(int i = 0; i < 21; ++i)
+    {
+      WAIT_SPI_FINISHED();
+      SET_GPIO(GPIO_SPI0_CE0); // Enable Touch
+      CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
+      SPI_TRANSFER(0x0000E700);
+    }
+    SPI_TRANSFER(0x00008000);
+
+    END_SPI_COMMUNICATION();
+    BEGIN_SPI_COMMUNICATION();
+
+    usleep(10*1000);
+*/
+    CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+
+    BEGIN_SPI_COMMUNICATION();
+
+//    SPI_TRANSFER_TO_PREV_CS(0x00000100);
+///////////////////////    SPI_TRANSFER(0x00000100);
+
+//    END_SPI_COMMUNICATION();
+//    BEGIN_SPI_COMMUNICATION();
+
+    usleep(25*1000);
+
+    SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
+/*
+    SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+
+    END_SPI_COMMUNICATION();
+    BEGIN_SPI_COMMUNICATION();
+
+    SET_GPIO(GPIO_SPI0_CE1); // Enable Display
+    usleep(30);
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+*/
+    usleep(25*1000);
+
+//    SPI_TRANSFER_TO_PREV_CS(0x00000000);
+    SPI_TRANSFER(0x00000000); // This command seems to be Reset
+    usleep(120*1000);
+    /*
+    SET_GPIO(GPIO_SPI0_CE1); // Enable Display
+    usleep(30);
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+    */
+
+//    SPI_TRANSFER_TO_PREV_CS(0x00000100);
+    SPI_TRANSFER(0x00000100);
+    usleep(50*1000);
+//    SPI_TRANSFER_TO_PREV_CS(0x00001100);
+    SPI_TRANSFER(0x00001100);
+    usleep(60*1000);
+/*
+    SET_GPIO(GPIO_SPI0_CE1); // Disable Display
+    usleep(30);
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+*/
+//    END_SPI_COMMUNICATION();
+//    BEGIN_SPI_COMMUNICATION();
+
+    SPI_TRANSFER(0xB9001100, 0x00, 0xFF, 0x00, 0x83, 0x00, 0x57);
+    usleep(5*1000);
+/*
+    SET_GPIO(GPIO_SPI0_CE1); // Enable Display
+    usleep(30);
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+*/
+    SPI_TRANSFER(0xB6001100, 0x00, 0x2C);
+    SPI_TRANSFER(0x11001100);
+    usleep(150*1000);
+/*
+    SET_GPIO(GPIO_SPI0_CE1); // Enable Display
+    usleep(30);
+    CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
+*/
+    SPI_TRANSFER(0x3A001100, 0x00, 0x55);
+    SPI_TRANSFER(0xB0001100, 0x00, 0x68);
+    SPI_TRANSFER(0xCC001100, 0x00, 0x09);
+
+    SPI_TRANSFER(0xB3001100, 0x00, 0x43, 0x00, 0x00, 0x00, 0x06, 0x00, 0x06);
+
+    SPI_TRANSFER(0xB1001100, 0x00, 0x00, 0x00, 0x15, 0x00, 0x1C, 0x00, 0x1C, 0x00, 0x83, 0x00, 0x44);
+
+    SPI_TRANSFER(0xC0001100, 0x00, 0x24, 0x00, 0x24, 0x00, 0x01, 0x00, 0x3C, 0x00, 0x1E, 0x00, 0x08);
+
+    SPI_TRANSFER(0xB4001100, 0x00, 0x02, 0x00, 0x40, 0x00, 0x00, 0x00, 0x2A, 0x00, 0x2A, 0x00, 0x0D, 0x00, 0x4F);
+
+    SPI_TRANSFER(0xE0001100, 0x00, 0x02, 0x00, 0x08, 0x00, 0x11, 0x00, 0x23, 0x00, 0x2C, 0x00, 0x40, 0x00, 0x4A, 0x00, 0x52, 0x00, 0x48, 0x00, 0x41, 0x00, 0x3C, 0x00, 0x33, 0x00, 0x2E, 0x00, 0x28, 0x00, 0x27, 0x00, 0x1B, 0x00, 0x02, 0x00, 0x08, 0x00, 0x11, 0x00, 0x23, 0x00, 0x2C, 0x00, 0x40, 0x00, 0x4A, 0x00, 0x52, 0x00, 0x48, 0x00, 0x41, 0x00, 0x3C, 0x00, 0x33, 0x00, 0x2E, 0x00, 0x28, 0x00, 0x27, 0x00, 0x1B, 0x00, 0x00, 0x00, 0x01);
+
+    SPI_TRANSFER(0x36001100, 0x00, 0x3A);
+
+    SPI_TRANSFER(0x29001100);
+
+    usleep(200*1000);
+#if 0
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
     SPI_TRANSFER(0xB0/*Interface Mode Control*/, 0x00, 0x00/*DE polarity=High enable, PCKL polarity=data fetched at rising time, HSYNC polarity=Low level sync clock, VSYNC polarity=Low level sync clock*/);
 #else
@@ -104,7 +232,7 @@ void InitILI9486()
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
     TurnBacklightOn();
 #endif
-
+#endif
     ClearScreen();
   }
 #ifndef USE_DMA_TRANSFERS // For DMA transfers, keep SPI CS & TA active.

@@ -188,7 +188,7 @@
 // DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE enabled: traditional no-vsync tearing (tear line runs in portrait
 // i.e. narrow direction)
 #if !defined(SINGLE_CORE_BOARD)
-#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
+//#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE
 #endif
 
 // If enabled, build to utilize DMA transfers to communicate with the SPI peripheral. Otherwise polling
