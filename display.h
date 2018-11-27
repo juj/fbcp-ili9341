@@ -5,7 +5,9 @@
 // Configure the desired display update rate. Use 120 for max performance/minimized latency, and 60/50/30/24 etc. for regular content, or to save battery.
 #define TARGET_FRAME_RATE 60
 
-#ifdef ILI9341
+#ifdef ILI9340
+#include "ili9340.h"
+#elif defined(ILI9341)
 #include "ili9341.h"
 #elif defined(ILI9486L)
 #include "ili9486l.h"

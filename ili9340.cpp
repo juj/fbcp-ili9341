@@ -48,6 +48,24 @@ void InitILI9340()
     // VCOM Control 2
     SPI_TRANSFER(0xC7, 0x86);
 
+#define MADCTL_BGR_PIXEL_ORDER (1<<3)
+#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
+#define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
+#define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
+#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
+
+    uint8_t madctl = 0;
+#ifndef DISPLAY_SWAP_BGR
+    madctl |= MADCTL_BGR_PIXEL_ORDER;
+#endif
+#if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
+    madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
+#endif
+#ifdef DISPLAY_ROTATE_180_DEGREES
+    madctl ^= MADCTL_ROTATE_180_DEGREES;
+#endif
+    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
+
     // COLMOD: Pixel Format Set
     // 16 bits/pixel
     SPI_TRANSFER(0x3A, 0x55);
