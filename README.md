@@ -63,6 +63,7 @@ The following LCD displays have been tested:
  - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
  - [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
  - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
+ - Unbranded 2.8" 320x240 display with ILI9340 controller
 
 ### Installation
 
@@ -127,6 +128,7 @@ If you connected wires directly on the Pi instead of using a Hat from the above 
 - `-DST7735S=ON`: If you have a ST7735S display, use this.
 - `-DILI9486=ON`: If you have a ILI9486 display, pass this directive.
 - `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have. (or just try both, should not break if you misidentified)
+- `-DILI9430=ON`: If you have a ILI9430 display, pass this directive. ILI9430 and ILI9341 chipsets are quite similar and ILI9341 displays might work with the same setup commands as ILI9430.
 
 And additionally, pass the following to customize the GPIO pin assignments you used:
 

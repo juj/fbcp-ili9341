@@ -4,24 +4,7 @@
 
 // SPI_BUS_CLOCK_DIVISOR specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
-// 6 is the fastest possible. While developing, it was observed that a value of 12 or higher did not
-// actually work either, and only 6, 8 and 10 were functioning properly.
-
-// On Adafruit PiTFT 2.8", the following speed configurations have been tested (on a Pi 3B):
-// core_freq=400: CDIV=6, results in 66.67MHz, works
-// core_freq=294: CDIV=4, results in 73.50MHz, works
-// core_freq=320: CDIV=4, would result in 80.00MHz, but this was too fast for the display
-// core_freq=300: CDIV=4, would result in 75.00MHz, and would work for ~99% of the time, but develop rare occassional pixel glitches once a minute or so.
-// core_freq=296: CDIV=4, would result in 74.50MHz, would produce tiny individual pixel glitches very rarely, once every few 10 minutes or so.
-
-// On Waveshare 3.2", the following speed configurations have been observed to work (on a Pi 3B):
-// core_freq=400: CDIV=6, results in 66.67MHz, works
-// core_freq=310: CDIV=4, results in 77.50MHz, works
-// core_freq=320: CDIV=4, would result in 80.00MHz, would work most of the time, but produced random occassional glitches every few minutes or so.
-
-// On Adafruit 2.2" PiTFT HAT - 320x240 Display with ILI9340 controller, the following speed configurations have been tested (on a Pi 3B):
-// core_freq=338: CDIV=4, results in 84.5MHz, works
-// core_freq=339: CDIV=4, would result in 84.75MHz, would work most of the time, but every few minutes generated random glitched pixels.
+// 6 is the fastest possible.
 
 // Data specific to the ILI9340 controller
 #define DISPLAY_SET_CURSOR_X 0x2A
