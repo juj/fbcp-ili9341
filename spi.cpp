@@ -14,10 +14,33 @@
 #include "mailbox.h"
 #include "mem_alloc.h"
 
-#if defined(DISPLAY_SPI_BUS_IS_16BITS_WIDE) && defined(SPI_3WIRE_PROTOCOL)
-// I do not have any 3-wire ILI9486 displays to test support for this
-#error TODO: 3-wire displays that have 16-bits wide command word are not currently implemented! (that is, ILI9486 does not work in 3-wire configuration) (Only 3-wire displays with 8-bit wide command words are currently supported)
+// Uncomment this to print out all bytes sent to the SPI bus
+// #define DEBUG_SPI_BUS_WRITES
+
+#ifdef DEBUG_SPI_BUS_WRITES
+#define DEBUG_PRINT_WRITTEN_BYTE(byte) do { \
+  printf("%02X", byte); \
+  if ((writeCounter & 3) == 0) printf("\n"); \
+  while(0)
+#else
+#define DEBUG_PRINT_WRITTEN_BYTE(byte) ((void)0)
 #endif
+
+#ifdef CHIP_SELECT_LINE_NEEDS_REFRESHING_EACH_32BITS_WRITTEN
+void ChipSelectHigh();
+#define TOGGLE_CHIP_SELECT_LINE() if ((++writeCounter & 3) == 0) { ChipSelectHigh(); }
+#else
+#define TOGGLE_CHIP_SELECT_LINE() ((void)0)
+#endif
+
+static uint32_t writeCounter = 0;
+
+#define WRITE_FIFO(word) do { \
+  uint8_t w = (word); \
+  spi->fifo = w; \
+  TOGGLE_CHIP_SELECT_LINE(); \
+  DEBUG_PRINT_WRITTEN_BYTE(w); \
+  } while(0)
 
 int mem_fd = -1;
 volatile void *bcm2835 = 0;
@@ -84,6 +107,11 @@ bool previousTaskWasSPI = true;
 
 #ifdef SPI_3WIRE_PROTOCOL
 
+uint32_t NumBytesNeededFor32BitSPITask(uint32_t byteSizeFor8BitTask)
+{
+  return byteSizeFor8BitTask * 2 + 4; // 16bit -> 32bit expansion, plus 4 bytes for command word
+}
+
 uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask)
 {
   uint32_t numOutBits = (byteSizeFor8BitTask + 1) * 9;
@@ -99,13 +127,13 @@ uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask)
 // highest byte of the outgoing buffer.
 void Interleave8BitSPITaskTo9Bit(SPITask *task)
 {
-  const uint32_t size8BitTask = task->size - task->size9BitTaskWithPadding;
+  const uint32_t size8BitTask = task->size - task->sizeExpandedTaskWithPadding;
 
   // 9-bit SPI task lives right at the end of the 8-bit task
   uint8_t *dst = task->data + size8BitTask;
 
   // Pre-clear the 9*8=72 bit tail end of the memory to all zeroes to avoid having to pad source data to multiples of 9. (plus padding bytes, just to be safe)
-  memset(dst + task->size9BitTaskWithPadding - 9 - SPI_9BIT_TASK_PADDING_BYTES, 0, 9 + SPI_9BIT_TASK_PADDING_BYTES);
+  memset(dst + task->sizeExpandedTaskWithPadding - 9 - SPI_9BIT_TASK_PADDING_BYTES, 0, 9 + SPI_9BIT_TASK_PADDING_BYTES);
 
   // Fill first command byte xxxxxxxx -> 0xxxxxxx x: (low 0 bit to indicate a command byte)
   dst[0] = task->cmd >> 1;
@@ -194,17 +222,32 @@ void Interleave8BitSPITaskTo9Bit(SPITask *task)
   (byte & 0x02 ? '1' : '0'), \
   (byte & 0x01 ? '1' : '0')
 
-  printf("Interleaving result: 8-bit task of size %d bytes became %d bytes:\n", task->size - task->size9BitTaskWithPadding, task->size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES);
+  printf("Interleaving result: 8-bit task of size %d bytes became %d bytes:\n", task->size - task->sizeExpandedTaskWithPadding, task->sizeExpandedTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES);
   printf("8-bit c" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(task->cmd));
-  for(int i = 0; i < task->size - task->size9BitTaskWithPadding; ++i)
+  for(int i = 0; i < task->size - task->sizeExpandedTaskWithPadding; ++i)
     printf("d" BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(task->data[i]));
   printf("\n9-bit ");
-  for(int i = 0; i < task->size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; ++i)
+  for(int i = 0; i < task->sizeExpandedTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; ++i)
     printf(BYTE_TO_BINARY_PATTERN, BYTE_TO_BINARY(dst[i]));
   printf("\n\n");
 #endif
 
 }
+
+void Interleave16BitSPITaskTo32Bit(SPITask *task)
+{
+  const uint32_t size8BitTask = task->size - task->sizeExpandedTaskWithPadding;
+
+  // 32-bit SPI task lives right at the end of the 16-bit task
+  uint32_t *dst = (uint32_t *)(task->data + size8BitTask);
+  *dst++ = task->cmd;
+
+  const uint32_t taskSizeU16 = size8BitTask >> 1;
+  uint16_t *src = (uint16_t*)task->data;
+  for(uint32_t i = 0; i < taskSizeU16; ++i)
+    dst[i] = 0x1500 | (src[i] << 16);
+}
+
 #endif // ~SPI_3WIRE_PROTOCOL
 
 void WaitForPolledSPITransferToFinish()
@@ -258,9 +301,9 @@ void RunSPITask(SPITask *task)
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
     // On e.g. the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
-    spi->fifo = 0x00;
+    WRITE_FIFO(0x00);
 #endif
-    spi->fifo = task->cmd;
+    WRITE_FIFO(task->cmd);
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
     while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
@@ -274,11 +317,11 @@ void RunSPITask(SPITask *task)
 #endif
 
     // Send the data payload:
-    while(tStart < tPrefillEnd) spi->fifo = *tStart++;
+    while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
     while(tStart < tEnd)
     {
       cs = spi->cs;
-      if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+      if ((cs & BCM2835_SPI0_CS_TXD)) WRITE_FIFO(*tStart++);
 // TODO:      else asm volatile("yield");
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
@@ -312,9 +355,9 @@ void RunSPITask(SPITask *task)
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   // On e.g. the ILI9486, all commands are 16-bit, so need to be clocked in in two bytes. The MSB byte is always zero though in all the defined commands.
-  spi->fifo = 0x00;
+  WRITE_FIFO(0x00);
 #endif
-  spi->fifo = task->cmd;
+  WRITE_FIFO(task->cmd);
 
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
@@ -343,11 +386,11 @@ void RunSPITask(SPITask *task)
   else
 #endif
   {
-    while(tStart < tPrefillEnd) spi->fifo = *tStart++;
+    while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
     while(tStart < tEnd)
     {
       uint32_t cs = spi->cs;
-      if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *tStart++;
+      if ((cs & BCM2835_SPI0_CS_TXD)) WRITE_FIFO(*tStart++);
 // TODO:      else asm volatile("yield");
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
@@ -494,12 +537,17 @@ int InitSPI()
   // transitions to let the CS line live. For most other displays, we just set CS line always enabled for the display throughout
   // fbcp-ili9341 lifetime, which is a tiny bit faster.
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
+#ifdef DISPLAY_USES_CS1
+  SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04);
+#endif
 #else
   // Set the SPI 0 pin explicitly to output, and enable chip select on the line by setting it to low.
   // fbcp-ili9341 assumes exclusive access to the SPI0 bus, and exclusive presence of only one device on the bus,
   // which is (permanently) activated here.
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
-  CLEAR_GPIO(GPIO_SPI0_CE0);
+#ifdef DISPLAY_USES_CS1
+  SET_GPIO_MODE(GPIO_SPI0_CE1, 0x01);
+#endif
 #endif
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.

@@ -60,7 +60,7 @@ void InitHX8357D()
 
     SPI_TRANSFER(0x11/*Sleep Out*/);
     usleep(120 * 1000);
-    SPI_TRANSFER(/*Display ON*/0x29);
+    SPI_TRANSFER(0x29/*Display ON*/);
 
 #if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);

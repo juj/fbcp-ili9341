@@ -63,6 +63,7 @@ The following LCD displays have been tested:
  - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
  - [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
  - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
+ - [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
 
 ### Installation
 
@@ -113,6 +114,7 @@ When using one of the displays that stack on top of the Pi that are already reco
 - `-DTONTEC_MZ61581=ON`: If you are running on the [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) display, pass this.
 - `-DWAVESHARE_ST7789VW_HAT=ON`: If specified, targets a [240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW display controller.
 - `-DWAVESHARE_ST7735S_HAT=ON`: If specified, targets a [128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7735S display controller.
+- `-DKEDEI_V63_MPI3501=ON`: If specified, targets a [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) display with MPI3501 display controller.
 
 ###### If you wired the display to the Pi yourself
 
@@ -127,6 +129,7 @@ If you connected wires directly on the Pi instead of using a Hat from the above 
 - `-DST7735S=ON`: If you have a ST7735S display, use this.
 - `-DILI9486=ON`: If you have a ILI9486 display, pass this directive.
 - `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have. (or just try both, should not break if you misidentified)
+- `-DMPI3501=ON`: If specified, targets a display with MPI3501 display controller.
 
 And additionally, pass the following to customize the GPIO pin assignments you used:
 
@@ -518,6 +521,7 @@ Second is the consideration about display speed. Below is a performance chart of
 | [Adafruit 240x240 Wide Angle TFT](https://www.adafruit.com/product/3787) | 1.54" | 240x240 | ST7789 | ? | 340MHz/4=85.00MHz | 92.23 fps |
 | [WaveShare 240x240 Display HAT](https://www.waveshare.com/1.3inch-lcd-hat.htm) | 1.3" | 240x240 | ST7789VW | 62.5MHz | 338MHz/4=84.50MHz | 91.69 fps |
 | [WaveShare 128x128 Display HAT](https://www.waveshare.com/1.44inch-lcd-hat.htm) | 1.44" | 128x128 | ST7735S | 15.15MHz | (untested) | (untested) |
+| [KeDei v6.3](https://github.com/juj/fbcp-ili9341/issues/40) | 3.5" | 320x480 | MPI3501 | ? | 400MHz/12=33.333MHz | 4.8fps ** |
 
 In this list, *Rated SPI Bus Speed* is the maximum clock speed that the display controller is rated to run at. The *Obtained Bus Speed* column lists the fastest SPI bus speed that was achieved in practice, and the `core_freq` BCM Core speed and SPI Clock Divider `CDIV` setting that was used to achieve that rate. Note how most display controllers can generally be driven much faster than what they are officially rated at in their spec sheets.
 
@@ -528,6 +532,8 @@ All the ILI9341 displays work nice and super fast at ~70-80MHz. My WaveShare 3.5
 The ILI9486L controller based maithoga display runs a bit faster than ILI9486 WaveShare, 50MHz versus 31.88MHz, i.e. +56.8% bandwidth increase. However fps-wise maithoga reaches only 13.56 vs WaveShare 12.97 fps, because the bandwidth advantage is fully lost in pixel format differences: ILI9486L requires transmitting 24 bits per each pixel (R6G6B6 mode), whereas ILI9486 supports 16 bits per pixel R5G6B5 mode. This is reflected in the above chart refresh rate for the maithoga display (marked with a star).
 
 If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, they indeed are slow.
+
+The KeDei v6.3 display with MPI3501 controller takes the crown of being horrible, in all aspects imaginable. It is able to run at 33.33 MHz, but due to technical design limitations of the display (see [#40](https://github.com/juj/fbcp-ili9341/issues/40#issuecomment-441480557)), effective bus speed is halved, and only about 72% utilization of the remaining bus rate is achieved. DMA cannot be used, so CPU usage will be off the charts. Even though fbcp-ili9341 supports this display, level of support is expected to be poor, because the hardware design is a closed secret without open documentation publicly available from the manufacturer. Stay clear of KeDei or MPI3501 displays.
 
 The Tontec MZ61581 controller based 320x480 3.5" display on the other hand can be driven insanely fast at up to 140MHz! These seem to be quite hard to come by though and they are expensive. Tontec seems to have gone out of business and for example the domain itontec.com from which the supplied instructions sheet asks to download original drivers from is no longer registered. I was able to find one from eBay for testing.
 

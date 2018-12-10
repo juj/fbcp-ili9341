@@ -87,8 +87,12 @@ extern volatile SPIRegisterFile *spi;
 #define SHARED_MEMORY_SIZE (DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT*SPI_BYTESPERPIXEL*3)
 #define SPI_QUEUE_SIZE (SHARED_MEMORY_SIZE - sizeof(SharedMemory))
 
-// Need a bit of padding for 8-bit -> 9-bit expansion for performance
+#if defined(SPI_3WIRE_DATA_COMMAND_FRAMING_BITS) && SPI_3WIRE_DATA_COMMAND_FRAMING_BITS == 1
+// Need a byte of padding for 8-bit -> 9-bit expansion for performance
 #define SPI_9BIT_TASK_PADDING_BYTES 1
+#else
+#define SPI_9BIT_TASK_PADDING_BYTES 0
+#endif
 
 // Defines the maximum size of a single SPI task, in bytes. This excludes the command byte. If MAX_SPI_TASK_SIZE
 // is not defined, there is no length limit that applies. (In ALL_TASKS_SHOULD_DMA version of DMA transfer,
@@ -101,9 +105,13 @@ typedef struct __attribute__((packed)) SPITask
 {
   uint32_t size; // Size, including both 8-bit and 9-bit tasks
 #ifdef SPI_3WIRE_PROTOCOL
-  uint32_t size9BitTaskWithPadding; // Size of the 9-bit task. The 9-bit task starts at address spiTask->data + spiTask->size - spiTask->size9BitTaskWithPadding;
+  uint32_t sizeExpandedTaskWithPadding; // Size of the expanded 9-bit/32-bit task. The expanded task starts at address spiTask->data + spiTask->size - spiTask->sizeExpandedTaskWithPadding;
 #endif
+#ifdef SPI_32BIT_COMMANDS
+  uint32_t cmd;
+#else
   uint8_t cmd;
+#endif
   uint32_t dmaSpiHeader;
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   uint8_t *fb;
@@ -113,9 +121,9 @@ typedef struct __attribute__((packed)) SPITask
   uint8_t data[]; // Contains both 8-bit and 9-bit tasks back to back, 8-bit first, then 9-bit.
 
 #ifdef SPI_3WIRE_PROTOCOL
-  inline uint8_t *PayloadStart() { return data + (size - size9BitTaskWithPadding); }
+  inline uint8_t *PayloadStart() { return data + (size - sizeExpandedTaskWithPadding); }
   inline uint8_t *PayloadEnd() { return data + (size - SPI_9BIT_TASK_PADDING_BYTES); }
-  inline uint32_t PayloadSize() const { return size9BitTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; }
+  inline uint32_t PayloadSize() const { return sizeExpandedTaskWithPadding - SPI_9BIT_TASK_PADDING_BYTES; }
   inline uint32_t *DmaSpiHeaderAddress() { return (uint32_t*)(PayloadStart()-4); }
 #else
   inline uint8_t *PayloadStart() { return data; }
@@ -136,6 +144,16 @@ typedef struct __attribute__((packed)) SPITask
     } \
     spi->cs = BCM2835_SPI0_CS_CLEAR_RX | DISPLAY_SPI_DRIVE_SETTINGS; /* Clear TA and any pending bytes */ \
   } while(0)
+
+#define WAIT_SPI_FINISHED()  do { \
+    uint32_t cs; \
+    while (!((cs = spi->cs) & BCM2835_SPI0_CS_DONE)) /* While DONE=0*/ \
+    { \
+      if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF))) \
+        spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS; \
+    } \
+  } while(0)
+
 
 // A convenience for defining and dispatching SPI task bytes inline
 #define SPI_TRANSFER(command, ...) do { \
@@ -255,8 +273,14 @@ extern int mem_fd;
 // Converts the given SPI task in-place from an 8-bit task to a 9-bit task.
 void Interleave8BitSPITaskTo9Bit(SPITask *task);
 
+// Converts the given SPI task in-place from a 16-bit task to a 32-bit task.
+void Interleave16BitSPITaskTo32Bit(SPITask *task);
+
 // If the given display is a 3-wire SPI display (9 bits/task instead of 8 bits/task), this function computes the byte size of the 8-bit task when it is converted to a 9-bit task.
 uint32_t NumBytesNeededFor9BitSPITask(uint32_t byteSizeFor8BitTask);
+
+// If the given display is a 3-wire SPI display with 32 bits bus width, this function computes the byte size of the task when it is converted to a 32-bit task.
+uint32_t NumBytesNeededFor32BitSPITask(uint32_t byteSizeFor8BitTask);
 
 #endif
 
@@ -264,8 +288,12 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 {
 #ifdef SPI_3WIRE_PROTOCOL
   // For 3-wire/9-bit tasks, store the converted task right at the end of the 8-bit task.
-  uint32_t size9BitTaskWithPadding = NumBytesNeededFor9BitSPITask(bytes) + SPI_9BIT_TASK_PADDING_BYTES;
-  bytes += size9BitTaskWithPadding;
+#ifdef SPI_32BIT_COMMANDS
+  uint32_t sizeExpandedTaskWithPadding = NumBytesNeededFor32BitSPITask(bytes) + SPI_9BIT_TASK_PADDING_BYTES;
+#else
+  uint32_t sizeExpandedTaskWithPadding = NumBytesNeededFor9BitSPITask(bytes) + SPI_9BIT_TASK_PADDING_BYTES;
+#endif
+  bytes += sizeExpandedTaskWithPadding;
 #else
 //  const uint32_t totalBytesFor9BitTask = 0;
 #endif
@@ -318,7 +346,7 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
   SPITask *task = (SPITask*)(spiTaskMemory->buffer + tail);
   task->size = bytes;
 #ifdef SPI_3WIRE_PROTOCOL
-  task->size9BitTaskWithPadding = size9BitTaskWithPadding;
+  task->sizeExpandedTaskWithPadding = sizeExpandedTaskWithPadding;
 #endif
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   task->fb = &task->data[0];
@@ -330,7 +358,11 @@ static inline SPITask *AllocTask(uint32_t bytes) // Returns a pointer to a new S
 static inline void CommitTask(SPITask *task) // Advertises the given SPI task from main thread to worker, called on main thread
 {
 #ifdef SPI_3WIRE_PROTOCOL
+#ifdef SPI_32BIT_COMMANDS
+  Interleave16BitSPITaskTo32Bit(task);
+#else
   Interleave8BitSPITaskTo9Bit(task);
+#endif
 #endif
   __sync_synchronize();
 #if !defined(KERNEL_MODULE_CLIENT) && !defined(KERNEL_MODULE)

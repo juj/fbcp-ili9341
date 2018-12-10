@@ -19,6 +19,8 @@
 #include "ssd1351.h"
 #elif defined(MZ61581)
 #include "mz61581.h"
+#elif defined(MPI3501)
+#include "mpi3501.h"
 #else
 #error Please reconfigure CMake with your display controller directive set!
 #endif
@@ -109,4 +111,9 @@ void DeinitSPIDisplay(void);
 
 #if !defined(GPIO_TFT_DATA_CONTROL) && !defined(SPI_3WIRE_PROTOCOL)
 #error Please reconfigure CMake with -DGPIO_TFT_DATA_CONTROL=<int> specifying which pin your display is using for the Data/Control line!
+#endif
+
+#if defined(SPI_3WIRE_PROTOCOL) && !defined(SPI_3WIRE_DATA_COMMAND_FRAMING_BITS)
+// 3-wire SPI displays use 1 bit of D/C framing (unless otherwise specified. E.g. KeDei uses 16 bit instead)
+#define SPI_3WIRE_DATA_COMMAND_FRAMING_BITS 1
 #endif
