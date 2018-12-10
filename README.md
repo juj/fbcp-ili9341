@@ -364,6 +364,8 @@ Be aware of the following limitations:
 ###### Raspbian + 32-bit only(?)
  - At the moment fbcp-ili9341 is only likely to work on 32-bit OSes, on Raspbian/Ubuntu/Debian family of distributions, where Broadcom and DispmanX libraries are available. 64-bit operating systems do not currently work (see [issue #43](https://github.com/juj/fbcp-ili9341/issues/43)). It should be possible to port the driver to 64-bit and other OSes, though the amount of work has not been explored.
 
+For more known issues and limitations, check out the [bug tracker](https://github.com/juj/fbcp-ili9341/issues), especially the entries marked *retired*, for items that are beyond current scope.
+
 ### Statistics Overlay
 
 By default fbcp-ili9341 builds with a statistics overlay enabled. See the video [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4) to find details on what each field means. Build with CMake option `-DSTATISTICS=0` to disable displaying the statistics. You can also try building with CMake option `-DSTATISTICS=2` to show a more detailed frame delivery timings histogram view, see screenshot and video above.
