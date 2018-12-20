@@ -82,6 +82,7 @@ Likewise, if you have any touch controller related dtoverlays active, such as `d
 Run in the console of your Raspberry Pi:
 
 ```bash
+sudo apt-get install cmake
 git clone https://github.com/juj/fbcp-ili9341.git
 cd fbcp-ili9341
 mkdir build
@@ -161,7 +162,7 @@ The following build options are general to all displays and Pi boards, they furt
 - `-DBACKLIGHT_CONTROL=ON`: If set, enables fbcp-ili9341 to control the display backlight in the given backlight pin. The display will go to sleep after a period of inactivity on the screen. If not, backlight is not touched.
 - `-DDISPLAY_CROPPED_INSTEAD_OF_SCALING=ON`: If set, and source video frame is larger than the SPI display video resolution, the source video is presented on the SPI display by cropping out parts of it in all directions, instead of scaling to fit.
 - `-DDISPLAY_BREAK_ASPECT_RATIO_WHEN_SCALING=ON`: When scaling source video to SPI display, scaling is performed by default following aspect ratio, adding letterboxes/pillarboxes as needed. If this is set, the stretching is performed breaking aspect ratio.
-- `-DSTATISTICS=number`: Specifies the level of overlay statistics to show on screen. 0: disabled, 1: enabled, 2: enabled, and show frame rate interval graph as well.
+- `-DSTATISTICS=number`: Specifies the level of overlay statistics to show on screen. 0: disabled, 1: enabled, 2: enabled, and show frame rate interval graph as well. Default value is 1 (enabled).
 - `-DUSE_DMA_TRANSFERS=OFF`: If specified, disables using DMA transfers (at great expense of lost CPU usage). Pass this directive if DMA is giving some issues, e.g. as a troubleshooting step if something is not looking right.
 - `-DDMA_TX_CHANNEL=<num>`: Specifies the DMA channel number to use for SPI send commands. Change this if you find a DMA channel conflict.
 - `-DDMA_RX_CHANNEL=<num>`: Specifies the DMA channel number to use for SPI receive commands. Change this if you find a DMA channel conflict.
@@ -177,6 +178,7 @@ Here is a full example of what to type to build and run, if you have the [Adafru
 
 ```bash
 cd ~
+sudo apt-get install cmake
 git clone https://github.com/juj/fbcp-ili9341.git
 cd fbcp-ili9341
 mkdir build
@@ -186,7 +188,7 @@ make -j
 sudo ./fbcp-ili9341
 ```
 
-If the above does not work, try specifying `-DSPI_BUS_CLOCK_DIVISOR=8` or `=10` to make the display run a little slower, or try with `-DUSE_DMA_TRANSFERS=OFF` to troubleshoot if DMA might be the issue. When changing CMake options, you can reissue the CMake directive line without having to reclone or recreate the `build` directory.
+If the above does not work, try specifying `-DSPI_BUS_CLOCK_DIVISOR=8` or `=10` to make the display run a little slower, or try with `-DUSE_DMA_TRANSFERS=OFF` to troubleshoot if DMA might be the issue. If you are using another display controller than ILI9341, using a much higher value, like 30 or 40 may be needed. When changing CMake options, you can reissue the CMake directive line without having to reclone or recreate the `build` directory. However you may need to manually delete file CMakeCache.txt between changing options to avoid CMake remembering old settings.
 
 If you want to do a full rebuild from scratch, you can `rm -rf build` to delete the build directory and recreate it for a clean rebuild from scratch. There is nothing special about the name or location of this directory, it is just my usual convention. You can also do the build in some other directory relative to the fbcp-ili9341 directory if you please.
 
@@ -392,6 +394,14 @@ After having edited and saved the file, reissue `make -j` in the build directory
 
 Some options are passed to the build from the CMake configuration script. You can run with `make VERBOSE=1` to see which configuration items the CMake build is passing. See the above *Configuring Build Options* section to customize the CMake configure items. For example, to remove the statistics overlay, pass `-DSTATISTICS=0` directive to CMake.
 
+#### bash: cmake: command not found!
+
+Building requires CMake to be installed on the Pi: try `sudo apt-get install cmake`.
+
+#### When I change a CMake option on the command line, it does not seem to apply
+
+Try deleting CMakeCache.txt between changing CMake settings.
+
 #### Does fbcp-ili9341 work with linux command line terminal or X windowing system?
 
 Yes, both work fine. For linux command line terminal, the `/dev/tty1` console should be set to output to Linux framebuffer 0 (`/dev/fb0`). This is the default mode of operation and there do not exist other framebuffers in a default distribution of Raspbian, but if you have manually messed with the `con2fbmap` command in your installation, you may have inadvertently changed this configuration. Run `con2fbmap 1` to see which framebuffer the `/dev/tty1` console is outputting to, it should print `console 1 is mapped to framebuffer 0`. Type `con2fbmap 1 0` to reset console 1 back to outputting to framebuffer 0.
@@ -412,7 +422,7 @@ If fbcp-ili9341 does not support your display controller, you will have to write
 
 #### Does fbcp-ili9341 work with 3-wire SPI displays?
 
-Yes! This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
+Perhaps. This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
 
 Current limitations of 3-wire communication are:
  - The performance option `ALL_TASKS_SHOULD_DMA` is currently not supported, there is an issue with DMA chaining that prevents this from being enabled. As result, CPU usage on 3-wire displays will be slightly higher than on 4-wire displays.
