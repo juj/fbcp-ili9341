@@ -21,7 +21,7 @@
 #define DEBUG_PRINT_WRITTEN_BYTE(byte) do { \
   printf("%02X", byte); \
   if ((writeCounter & 3) == 0) printf("\n"); \
-  while(0)
+  } while(0)
 #else
 #define DEBUG_PRINT_WRITTEN_BYTE(byte) ((void)0)
 #endif
