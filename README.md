@@ -488,6 +488,12 @@ Make sure other `fbcp` programs are not running, or that another copy of `fbcp-i
 
 This is likely caused by the program resizing the video resolution at runtime, which breaks DispmanX. See https://github.com/raspberrypi/userland/issues/461 for more details.
 
+#### The display works for some seconds or minutes, but then turns all white or black, or freezes
+
+Check that the Pi is powered off of a power supply that can keep up with the voltage, and the low voltage icon is not showing up. (remove any `avoid_warnings=1/2` directive from `/boot/config.txt` if that was used to get rid of warnings overlay, to check that voltage is good) It has been observed that if there is not enough power supplied, the display can be the first to starve, while the Pi might keep on running fine. Try removing turbo settings or lowering the clock speed if you have overclocked to verify that the display crash is not power usage related.
+
+Also try lowering SPI bus speed to a safe lower value, e.g. half of the maximum speed that the display was able to manage.
+
 #### The driver is updating pixels on the display, but it looks all garbled
 
 Double check the Data/Command (D/C) GPIO pin physically, and in CMake command line. Whenever fbcp-ili9341 refers to pin numbers, they are always specified in BCM pin numbers. Try setting a higher `-DSPI_BUS_CLOCK_DIVISOR=` value to CMake. Make sure no other `fbcp` programs or SPI drivers or dtoverlays are enabled.
