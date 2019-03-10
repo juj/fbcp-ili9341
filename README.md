@@ -64,6 +64,7 @@ The following LCD displays have been tested:
  - [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
  - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
  - [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
+ - Unbranded 2.8" 320x240 display with ILI9340 controller
 
 ### Installation
 
@@ -122,6 +123,7 @@ When using one of the displays that stack on top of the Pi that are already reco
 If you connected wires directly on the Pi instead of using a Hat from the above list, you will need to use the configuration directives below. In addition to specifying the display, you will also need to tell fbcp-ili9341 which GPIO pins you wired the connections to. To configure the display controller, pass one of:
 
 - `-DILI9341=ON`: If you are running on any other generic ILI9341 display, or on Waveshare32b display that is standalone and not on the FreeplayTech CM3/Zero device, pass this flag.
+- `-DILI9430=ON`: If you have a ILI9430 display, pass this directive. ILI9430 and ILI9341 chipsets are quite similar and ILI9341 displays might work with the same setup commands as ILI9430.
 - `-DHX8357D=ON`: If you have a HX8357D display, pass this directive.
 - `-DSSD1351=ON`: If you have a SSD1351 OLED display, use this.
 - `-DST7735R=ON`: If you have a ST7735R display, use this.

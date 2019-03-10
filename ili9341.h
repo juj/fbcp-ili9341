@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef ILI9341
+#if defined(ILI9341) || defined(ILI9340)
 
 // SPI_BUS_CLOCK_DIVISOR specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
