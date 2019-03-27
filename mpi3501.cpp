@@ -53,7 +53,7 @@ void InitKeDeiV63()
     SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
     usleep(25*1000);
 
-    SPI_TRANSFER(0x00001100); // Oy!  Now this is a reset
+    SPI_TRANSFER(0x00001100); // Reset
     usleep(10*1000);
     SPI_TRANSFER(0xff001100);
     SPI_TRANSFER(0xff001100);
@@ -82,10 +82,11 @@ void InitKeDeiV63()
     SPI_TRANSFER(0x35001100, 0x00, 0x00);
 
 #define MADCTL_BGR_PIXEL_ORDER (1<<3)
+#define MADCTL_LINE_ADDRESS_ORDER_SWAP (1<<4)
 #define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
 #define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
 #define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
-#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
+#define MADCTL_ROTATE_180_DEGREES ( MADCTL_ROW_ADDRESS_ORDER_SWAP )
 
     uint8_t madctl = 0;
 #ifndef DISPLAY_SWAP_BGR
@@ -97,8 +98,7 @@ void InitKeDeiV63()
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
-    //SPI_TRANSFER(0x36001100/*MADCTL: Memory Access Control*/, 0x00, madctl);
-    SPI_TRANSFER(0x36001100/*MADCTL: Memory Access Control*/, 0x00, 0x60);
+    SPI_TRANSFER(0x36001100/*MADCTL: Memory Access Control*/, 0x00, madctl);
 
     SPI_TRANSFER(0x3A001100/*Interface Pixel Format*/, 0x00, 0x55);
     SPI_TRANSFER(0x44001100, 0x00, 0x00, 0x00, 0x01);
@@ -109,10 +109,7 @@ void InitKeDeiV63()
 
     usleep(30*1000);
 
-    SPI_TRANSFER(0x2A001100, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x3F); // ? 
-    SPI_TRANSFER(0x2B001100, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0xE0); // ? 
-    SPI_TRANSFER(0xB4001100, 0x00, 0x00);
-    SPI_TRANSFER(0x2C001100); // x-fer mcu to frame memory?
+    SPI_TRANSFER(0xB4001100, 0x00, 0x00); // ?
     
     usleep(10*1000);
     
