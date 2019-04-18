@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef ILI9341
+#if defined(ILI9341) || defined(ILI9340)
 
 // SPI_BUS_CLOCK_DIVISOR specifies how fast to communicate the SPI bus at. Possible values are 4, 6, 8, 10, 12, ... Smaller
 // values are faster. On my PiTFT 2.8 and Waveshare32b displays, divisor value of 4 does not work, and
@@ -50,6 +50,19 @@
 // most pleasing result, so default to using that. You can also try other settings above. 119 Hz should give
 // lowest latency, perhaps 61 Hz might give least amount of tearing, although this can be quite subjective.
 #define ILI9341_UPDATE_FRAMERATE ILI9341_FRAMERATE_119_HZ
+
+// Appears in ILI9341 Data Sheet v1.11 (2011/06/10), but not in older v1.02 (2010/12/06). This has a subtle effect on colors/saturation.
+// Valid values are 0x20 and 0x30. Spec says 0x20 is default at boot, but doesn't seem so, more like 0x00 is default, giving supersaturated colors. I like 0x30 best.
+// Value 0x30 doesn't seem to be available on ILI9340.
+#define ILI9341_PUMP_CONTROL_2XVCI 0x20
+#define ILI9341_PUMP_CONTROL_3XVCI 0x30
+
+#ifdef ILI9341
+#define ILI9341_PUMP_CONTROL ILI9341_PUMP_CONTROL_3XVCI 
+#else
+#define ILI9341_PUMP_CONTROL ILI9341_PUMP_CONTROL_2XVCI
+#endif
+
 
 #define DISPLAY_NATIVE_WIDTH 240
 #define DISPLAY_NATIVE_HEIGHT 320
