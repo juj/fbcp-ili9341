@@ -4,7 +4,7 @@
 
 #ifdef HX8357D
 
-#include "spi.h"
+#include "spi_user.h"
 
 #include <memory.h>
 #include <stdio.h>

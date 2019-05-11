@@ -3,7 +3,7 @@
 #include "util.h"
 #include "display.h"
 #include "gpu.h"
-#include "spi.h"
+#include "spi_user.h"
 
 Span *spans = 0;
 

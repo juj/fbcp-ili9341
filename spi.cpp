@@ -5,10 +5,11 @@
 #include <sys/mman.h> // mmap, munmap
 #include <pthread.h> // pthread_create
 #include <bcm_host.h> // bcm_host_get_peripheral_address, bcm_host_get_peripheral_size, bcm_host_get_sdram_address
+#include "config.h"
 #endif
 
 #include "config.h"
-#include "spi.h"
+#include "spi_user.h"
 #include "util.h"
 #include "dma.h"
 #include "mailbox.h"
@@ -403,6 +404,7 @@ void RunSPITask(SPITask *task)
 #endif
 
 SharedMemory *spiTaskMemory = 0;
+SharedMemory *spiFlagMemory = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
 volatile int spiThreadSleeping = 0;
@@ -454,7 +456,7 @@ void ExecuteSPITasks()
 #endif
 }
 
-#if !defined(KERNEL_MODULE) && defined(USE_SPI_THREAD)
+#if defined(USE_SPI_THREAD)
 pthread_t spiThread;
 
 // A worker thread that keeps the SPI bus filled at all times
@@ -489,19 +491,6 @@ void *spi_thread(void *unused)
 
 int InitSPI()
 {
-#ifdef KERNEL_MODULE
-
-#define BCM2835_PERI_BASE               0x3F000000
-#define BCM2835_GPIO_BASE               0x200000
-#define BCM2835_SPI0_BASE               0x204000
-  printk("ioremapping %p\n", (void*)(BCM2835_PERI_BASE+BCM2835_GPIO_BASE));
-  void *bcm2835 = ioremap(BCM2835_PERI_BASE+BCM2835_GPIO_BASE, 32768);
-  printk("Got bcm address %p\n", bcm2835);
-  if (!bcm2835) FATAL_ERROR("Failed to map BCM2835 address!");
-  spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE - BCM2835_GPIO_BASE);
-  gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835);
-
-#else // Userland version
   // Memory map GPIO and SPI peripherals for direct access
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
@@ -512,7 +501,6 @@ int InitSPI()
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
   systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
-#endif
 
   uint32_t currentBcmCoreSpeed = MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
   uint32_t maxBcmCoreTurboSpeed = MailboxRet2(0x00030004/*Get Max Clock Rate*/, 0x4/*CORE*/);
@@ -522,7 +510,6 @@ int InitSPI()
 
   printf("BCM core speed: current: %uhz, max turbo: %uhz. SPI CDIV: %d, SPI max frequency: %.0fhz\n", currentBcmCoreSpeed, maxBcmCoreTurboSpeed, SPI_BUS_CLOCK_DIVISOR, (double)maxBcmCoreTurboSpeed / SPI_BUS_CLOCK_DIVISOR);
 
-#if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
 #ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
@@ -552,38 +539,27 @@ int InitSPI()
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk
-#endif
 
   // Initialize SPI thread task buffer memory
 #ifdef KERNEL_MODULE_CLIENT
-  int driverfd = open("/proc/bcm2835_spi_display_bus", O_RDWR|O_SYNC);
-  if (driverfd < 0) FATAL_ERROR("Could not open SPI ring buffer - kernel driver module not running?");
-  spiTaskMemory = (SharedMemory*)mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
-  close(driverfd);
-  if (spiTaskMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI ring buffer!");
-  printf("Got shared memory block %p, ring buffer head %p, ring buffer tail %p, shared memory block phys address: %p\n", (const char *)spiTaskMemory, spiTaskMemory->queueHead, spiTaskMemory->queueTail, spiTaskMemory->sharedMemoryBaseInPhysMemory);
-
-#ifdef USE_DMA_TRANSFERS
-  printf("DMA TX channel: %d, DMA RX channel: %d\n", spiTaskMemory->dmaTxChannel, spiTaskMemory->dmaRxChannel);
+  spiFlagMemory = (SharedMemory*)mmap(NULL, sizeof(char), PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
+  if (spiFlagMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI flag buffer!");
+  printf("Got shared memory block %p\n", (const char *)spiFlagMemory);
 #endif
-
-#else
 
 #ifdef KERNEL_MODULE
-  spiTaskMemory = (SharedMemory*)kmalloc(SHARED_MEMORY_SIZE, GFP_KERNEL | GFP_DMA);
-  // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer in 'spiTaskMemory'. However
-  // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
-  // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to the following intermediate 'dmaSourceMemory'
-  // memory area to perform the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
-  dmaSourceMemory = (SharedMemory*)dma_alloc_writecombine(0, SHARED_MEMORY_SIZE, &spiTaskMemoryPhysical, GFP_KERNEL);
-  LOG("Allocated DMA memory: mem: %p, phys: %p", spiTaskMemory, (void*)spiTaskMemoryPhysical);
-  memset((void*)spiTaskMemory, 0, SHARED_MEMORY_SIZE);
-#else
-  spiTaskMemory = (SharedMemory*)Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
+  spiFlagMemory = (SharedMemory*)kmalloc(sizeof(char), GFP_KERNEL | GFP_DMA);
+  dmaSourceMemory = (SharedMemory*)dma_alloc_writecombine(0, sizeof(char), &spiFlagMemoryPhysical, GFP_KERNEL);
+  LOG("Allocated Flag memory: mem: %p, phys: %p", spiFlagMemory, (void*)spiFlagMemoryPhysical);
+  memset((void*)spiFlagMemory, 0, sizeof(char));
 #endif
 
-  spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
+#if !defined(KERNEL_MODULE) && !defined(KERNEL_MODULE_CLIENT)
+  spiFlagMemory = (SharedMemory*)Malloc(sizeof(char), "spi.cpp shared flag memory");
 #endif
+
+  spiTaskMemory = (SharedMemory*)Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
+  spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
 
 #ifdef USE_DMA_TRANSFERS
   InitDMA();
@@ -592,7 +568,6 @@ int InitSPI()
   // Enable fast 8 clocks per byte transfer mode, instead of slower 9 clocks per byte.
   UNLOCK_FAST_8_CLOCKS_SPI();
 
-#if !defined(KERNEL_MODULE) && (!defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES))
   printf("Initializing display\n");
   InitSPIDisplay();
 
@@ -607,7 +582,6 @@ int InitSPI()
   BEGIN_SPI_COMMUNICATION();
 #endif
 
-#endif
 
   LOG("InitSPI done");
   return 0;
@@ -626,7 +600,6 @@ void DeinitSPI()
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
-#ifndef KERNEL_MODULE_CLIENT
 #ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
 #endif
@@ -635,7 +608,6 @@ void DeinitSPI()
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0);
   SET_GPIO_MODE(GPIO_SPI0_CLK, 0);
-#endif
 
   if (bcm2835)
   {
@@ -649,15 +621,14 @@ void DeinitSPI()
     mem_fd = -1;
   }
 
-#ifndef KERNEL_MODULE_CLIENT
 
 #ifdef KERNEL_MODULE
-  kfree(spiTaskMemory);
-  dma_free_writecombine(0, SHARED_MEMORY_SIZE, dmaSourceMemory, spiTaskMemoryPhysical);
-  spiTaskMemoryPhysical = 0;
+  kfree(spiFlagMemory);
+  spiFlagMemoryPhysical = 0;
 #else
   free(spiTaskMemory);
-#endif
+  free(spiFlagMemory);
 #endif
   spiTaskMemory = 0;
+  spiFlagMemory = 0;
 }

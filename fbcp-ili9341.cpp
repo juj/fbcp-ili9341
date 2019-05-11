@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "text.h"
-#include "spi.h"
+#include "spi_user.h"
 #include "gpu.h"
 #include "statistics.h"
 #include "tick.h"

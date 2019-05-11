@@ -12,7 +12,7 @@
 
 #include "tick.h"
 #include "text.h"
-#include "spi.h"
+#include "spi_user.h"
 #include "util.h"
 #include "mailbox.h"
 #include "mem_alloc.h"

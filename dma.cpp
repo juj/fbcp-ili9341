@@ -5,11 +5,13 @@
 #include <inttypes.h> // uint32_t
 #include <syslog.h> // syslog
 #include <sys/mman.h> // mmap, munmap, PROT_READ, PROT_WRITE
+#include "spi_kernel.h"
+#else
+#include "spi_user.h"
 #endif
 
 #include "config.h"
 #include "dma.h"
-#include "spi.h"
 #include "gpu.h"
 #include "util.h"
 #include "mailbox.h"

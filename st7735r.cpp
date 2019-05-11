@@ -2,7 +2,7 @@
 
 #if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
 
-#include "spi.h"
+#include "spi_user.h"
 
 #include <memory.h>
 #include <stdio.h>

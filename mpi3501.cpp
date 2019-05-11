@@ -2,7 +2,7 @@
 
 #ifdef MPI3501
 
-#include "spi.h"
+#include "spi_user.h"
 
 #include <memory.h>
 #include <stdio.h>
