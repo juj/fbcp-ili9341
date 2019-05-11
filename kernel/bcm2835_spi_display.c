@@ -69,7 +69,7 @@ static int p_mmap(struct file *filp, struct vm_area_struct *vma)
 static int p_open(struct inode *inode, struct file *filp)
 {
   mmap_info *info = kmalloc(sizeof(mmap_info), GFP_KERNEL);
-  info->data = (void*)spiFlagMemory;
+  //info->data = (void*)spiFlagMemory;
   filp->private_data = info;
   return 0;
 }
@@ -103,8 +103,6 @@ uint32_t virt_to_bus_address(volatile void *virtAddress)
 }
 
 volatile int shuttingDown = 0;
-dma_addr_t spiFlagMemoryPhysical = 0;
-
 static uint32_t irqHandlerCookie = 0;
 static uint32_t irqRegistered = 0;
 

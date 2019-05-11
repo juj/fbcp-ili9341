@@ -404,7 +404,6 @@ void RunSPITask(SPITask *task)
 #endif
 
 SharedMemory *spiTaskMemory = 0;
-SharedMemory *spiFlagMemory = 0;
 volatile uint64_t spiThreadIdleUsecs = 0;
 volatile uint64_t spiThreadSleepStartTime = 0;
 volatile int spiThreadSleeping = 0;
@@ -540,24 +539,6 @@ int InitSPI()
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk
 
-  // Initialize SPI thread task buffer memory
-#ifdef KERNEL_MODULE_CLIENT
-  spiFlagMemory = (SharedMemory*)mmap(NULL, sizeof(char), PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
-  if (spiFlagMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI flag buffer!");
-  printf("Got shared memory block %p\n", (const char *)spiFlagMemory);
-#endif
-
-#ifdef KERNEL_MODULE
-  spiFlagMemory = (SharedMemory*)kmalloc(sizeof(char), GFP_KERNEL | GFP_DMA);
-  dmaSourceMemory = (SharedMemory*)dma_alloc_writecombine(0, sizeof(char), &spiFlagMemoryPhysical, GFP_KERNEL);
-  LOG("Allocated Flag memory: mem: %p, phys: %p", spiFlagMemory, (void*)spiFlagMemoryPhysical);
-  memset((void*)spiFlagMemory, 0, sizeof(char));
-#endif
-
-#if !defined(KERNEL_MODULE) && !defined(KERNEL_MODULE_CLIENT)
-  spiFlagMemory = (SharedMemory*)Malloc(sizeof(char), "spi.cpp shared flag memory");
-#endif
-
   spiTaskMemory = (SharedMemory*)Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
   spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
 
@@ -622,13 +603,6 @@ void DeinitSPI()
   }
 
 
-#ifdef KERNEL_MODULE
-  kfree(spiFlagMemory);
-  spiFlagMemoryPhysical = 0;
-#else
   free(spiTaskMemory);
-  free(spiFlagMemory);
-#endif
   spiTaskMemory = 0;
-  spiFlagMemory = 0;
 }
