@@ -7,6 +7,8 @@
 
 #if defined(ILI9341) || defined(ILI9340)
 #include "ili9341.h"
+#elif defined(ILI9342)
+#include "ili9342.h"
 #elif defined(ILI9486L)
 #include "ili9486l.h"
 #elif defined(ILI9486)
