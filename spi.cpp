@@ -44,6 +44,9 @@ static uint32_t writeCounter = 0;
   } while(0)
 
 int mem_fd = -1;
+int intr_fd = -1;
+static int numberPress = 0;
+static char numberAsString[21] = "                    ";
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
@@ -51,6 +54,19 @@ volatile SPIRegisterFile *spi = 0;
 // Points to the system timer register. N.B. spec sheet says this is two low and high parts, in an 32-bit aligned (but not 64-bit aligned) address. Profiling shows
 // that Pi 3 Model B does allow reading this as a u64 load, and even when unaligned, it is around 30% faster to do so compared to loading in parts "lo | (hi << 32)".
 volatile uint64_t *systemTimerRegister = 0;
+
+bool hasInterrupt() {
+    int lastNumberPress = numberPress;
+    
+    if ((read(intr_fd, numberAsString, sizeof(numberAsString))) < 0) {
+        if (errno != EWOULDBLOCK) {
+            perror("read/intr_fd");
+        }
+    } else {
+        numberPress = atoi(numberAsString);
+    }
+    return (numberPress != lastNumberPress);
+}
 
 void DumpSPICS(uint32_t reg)
 {
@@ -501,6 +517,10 @@ int InitSPI()
   systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 
+  // Touch screen interrupt
+  intr_fd = open("/sys/tft/gpio25/numberPresses", O_RDONLY|O_NONBLOCK);
+  if (intr_fd < 0) FATAL_ERROR("can't open /sys/tft/gpio25/numberPresses (run as sudo)");
+    
   uint32_t currentBcmCoreSpeed = MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
   uint32_t maxBcmCoreTurboSpeed = MailboxRet2(0x00030004/*Get Max Clock Rate*/, 0x4/*CORE*/);
 
@@ -601,8 +621,10 @@ void DeinitSPI()
     close(mem_fd);
     mem_fd = -1;
   }
-
-
+  if (intr_fd >= 0) {
+    close(intr_fd);
+    intr_fd = -1;
+  }
   free(spiTaskMemory);
   spiTaskMemory = 0;
 }

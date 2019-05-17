@@ -11,6 +11,10 @@ void ChipSelectHigh()
 {
   WAIT_SPI_FINISHED();
   CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
+  if(hasInterrupt()) {
+	// TODO: Read touch display here on spi
+fprintf( stderr, ".");
+  }
   SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
   __sync_synchronize();
   SET_GPIO(GPIO_SPI0_CE1); // Disable Display
