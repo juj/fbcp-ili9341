@@ -7,13 +7,23 @@
 #include <memory.h>
 #include <stdio.h>
 
+#include <fcntl.h>
+
+int fd_touch = -1;
+static int counter = 0;
+char buffer[20];
+short bufLen = 0;
+
 void ChipSelectHigh()
 {
   WAIT_SPI_FINISHED();
   CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
-  if(hasInterrupt()) {
+  if(hasInterrupt() && fd_touch >= 0) {
 	// TODO: Read touch display here on spi
-fprintf( stderr, ".");
+     counter = counter + 1; 
+	bufLen = sprintf(buffer,"%04X %04X\n",fd_touch, counter);
+      lseek(fd_touch,0,SEEK_SET); 
+      write(fd_touch,buffer,bufLen);
   }
   SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
   __sync_synchronize();
@@ -24,6 +34,12 @@ fprintf( stderr, ".");
 
 void InitKeDeiV63()
 {
+  // Open output device
+    fd_touch = open("/dev/mpi3501_touch",O_CREAT|O_WRONLY|O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH );
+    if (fd_touch < 0) {
+        perror("uio open:");
+    }
+    
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
 #if defined(GPIO_TFT_RESET_PIN) && GPIO_TFT_RESET_PIN >= 0
   printf("Resetting display at reset GPIO pin %d\n", GPIO_TFT_RESET_PIN);
@@ -146,6 +162,9 @@ void TurnDisplayOn()
 
 void DeinitSPIDisplay()
 {
+    if(fd_touch >=0) {
+        close(fd_touch);
+    }
   ClearScreen();
   TurnDisplayOff();
 }

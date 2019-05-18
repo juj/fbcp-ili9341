@@ -58,6 +58,7 @@ volatile uint64_t *systemTimerRegister = 0;
 bool hasInterrupt() {
     int lastNumberPress = numberPress;
     
+    lseek(intr_fd,0,SEEK_SET);
     if ((read(intr_fd, numberAsString, sizeof(numberAsString))) < 0) {
         if (errno != EWOULDBLOCK) {
             perror("read/intr_fd");
