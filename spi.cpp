@@ -58,12 +58,13 @@ volatile uint64_t *systemTimerRegister = 0;
 bool hasInterrupt() {
     int lastNumberPress = numberPress;
     
-    lseek(intr_fd,0,SEEK_SET);
+    if(intr_fd<0) return false;
     if ((read(intr_fd, numberAsString, sizeof(numberAsString))) < 0) {
         if (errno != EWOULDBLOCK) {
             perror("read/intr_fd");
         }
     } else {
+    	lseek(intr_fd,0,SEEK_SET);
         numberPress = atoi(numberAsString);
     }
     return (numberPress != lastNumberPress);
@@ -520,7 +521,7 @@ int InitSPI()
 
   // Touch screen interrupt
   intr_fd = open("/sys/tft/gpio25/numberPresses", O_RDONLY|O_NONBLOCK);
-  if (intr_fd < 0) FATAL_ERROR("can't open /sys/tft/gpio25/numberPresses (run as sudo)");
+  //if (intr_fd < 0) FATAL_ERROR("can't open /sys/tft/gpio25/numberPresses (run as sudo)");
     
   uint32_t currentBcmCoreSpeed = MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
   uint32_t maxBcmCoreTurboSpeed = MailboxRet2(0x00030004/*Get Max Clock Rate*/, 0x4/*CORE*/);
