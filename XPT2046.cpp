@@ -75,12 +75,11 @@ XPT2046::XPT2046() {
     // FIFO file path 
 	// Creating the named file(FIFO) 
 	// mkfifo(<pathname>, <permission>) 
-	mkfifo(tcfifo, 0666); 
+	mkfifo(tcfifo, 0666);
 }
 
 
 XPT2046::~XPT2046() {
-	
 }
 
 int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
@@ -110,16 +109,16 @@ int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
 }
 
 void XPT2046::read_touchscreen() {
-		
+    uint16_t x, y, z;
+
 	uint32_t old_spi_cs = spi->cs;
 	uint32_t old_spi_clk = spi->clk;
 	//printBits(sizeof(old_spi_cs), (void*)&(old_spi_cs));
 	spi->clk = 256;
-	SET_GPIO_MODE(GPIO_SPI0_CE0, 0x00);
-	// SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04);
+	//SET_GPIO_MODE(GPIO_SPI0_CE0, 0x00);
+    //SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04);
 	// touch on low
-	
-	uint16_t x, y, z;
+
 	read(&x, &y, &z);
 	if (abs(x - _lastX) > _minChange || abs(y - _lastY) > _minChange) {
 		_lastX = x;
@@ -129,18 +128,17 @@ void XPT2046::read_touchscreen() {
 	if (z > 100) 
 	{
 		char output[30] = "";
+        fd = open(tcfifo, O_WRONLY | O_NONBLOCK);
 		sprintf(output, "x:%d, y:%d, z:%d\n", x, y, z);
-		int fd = open(tcfifo, O_WRONLY); 
-		write(fd, output, strlen(output) + 1); 
-		close(fd); 
+		write(fd, output, strlen(output) + 1);
+        close(fd);
 	}
 		
 	
-	//spi->cs = (old_spi_cs | 1 << 4 | 1 << 5) & (~(1 << 7)); //Clear Fifos and TA
+	spi->cs = (old_spi_cs | 1 << 4 | 1 << 5) & (~(1 << 7)); //Clear Fifos and TA
 	spi->cs  = old_spi_cs;
 	spi->clk = old_spi_clk;
-		
-	SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
+	//SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
 	//SET_GPIO_MODE(GPIO_SPI0_CE1, 0x00);
 }
 

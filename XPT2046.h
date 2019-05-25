@@ -91,7 +91,8 @@ class XPT2046 {
 
         int _lastX;
         int _lastY;
-
+        int fd;
+    
         uint16_t _minChange;
 			
 		uint32_t spi_cs ;
