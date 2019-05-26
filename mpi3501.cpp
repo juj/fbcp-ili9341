@@ -19,14 +19,13 @@ void ChipSelectHigh()
 {
   WAIT_SPI_FINISHED();
   SET_GPIO(GPIO_SPI0_CE1); // Disable Display
+  CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
   __sync_synchronize();
   if(hasInterrupt()) {
 	touch.read_touchscreen();
-  } else {
-    CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
-    SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
+    __sync_synchronize();
   }
-  __sync_synchronize();
+  SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
   CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display
   __sync_synchronize();
 }
