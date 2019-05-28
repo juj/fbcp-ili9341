@@ -84,8 +84,6 @@ XPT2046::~XPT2046() {
 
 int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
 {
-	uint32_t old_spi_cs = spi->cs;
-	
 	for (int i = 0; i < length; i++)
 	{		
 		spi->cs = spi_cs | 1 << 7;//Set TA to high
@@ -96,16 +94,14 @@ int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
 		
 		while(! (spi->cs & (1 << 17))) ; //Wait until RX FIFO contains data
 		
-		//while(!(spi->cs & (1 << 16)));  //Wait until DONE
+		uint32_t spi_fifo = spi->fifo;
 		
-		uint32_t spi_fifo = spi->fifo;		
-		
-		spi->cs = (spi_cs & (~(1 << 7))) | 1 << 5 | 1 << 4;   //Set TA to LOW  //Clear Fifox
+		spi->cs = (spi_cs & (~(1 << 7))) | 1 << 5 | 1 << 4;   //Set TA to LOW  //Clear Fifo
 		
 		data[i] = spi_fifo;		
 	}
-	
-	return 0;
+    
+    return 0;
 }
 
 void XPT2046::read_touchscreen() {
@@ -115,10 +111,8 @@ void XPT2046::read_touchscreen() {
 	uint32_t old_spi_clk = spi->clk;
 	//printBits(sizeof(old_spi_cs), (void*)&(old_spi_cs));
 	spi->clk = 256;
-	//SET_GPIO_MODE(GPIO_SPI0_CE0, 0x00);
-    //SET_GPIO_MODE(GPIO_SPI0_CE1, 0x04);
-	// touch on low
 
+    // touch on low
 	read(&x, &y, &z);
 	if (abs(x - _lastX) > _minChange || abs(y - _lastY) > _minChange) {
 		_lastX = x;
@@ -133,13 +127,10 @@ void XPT2046::read_touchscreen() {
 		write(fd, output, strlen(output) + 1);
         close(fd);
 	}
-		
-	
+    
 	//spi->cs = (old_spi_cs | 1 << 4 | 1 << 5) & (~(1 << 7)); //Clear Fifos and TA
 	spi->cs  = old_spi_cs;
 	spi->clk = old_spi_clk;
-	//SET_GPIO_MODE(GPIO_SPI0_CE0, 0x04);
-	//SET_GPIO_MODE(GPIO_SPI0_CE1, 0x00);
 }
 
 void XPT2046::setRotation(uint8_t m) {
@@ -192,14 +183,16 @@ void XPT2046::readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
 
     for(; i < 15; i++) {
         // SPI requires 32bit alignment
-        uint8_t buf[12] = {
+        uint8_t buf[15] = {
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Y) | XPT2046_CFG_PWR(3)), 0x00, 0x00,
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_X) | XPT2046_CFG_PWR(3)), 0x00, 0x00,
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z1)| XPT2046_CFG_PWR(3)), 0x00, 0x00,
-                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(3)), 0x00, 0x00
+                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(3)), 0x00, 0x00,
+                // re-enable interrupt
+                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(0)| XPT2046_CFG_PWR(0)), 0x00, 0x00
         };
 
-		SpiWriteAndRead(buf, 12);	    
+		SpiWriteAndRead(buf, 15);
 
         y += (buf[1] << 8 | buf[2])>>3;
         x += (buf[4] << 8 | buf[5])>>3;
