@@ -71,7 +71,7 @@ XPT2046::XPT2046() {
 		0 << 8 |    //DMA disabled
 		0 << 11;  //Manual chip select
 	
-	
+	interruptEnabled = false;
     // FIFO file path 
 	// Creating the named file(FIFO) 
 	// mkfifo(<pathname>, <permission>) 
@@ -103,7 +103,23 @@ int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
     
     return 0;
 }
+bool XPT2046::armInterrupt() {
+/*
+    uint8_t i = 0;
+    // SPI requires 32bit alignment
+    uint8_t buf[3] = {
+        // re-enable interrupt
+        (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(0)), 0x00, 0x00
+    };
+ */
+    if(interruptEnabled) return false;
+    
+    //SpiWriteAndRead(buf, 3);
 
+    interruptEnabled = true;
+ 
+    return true;
+}
 void XPT2046::read_touchscreen() {
     uint16_t x, y, z;
 
@@ -181,24 +197,29 @@ void XPT2046::readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
     uint32_t z2 = 0;
     uint8_t i = 0;
 
-    for(; i < 15; i++) {
+    for(; i < 4; i++) { // Sampling
         // SPI requires 32bit alignment
-        uint8_t buf[15] = {
+        uint8_t buf[12] = {
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Y) | XPT2046_CFG_PWR(3)), 0x00, 0x00,
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_X) | XPT2046_CFG_PWR(3)), 0x00, 0x00,
                 (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z1)| XPT2046_CFG_PWR(3)), 0x00, 0x00,
-                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(3)), 0x00, 0x00,
-                // re-enable interrupt
-                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(0)| XPT2046_CFG_PWR(0)), 0x00, 0x00
+                (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(3)), 0x00, 0x00
         };
 
-		SpiWriteAndRead(buf, 15);
+		SpiWriteAndRead(buf, 12);
 
         y += (buf[1] << 8 | buf[2])>>3;
         x += (buf[4] << 8 | buf[5])>>3;
         z1 += (buf[7] << 8 | buf[8])>>3;
         z2 += (buf[10] << 8 | buf[11])>>3;
     }
+
+    // SPI requires 32bit alignment
+    uint8_t buf[3] = {
+        // re-enable interrupt
+        (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(0)), 0x00, 0x00
+    };
+    SpiWriteAndRead(buf, 3);
 
     if(i == 0) {
         *oX = 0;

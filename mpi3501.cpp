@@ -24,6 +24,10 @@ void ChipSelectHigh()
   if(hasInterrupt()) {
 	touch.read_touchscreen();
     __sync_synchronize();
+  } else {
+      if(touch.armInterrupt()) {
+          __sync_synchronize();
+      }
   }
   SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
   CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display

@@ -49,6 +49,7 @@ class XPT2046 {
 	    int SpiWriteAndRead(unsigned char *data, int length);
 	
         void read_touchscreen();
+        bool armInterrupt();
 
         void setRotation(uint8_t m);
         void setCalibration(uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY);
@@ -100,6 +101,7 @@ class XPT2046 {
 	    uint32_t z_average ;
 
 		const char * tcfifo ;
+        bool interruptEnabled ;
 };
 
 
