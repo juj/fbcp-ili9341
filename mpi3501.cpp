@@ -14,6 +14,8 @@ XPT2046 touch;
 static int counter = 0;
 char buffer[20];
 short bufLen = 0;
+#define LOOP_INTERVAL 500
+static int loop = 0;
 
 void ChipSelectHigh()
 {
@@ -21,13 +23,13 @@ void ChipSelectHigh()
   SET_GPIO(GPIO_SPI0_CE1); // Disable Display
   CLEAR_GPIO(GPIO_SPI0_CE0); // Enable Touch
   __sync_synchronize();
+    if(loop++ % LOOP_INTERVAL == 0) {
+        touch.read_touchscreen(true);
+        __sync_synchronize();
+    }
   if(hasInterrupt()) {
-	touch.read_touchscreen();
-    __sync_synchronize();
-  } else {
-      if(touch.armInterrupt()) {
-          __sync_synchronize();
-      }
+	touch.read_touchscreen(false);
+      __sync_synchronize();
   }
   SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
   CLEAR_GPIO(GPIO_SPI0_CE1); // Enable Display

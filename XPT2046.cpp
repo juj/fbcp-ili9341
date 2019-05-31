@@ -42,6 +42,8 @@
 #define XPT2046_MUX_Z1      0b011
 #define XPT2046_MUX_Z2      0b100
 
+#define INTERRUPTDEC 10
+
 XPT2046::XPT2046() {
 	spi_cs = 0;
 	z_average = 0;
@@ -63,6 +65,8 @@ XPT2046::XPT2046() {
 
     _minChange = 10;
 
+    interruptpoll = INTERRUPTDEC;
+    
 	spi_cs = 
 		1 << 0 |     //Chip select 1 
 		0 << 3 |    //low idle clock polarity
@@ -71,8 +75,7 @@ XPT2046::XPT2046() {
 		0 << 8 |    //DMA disabled
 		0 << 11;  //Manual chip select
 	
-	interruptEnabled = false;
-    // FIFO file path 
+    // FIFO file path
 	// Creating the named file(FIFO) 
 	// mkfifo(<pathname>, <permission>) 
 	mkfifo(tcfifo, 0666);
@@ -103,24 +106,8 @@ int XPT2046::SpiWriteAndRead(unsigned char *data, int length)
     
     return 0;
 }
-bool XPT2046::armInterrupt() {
-/*
-    uint8_t i = 0;
-    // SPI requires 32bit alignment
-    uint8_t buf[3] = {
-        // re-enable interrupt
-        (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(0)), 0x00, 0x00
-    };
- */
-    if(interruptEnabled) return false;
-    
-    //SpiWriteAndRead(buf, 3);
 
-    interruptEnabled = true;
- 
-    return true;
-}
-void XPT2046::read_touchscreen() {
+void XPT2046::read_touchscreen(bool interruptEnable) {
     uint16_t x, y, z;
 
 	uint32_t old_spi_cs = spi->cs;
@@ -134,7 +121,16 @@ void XPT2046::read_touchscreen() {
 		_lastX = x;
 		_lastY = y;
 	}
-	
+    
+    if(interruptEnable) {
+        // SPI requires 32bit alignment
+        uint8_t buf[3] = {
+            // re-enable interrupt
+            (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(0)), 0x00, 0x00
+        };
+        SpiWriteAndRead(buf, 3);
+    }
+    
 	if (z > 100) 
 	{
 		char output[30] = "";
@@ -213,13 +209,6 @@ void XPT2046::readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
         z1 += (buf[7] << 8 | buf[8])>>3;
         z2 += (buf[10] << 8 | buf[11])>>3;
     }
-
-    // SPI requires 32bit alignment
-    uint8_t buf[3] = {
-        // re-enable interrupt
-        (XPT2046_CFG_START | XPT2046_CFG_12BIT | XPT2046_CFG_DFR | XPT2046_CFG_MUX(XPT2046_MUX_Z2)| XPT2046_CFG_PWR(0)), 0x00, 0x00
-    };
-    SpiWriteAndRead(buf, 3);
 
     if(i == 0) {
         *oX = 0;
