@@ -76,7 +76,7 @@ This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) f
 
 This program neither utilizes the default SPI driver, so a line such as `dtparam=spi=on` in `/boot/config.txt` should also be removed so that it will not cause conflicts.
 
-Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, those should be removed as well to avoid conflicts. It would be possible to add touch support to fbcp-ili9341 if someone wants to take a stab at it.
+Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, those should be removed as well to avoid conflicts. The driver has its own touch screen driver (thanks to contributors).
 
 ##### Building and running
 
@@ -90,8 +90,12 @@ mkdir build
 cd build
 cmake [options] ..
 make -j
-sudo ./fbcp-ili9341
-```
+cd ../kernel
+./start_kernel_module.sh
+cd ../build
+tail -f /tmp/TCfifo &
+sudo ./fbcp-ili9341 &
+
 
 Note especially the two dots `..` on the CMake line, which denote "up one directory" in this case (instead of referring to "more items go here").
 
@@ -592,8 +596,7 @@ If you would like to help push Raspberry Pi SPI display support further, there a
  - Implement support for reading the MISO line for display identification numbers/strings for potentially interesting statistics (could some of the displays be autodetected this way?)
  - Add support for other color modes, like RGB666 or RGB888. Currently fbcp-ili9341 only knows about RGB565 display mode.
  - Implement a kernel module that enables userland programs to allocate DMA channels, which fbcp-ili9341 could use to amicably reserve its own DMA channels without danger of conflicting.
- - Implement support for touch control while fbcp-ili9341 is active. ([#33](https://github.com/juj/fbcp-ili9341/issues/33))
- - Implement support for SPI-based SD card readers that are sometimes attached to displays.
+ - üImplement support for SPI-based SD card readers that are sometimes attached to displays.
  - Port fbcp-ili9341 to work with I2C displays.
  - Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
  - Add support to building fbcp-ili9341 on another operating system than Raspbian. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
