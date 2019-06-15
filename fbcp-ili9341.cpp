@@ -137,7 +137,7 @@ int main()
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
   OpenKeyboard();
-
+  initTimer();
   printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
@@ -189,7 +189,6 @@ int main()
      	  } 
         }
     }
-printf("1");
     bool spiThreadWasWorkingHardBefore = false;
 
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
@@ -209,7 +208,6 @@ printf("1");
 #ifdef STATISTICS
         uint64_t t0 = tick();
 #endif
-printf("2");
         if (sleepUsecs > 1000) usleep(500);
 
 #ifdef STATISTICS
@@ -249,34 +247,39 @@ printf("2");
       for(int i = 0; i < frameSkipTimeHistorySize; ++i) frameSkipTimeHistory[i] = frameSkipTimeHistory[i+expiredSkippedFrames];
     }
 #endif
-printf("3");
 
+printf("3");
+startTimer();
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
     bool framebufferHasNewChangedPixels = true;
     uint64_t frameObtainedTime;
     if (gotNewFramebuffer)
     {
+printf("x");
 #ifdef USE_GPU_VSYNC
-      // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
-      // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
-      // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
+// TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
+// N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
+// produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
 
       frameObtainedTime = tick();
       uint64_t framePollingStartTime = frameObtainedTime;
 
-#if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
+  #if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
     uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
     int64_t timeToSleep = nextFrameArrivalTime - tick();
     if (timeToSleep > 0) {
+printf("y");
       usleep(timeToSleep);
-}
-#endif
+      stopTimer();
+    }
+  #endif
 
       framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
+printf("z");
 
 #ifdef STATISTICS
       uint64_t now = tick();
@@ -286,43 +289,44 @@ printf("3");
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
       DrawStatisticsOverlay(framebuffer[0]);
-
+printf("b");
 #ifdef USE_GPU_VSYNC
 
-#ifdef STATISTICS
+ #ifdef STATISTICS
       uint64_t completelyUnnecessaryTimeWastedPollingGPUStart = tick();
-#endif
+ #endif
 
       // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
-#ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
+ #ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
       framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
       while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
       {
-printf("4");
         usleep(2000);
         frameObtainedTime = tick();
         framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
         framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
-#else
+ #else
       framebufferHasNewChangedPixels = true;
-#endif
+ #endif
 
+printf("a");
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
-#ifdef STATISTICS
+printf("c");
+ #ifdef STATISTICS
       now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 
       uint64_t completelyUnnecessaryTimeWastedPollingGPUStop = tick();
       __atomic_fetch_add(&timeWastedPollingGPU, completelyUnnecessaryTimeWastedPollingGPUStop-completelyUnnecessaryTimeWastedPollingGPUStart, __ATOMIC_RELAXED);
-#endif
+ #endif
 
 #else // !USE_GPU_VSYNC
       if (!displayOff)
@@ -340,6 +344,7 @@ printf("4");
 #else
     const double timesliceToUseForScreenUpdates = 1500000;
 #endif
+printf("5");
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
 
 #if !defined(NO_INTERLACING) || (defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY))
@@ -471,9 +476,9 @@ printf("4");
           spiX = i->x;
         }
 #endif
-printf("5");
       }
 
+printf("6");
       // Submit the span pixels
       SPITask *task = AllocTask(i->size*SPI_BYTESPERPIXEL);
       task->cmd = DISPLAY_WRITE_PIXELS;
@@ -526,7 +531,6 @@ printf("5");
 #endif
       }
 #endif
-printf("6");
       CommitTask(task);
       IN_SINGLE_THREADED_MODE_RUN_TASK();
     }
@@ -544,7 +548,6 @@ printf("6");
       prevFrameEnd = curFrameEnd;
       curFrameEnd = spiTaskMemory->queueTail;
     }
-
 #if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
     double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
     bool displayIsActive = percentageOfScreenChanged > DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE;

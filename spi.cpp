@@ -29,7 +29,6 @@ struct sigevent sev;
 sigset_t mask;
 struct itimerspec its;
 struct sigaction sa;
-bool timerActive;
 
 #ifdef DEBUG_SPI_BUS_WRITES
 #define DEBUG_PRINT_WRITTEN_BYTE(byte) do { \
@@ -49,7 +48,7 @@ void ChipSelectHigh();
 
 void timerHandler(int sig, siginfo_t *si, void *uc)
 {
-    ChipSelectHigh();
+  printf(",");  ChipSelectHigh();
 }
 
 void initTimer() {
@@ -75,26 +74,6 @@ void initTimer() {
   sev.sigev_signo = SIG;
   sev.sigev_value.sival_ptr = &timerid;
   if (timer_create(CLOCKID, &sev, &timerid) == -1) errExit("timer_create");
-
-  timerActive = false;
-
-  printf("touch timer initialized\n");
-}
-
-void startTimer() {
-  if(timerActive) return; 
-  if (timer_settime(timerid, 0, &its, NULL) == -1) errExit("timer_settime");
-printf(">");
-  timerActive = true;
-}
-void stopTimer() {
-  if(!timerActive) return; 
-  /* Block timer signal temporarily */
-  sigemptyset(&mask);
-  sigaddset(&mask, SIG);
-  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
-printf("|");
-  timerActive = false;
 }
 
 static uint32_t writeCounter = 0;
@@ -105,6 +84,16 @@ static uint32_t writeCounter = 0;
   TOGGLE_CHIP_SELECT_LINE(); \
   DEBUG_PRINT_WRITTEN_BYTE(w); \
   } while(0)
+
+void startTimer() {
+  if (timer_settime(timerid, 0, &its, NULL) == -1) errExit("timer_settime");
+}
+void stopTimer() {
+  /* Block timer signal temporarily */
+  sigemptyset(&mask);
+  sigaddset(&mask, SIG);
+  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
+}
 
 int mem_fd = -1;
 int intr_fd = -1;
@@ -352,7 +341,7 @@ void RunSPITask(SPITask *task)
   uint8_t *tEnd = task->PayloadEnd();
   const uint32_t payloadSize = tEnd - tStart;
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
-
+  stopTimer();
 #define TASK_SIZE_TO_USE_DMA 4
   // Do a DMA transfer if this task is suitable in size for DMA to handle
   if (payloadSize >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
@@ -415,6 +404,7 @@ void RunSPITask(SPITask *task)
 
 void RunSPITask(SPITask *task)
 {
+  stopTimer();
   WaitForPolledSPITransferToFinish();
 
   // The Adafruit 1.65" 240x240 ST7789 based display is unique compared to others that it does want to see the Chip Select line go
@@ -526,7 +516,6 @@ void ExecuteSPITasks()
       SPITask *task = GetTask();
       if (task)
       {
-printf("a");
         RunSPITask(task);
         DoneTask(task);
       }
@@ -546,7 +535,6 @@ void *spi_thread(void *unused)
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
-startTimer();
   while(programRunning)
   {
     if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
@@ -656,7 +644,6 @@ int InitSPI()
   // We will be running SPI tasks continuously from the main thread, so keep SPI Transfer Active throughout the lifetime of the driver.
   BEGIN_SPI_COMMUNICATION();
 #endif
-  initTimer();
   LOG("InitSPI done");
   return 0;
 }

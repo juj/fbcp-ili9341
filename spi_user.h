@@ -296,11 +296,9 @@ static inline void CommitTask(SPITask *task) // Advertises the given SPI task fr
 #define IN_SINGLE_THREADED_MODE_RUN_TASK() ((void)0)
 #else
 #define IN_SINGLE_THREADED_MODE_RUN_TASK() { \
-  stopTimer();\
   SPITask *t = GetTask(); \
   RunSPITask(t); \
   DoneTask(t); \
-  startTimer();\
 }
 #endif
 

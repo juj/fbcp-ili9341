@@ -33,7 +33,7 @@
 // output new frames at this vsync-detached interval, so there's a 50 Hz vs 60 Hz mismatch that results
 // in visible microstuttering. Still, providing this as an option, this might be good for content that
 // is known to run at native 60Hz.
-// #define USE_GPU_VSYNC
+//#define USE_GPU_VSYNC
 
 // Always enable GPU VSync on the Pi Zero. Even though it is suboptimal and can cause stuttering, it saves battery.
 #if defined(SINGLE_CORE_BOARD)
