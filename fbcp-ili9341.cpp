@@ -95,6 +95,7 @@ int main()
   signal(SIGUSR1, ProgramInterruptHandler);
   signal(SIGUSR2, ProgramInterruptHandler);
   signal(SIGTERM, ProgramInterruptHandler);
+
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
@@ -136,6 +137,7 @@ int main()
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
   OpenKeyboard();
+
   printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
@@ -150,7 +152,10 @@ int main()
 #ifdef THROTTLE_INTERLACING
       timespec timeout = {};
       timeout.tv_nsec = 1000 * MIN(1000000, MAX(1, 750/*0.75ms extra sleep so we know we should likely sleep long enough to see the next frame*/ + PredictNextFrameArrivalTime() - tick()));
-      if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) 
+      {
+//syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+      }
 #endif
       // If THROTTLE_INTERLACING is not defined, we'll fall right through and immediately submit the rest of the remaining content on screen to attempt to minimize the visual
       // observable effect of interlacing, although at the expense of smooth animation (falling through here causes jitter)
@@ -172,14 +177,19 @@ int main()
           timespec timeout = {};
           timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
           timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
-          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+          if (programRunning) {
+            //syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+          }
         }
-        else
+        else 
+        {
 #endif
-          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
-      }
+          if (programRunning) {
+            //syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
+     	  } 
+        }
     }
-
+printf("1");
     bool spiThreadWasWorkingHardBefore = false;
 
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
@@ -199,6 +209,7 @@ int main()
 #ifdef STATISTICS
         uint64_t t0 = tick();
 #endif
+printf("2");
         if (sleepUsecs > 1000) usleep(500);
 
 #ifdef STATISTICS
@@ -238,6 +249,7 @@ int main()
       for(int i = 0; i < frameSkipTimeHistorySize; ++i) frameSkipTimeHistory[i] = frameSkipTimeHistory[i+expiredSkippedFrames];
     }
 #endif
+printf("3");
 
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
@@ -256,8 +268,9 @@ int main()
 #if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
     uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
     int64_t timeToSleep = nextFrameArrivalTime - tick();
-    if (timeToSleep > 0)
+    if (timeToSleep > 0) {
       usleep(timeToSleep);
+}
 #endif
 
       framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
@@ -288,6 +301,7 @@ int main()
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
       while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
       {
+printf("4");
         usleep(2000);
         frameObtainedTime = tick();
         framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
@@ -457,6 +471,7 @@ int main()
           spiX = i->x;
         }
 #endif
+printf("5");
       }
 
       // Submit the span pixels
@@ -511,6 +526,7 @@ int main()
 #endif
       }
 #endif
+printf("6");
       CommitTask(task);
       IN_SINGLE_THREADED_MODE_RUN_TASK();
     }
@@ -563,6 +579,7 @@ int main()
     }
     statsBytesTransferred += bytesTransferred;
 #endif
+printf("7");
   }
 
   DeinitGPU();

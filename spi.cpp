@@ -18,6 +18,19 @@
 // Uncomment this to print out all bytes sent to the SPI bus
 // #define DEBUG_SPI_BUS_WRITES
 
+/* timer config for touchscreen */
+#include <signal.h>
+#define TOUCH_WAKEUPINTERVAL 100000 /* ms */
+#define CLOCKID CLOCK_REALTIME
+#define SIG SIGRTMIN
+
+timer_t timerid;
+struct sigevent sev;
+sigset_t mask;
+struct itimerspec its;
+struct sigaction sa;
+bool timerActive;
+
 #ifdef DEBUG_SPI_BUS_WRITES
 #define DEBUG_PRINT_WRITTEN_BYTE(byte) do { \
   printf("%02X", byte); \
@@ -33,6 +46,56 @@ void ChipSelectHigh();
 #else
 #define TOGGLE_CHIP_SELECT_LINE() ((void)0)
 #endif
+
+void timerHandler(int sig, siginfo_t *si, void *uc)
+{
+    ChipSelectHigh();
+}
+
+void initTimer() {
+  /* Timer for touch */
+  sa.sa_flags = SA_SIGINFO;
+  sa.sa_sigaction = timerHandler;
+  sigemptyset(&sa.sa_mask);
+  if (sigaction(SIG, &sa, NULL) == -1) errExit("sigaction");
+
+  /* Block timer signal temporarily */
+  sigemptyset(&mask);
+  sigaddset(&mask, SIG);
+  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
+
+  /* Set timer frequency values */
+  its.it_value.tv_sec = 0;
+  its.it_value.tv_nsec = TOUCH_WAKEUPINTERVAL;
+  its.it_interval.tv_sec = its.it_value.tv_sec;
+  its.it_interval.tv_nsec = its.it_value.tv_nsec;
+
+  /* Create the timer */
+  sev.sigev_notify = SIGEV_SIGNAL;
+  sev.sigev_signo = SIG;
+  sev.sigev_value.sival_ptr = &timerid;
+  if (timer_create(CLOCKID, &sev, &timerid) == -1) errExit("timer_create");
+
+  timerActive = false;
+
+  printf("touch timer initialized\n");
+}
+
+void startTimer() {
+  if(timerActive) return; 
+  if (timer_settime(timerid, 0, &its, NULL) == -1) errExit("timer_settime");
+printf(">");
+  timerActive = true;
+}
+void stopTimer() {
+  if(!timerActive) return; 
+  /* Block timer signal temporarily */
+  sigemptyset(&mask);
+  sigaddset(&mask, SIG);
+  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
+printf("|");
+  timerActive = false;
+}
 
 static uint32_t writeCounter = 0;
 
@@ -296,7 +359,7 @@ void RunSPITask(SPITask *task)
   {
     if (previousTaskWasSPI)
       WaitForPolledSPITransferToFinish();
-//    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
+    //printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
     SPIDMATransfer(task);
     previousTaskWasSPI = false;
   }
@@ -312,7 +375,7 @@ void RunSPITask(SPITask *task)
     else
       WaitForPolledSPITransferToFinish();
 
-//    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
+    //printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
 
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
 #ifndef SPI_3WIRE_PROTOCOL
@@ -463,10 +526,11 @@ void ExecuteSPITasks()
       SPITask *task = GetTask();
       if (task)
       {
+printf("a");
         RunSPITask(task);
         DoneTask(task);
       }
-    }
+   }
   }
 #ifndef USE_DMA_TRANSFERS
   END_SPI_COMMUNICATION();
@@ -482,20 +546,26 @@ void *spi_thread(void *unused)
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
+startTimer();
   while(programRunning)
   {
     if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
+stopTimer();
       ExecuteSPITasks();
+startTimer();
     }
     else
     {
+startTimer();
 #ifdef STATISTICS
       uint64_t t0 = tick();
       spiThreadSleepStartTime = t0;
       __atomic_store_n(&spiThreadSleeping, 1, __ATOMIC_RELAXED);
 #endif
-      if (programRunning) syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) {
+	syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      }
 #ifdef STATISTICS
       __atomic_store_n(&spiThreadSleeping, 0, __ATOMIC_RELAXED);
       uint64_t t1 = tick();
@@ -505,6 +575,8 @@ void *spi_thread(void *unused)
   }
 }
 #endif
+
+
 
 int InitSPI()
 {
@@ -584,8 +656,7 @@ int InitSPI()
   // We will be running SPI tasks continuously from the main thread, so keep SPI Transfer Active throughout the lifetime of the driver.
   BEGIN_SPI_COMMUNICATION();
 #endif
-
-
+  initTimer();
   LOG("InitSPI done");
   return 0;
 }

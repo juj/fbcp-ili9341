@@ -375,6 +375,7 @@ void WaitForDMAFinished()
   uint64_t t0 = tick();
   while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE) && programRunning)
   {
+printf("b");
     usleep(100);
     if (tick() - t0 > 2000000)
     {
@@ -387,6 +388,7 @@ void WaitForDMAFinished()
   t0 = tick();
   while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE) && programRunning)
   {
+printf("c");
     usleep(100);
     if (tick() - t0 > 2000000)
     {

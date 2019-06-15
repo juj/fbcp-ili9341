@@ -11,6 +11,9 @@
 
 #define SWAPU32(x, y) { uint32_t tmp = x; x = y; y = tmp; }
 
+#define errExit(msg)    do { perror(msg); exit(EXIT_FAILURE); \
+                               } while (0)
+
 #ifndef ALIGN_DOWN
 #define ALIGN_DOWN(ptr, alignment) (((ptr)) & ~((alignment)-1))
 #endif
