@@ -9,9 +9,7 @@
 #include "tick.h"
 #include "display.h"
 
-extern void initTimer();
-extern void startTimer();
-extern void stopTimer();
+extern void sendNoOpCommand();
 
 extern volatile void *bcm2835;
 

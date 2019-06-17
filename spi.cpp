@@ -18,18 +18,6 @@
 // Uncomment this to print out all bytes sent to the SPI bus
 // #define DEBUG_SPI_BUS_WRITES
 
-/* timer config for touchscreen */
-#include <signal.h>
-#define TOUCH_WAKEUPINTERVAL 100000 /* ms */
-#define CLOCKID CLOCK_REALTIME
-#define SIG SIGRTMIN
-
-timer_t timerid;
-struct sigevent sev;
-sigset_t mask;
-struct itimerspec its;
-struct sigaction sa;
-
 #ifdef DEBUG_SPI_BUS_WRITES
 #define DEBUG_PRINT_WRITTEN_BYTE(byte) do { \
   printf("%02X", byte); \
@@ -46,36 +34,6 @@ void ChipSelectHigh();
 #define TOGGLE_CHIP_SELECT_LINE() ((void)0)
 #endif
 
-void timerHandler(int sig, siginfo_t *si, void *uc)
-{
-  printf(",");  ChipSelectHigh();
-}
-
-void initTimer() {
-  /* Timer for touch */
-  sa.sa_flags = SA_SIGINFO;
-  sa.sa_sigaction = timerHandler;
-  sigemptyset(&sa.sa_mask);
-  if (sigaction(SIG, &sa, NULL) == -1) errExit("sigaction");
-
-  /* Block timer signal temporarily */
-  sigemptyset(&mask);
-  sigaddset(&mask, SIG);
-  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
-
-  /* Set timer frequency values */
-  its.it_value.tv_sec = 0;
-  its.it_value.tv_nsec = TOUCH_WAKEUPINTERVAL;
-  its.it_interval.tv_sec = its.it_value.tv_sec;
-  its.it_interval.tv_nsec = its.it_value.tv_nsec;
-
-  /* Create the timer */
-  sev.sigev_notify = SIGEV_SIGNAL;
-  sev.sigev_signo = SIG;
-  sev.sigev_value.sival_ptr = &timerid;
-  if (timer_create(CLOCKID, &sev, &timerid) == -1) errExit("timer_create");
-}
-
 static uint32_t writeCounter = 0;
 
 #define WRITE_FIFO(word) do { \
@@ -84,16 +42,6 @@ static uint32_t writeCounter = 0;
   TOGGLE_CHIP_SELECT_LINE(); \
   DEBUG_PRINT_WRITTEN_BYTE(w); \
   } while(0)
-
-void startTimer() {
-  if (timer_settime(timerid, 0, &its, NULL) == -1) errExit("timer_settime");
-}
-void stopTimer() {
-  /* Block timer signal temporarily */
-  sigemptyset(&mask);
-  sigaddset(&mask, SIG);
-  if (sigprocmask(SIG_SETMASK, &mask, NULL) == -1) errExit("sigprocmask");
-}
 
 int mem_fd = -1;
 int intr_fd = -1;
@@ -331,6 +279,14 @@ void WaitForPolledSPITransferToFinish()
   if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
 }
 
+void sendNoOpCommand() {
+  // Send a no-operation command to display (side effect is Touch display is polled)
+  SPITask *task = AllocTask(0);
+  task->cmd = DISPLAY_NO_OPERATION;
+  CommitTask(task);
+  IN_SINGLE_THREADED_MODE_RUN_TASK();
+}
+
 #ifdef ALL_TASKS_SHOULD_DMA
 
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
@@ -341,7 +297,6 @@ void RunSPITask(SPITask *task)
   uint8_t *tEnd = task->PayloadEnd();
   const uint32_t payloadSize = tEnd - tStart;
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
-  stopTimer();
 #define TASK_SIZE_TO_USE_DMA 4
   // Do a DMA transfer if this task is suitable in size for DMA to handle
   if (payloadSize >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
@@ -404,7 +359,6 @@ void RunSPITask(SPITask *task)
 
 void RunSPITask(SPITask *task)
 {
-  stopTimer();
   WaitForPolledSPITransferToFinish();
 
   // The Adafruit 1.65" 240x240 ST7789 based display is unique compared to others that it does want to see the Chip Select line go
@@ -519,7 +473,7 @@ void ExecuteSPITasks()
         RunSPITask(task);
         DoneTask(task);
       }
-   }
+    }
   }
 #ifndef USE_DMA_TRANSFERS
   END_SPI_COMMUNICATION();
@@ -539,13 +493,10 @@ void *spi_thread(void *unused)
   {
     if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
     {
-stopTimer();
       ExecuteSPITasks();
-startTimer();
     }
     else
     {
-startTimer();
 #ifdef STATISTICS
       uint64_t t0 = tick();
       spiThreadSleepStartTime = t0;

@@ -74,7 +74,7 @@ void InitKeDeiV63()
     SET_GPIO(GPIO_SPI0_CE0); // Disable Touch
     usleep(25*1000);
 
-    SPI_TRANSFER(0x00001100); // Reset
+    SPI_TRANSFER(DISPLAY_NO_OPERATION); // Reset
     usleep(10*1000);
     SPI_TRANSFER(0xff001100);
     SPI_TRANSFER(0xff001100);
@@ -166,5 +166,6 @@ void DeinitSPIDisplay()
   ClearScreen();
   TurnDisplayOff();
 }
+
 
 #endif

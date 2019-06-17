@@ -137,11 +137,11 @@ int main()
   bool interlacedUpdate = false; // True if the previous update we did was an interlaced half field update.
   int frameParity = 0; // For interlaced frame updates, this is either 0 or 1 to denote evens or odds.
   OpenKeyboard();
-  initTimer();
   printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
     prevFrameWasInterlacedUpdate = interlacedUpdate;
+sendNoOpCommand();
 
     // If last update was interlaced, it means we still have half of the image pending to be updated. In such a case,
     // sleep only until when we expect the next new frame of data to appear, and then continue independent of whether
@@ -165,6 +165,7 @@ int main()
       uint64_t waitStart = tick();
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
+sendNoOpCommand();
 #if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         if (!displayOff && tick() - waitStart > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         {
@@ -178,7 +179,7 @@ int main()
           timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
           timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
           if (programRunning) {
-            //syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
           }
         }
         else 
@@ -229,6 +230,8 @@ int main()
       }
     }
 
+sendNoOpCommand();
+
     int expiredFrames = 0;
     uint64_t now = tick();
     while(expiredFrames < frameTimeHistorySize && now - frameTimeHistory[expiredFrames].time >= FRAMERATE_HISTORY_LENGTH) ++expiredFrames;
@@ -248,15 +251,12 @@ int main()
     }
 #endif
 
-printf("3");
-startTimer();
     int numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
     bool gotNewFramebuffer = (numNewFrames > 0);
     bool framebufferHasNewChangedPixels = true;
     uint64_t frameObtainedTime;
     if (gotNewFramebuffer)
     {
-printf("x");
 #ifdef USE_GPU_VSYNC
 // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
 // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
@@ -269,9 +269,7 @@ printf("x");
     uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
     int64_t timeToSleep = nextFrameArrivalTime - tick();
     if (timeToSleep > 0) {
-printf("y");
       usleep(timeToSleep);
-      stopTimer();
     }
   #endif
 
@@ -279,8 +277,6 @@ printf("y");
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
-printf("z");
-
 #ifdef STATISTICS
       uint64_t now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
@@ -289,7 +285,6 @@ printf("z");
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
       DrawStatisticsOverlay(framebuffer[0]);
-printf("b");
 #ifdef USE_GPU_VSYNC
 
  #ifdef STATISTICS
@@ -314,11 +309,9 @@ printf("b");
       framebufferHasNewChangedPixels = true;
  #endif
 
-printf("a");
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
-printf("c");
  #ifdef STATISTICS
       now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
@@ -344,7 +337,6 @@ printf("c");
 #else
     const double timesliceToUseForScreenUpdates = 1500000;
 #endif
-printf("5");
     const double tooMuchToUpdateUsecs = timesliceToUseForScreenUpdates / desiredTargetFps; // If updating the current and new frame takes too many frames worth of allotted time, drop to interlacing.
 
 #if !defined(NO_INTERLACING) || (defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY))
@@ -478,7 +470,6 @@ printf("5");
 #endif
       }
 
-printf("6");
       // Submit the span pixels
       SPITask *task = AllocTask(i->size*SPI_BYTESPERPIXEL);
       task->cmd = DISPLAY_WRITE_PIXELS;
@@ -582,7 +573,6 @@ printf("6");
     }
     statsBytesTransferred += bytesTransferred;
 #endif
-printf("7");
   }
 
   DeinitGPU();
