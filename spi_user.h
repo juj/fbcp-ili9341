@@ -9,7 +9,11 @@
 #include "tick.h"
 #include "display.h"
 
+// Sends no-Op command wich enables sensing of touch screen on some displays
 extern void sendNoOpCommand();
+
+// Checks last time touch screen sensed
+extern bool activeTouchscreen();
 
 extern volatile void *bcm2835;
 

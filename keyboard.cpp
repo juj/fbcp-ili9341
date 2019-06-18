@@ -18,7 +18,7 @@ void OpenKeyboard()
 {
 #ifdef READ_KEYBOARD_ENABLED
   key_fd = open(KEYBOARD_INPUT_FILE, O_RDONLY|O_NONBLOCK);
-  if (key_fd < 0) printf("Warning: cannot open keyboard input file " KEYBOARD_INPUT_FILE "! Try double checking that it exists, or reconfigure it in keyboard.cpp, or remove line '#define BACKLIGHT_CONTROL_FROM_KEYBOARD' in config.h if you do not want keyboard activity to factor into backlight control.\n");
+  if (key_fd < 0) printf("Warning: cannot open keyboard input file " KEYBOARD_INPUT_FILE "! Try double checking that it exists, or reconfigure it in keyboard.cpp.\n");
 #endif
 }
 

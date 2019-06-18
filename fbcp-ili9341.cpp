@@ -140,8 +140,8 @@ int main()
   printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
+    sendNoOpCommand();
     prevFrameWasInterlacedUpdate = interlacedUpdate;
-sendNoOpCommand();
 
     // If last update was interlaced, it means we still have half of the image pending to be updated. In such a case,
     // sleep only until when we expect the next new frame of data to appear, and then continue independent of whether
@@ -154,7 +154,7 @@ sendNoOpCommand();
       timeout.tv_nsec = 1000 * MIN(1000000, MAX(1, 750/*0.75ms extra sleep so we know we should likely sleep long enough to see the next frame*/ + PredictNextFrameArrivalTime() - tick()));
       if (programRunning) 
       {
-//syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+        syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
       }
 #endif
       // If THROTTLE_INTERLACING is not defined, we'll fall right through and immediately submit the rest of the remaining content on screen to attempt to minimize the visual
@@ -165,7 +165,7 @@ sendNoOpCommand();
       uint64_t waitStart = tick();
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
-sendNoOpCommand();
+        sendNoOpCommand();
 #if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         if (!displayOff && tick() - waitStart > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         {
@@ -176,22 +176,30 @@ sendNoOpCommand();
         if (!displayOff)
         {
           timespec timeout = {};
-          timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
-          timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
-          if (programRunning) {
-            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+          timeout.tv_nsec = ((uint64_t)SLEEP_TIME_USECS_NODRAWING * 1000) % 1000000000;
+          if (programRunning) 
+          {
+            // Sleep until the next frame arrives or up to SLEEP_TIME_USECS_NODRAWING time 
+            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); 
           }
         }
         else 
-        {
 #endif
-          if (programRunning) {
-            //syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
-     	  } 
-        }
+        {
+          if (programRunning) 
+          {
+            timespec timeout = {};
+            timeout.tv_nsec = ((uint64_t)SLEEP_TIME_USECS_NODRAWING * 1000) % 1000000000;
+            // Sleep until the next frame arrives or up to SLEEP_TIME_USECS_NODRAWING time 
+            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); 
+     	  }
+        } 
+      }
     }
     bool spiThreadWasWorkingHardBefore = false;
 
+    sendNoOpCommand();
+    
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
     // once the older of those has been displayed.
     bool once = true;
@@ -229,8 +237,6 @@ sendNoOpCommand();
 #endif
       }
     }
-
-sendNoOpCommand();
 
     int expiredFrames = 0;
     uint64_t now = tick();
@@ -546,7 +552,7 @@ sendNoOpCommand();
       displayContentsLastChanged = tick();
 
     bool keyboardIsActive = TimeSinceLastKeyboardPress() < TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY;
-    if (displayIsActive || keyboardIsActive)
+    if (displayIsActive || keyboardIsActive || activeTouchscreen() )
     {
       if (displayOff)
       {

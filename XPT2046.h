@@ -46,7 +46,7 @@ class XPT2046 {
 	
         ~XPT2046();
 
-	    int SpiWriteAndRead(unsigned char *data, int length);
+	int SpiWriteAndRead(unsigned char *data, int length);
 	
         void read_touchscreen(bool interruptEnable);
 
@@ -55,9 +55,14 @@ class XPT2046 {
 
         void read(uint16_t * oX, uint16_t * oY, uint16_t * oZ);
         void readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ);
-	
-	    static void printBits(size_t const size, void const * const ptr)
-	    {
+
+	uint64_t ticksSinceLastTouch() {
+        	uint64_t now = tick();
+		return now - this->lastTouchTick;
+        }
+
+	static void printBits(size_t const size, void const * const ptr)
+	{
 	    	unsigned char *b = (unsigned char*) ptr;
 	    	unsigned char byte;
 	    	int i, j;
@@ -72,7 +77,7 @@ class XPT2046 {
 	    		printf(" ");
 	    	}
 	    	puts("");
-	    }
+	}
 	
     protected:
 
@@ -92,14 +97,15 @@ class XPT2046 {
         int _lastX;
         int _lastY;
         int fd;
-    
+        uint64_t lastTouchTick;
+ 
         uint16_t _minChange;
 			
-		uint32_t spi_cs ;
+        uint32_t spi_cs ;
 	
-	    uint32_t z_average ;
+	uint32_t z_average ;
 
-		const char * tcfifo ;
+	const char * tcfifo ;
         int interruptpoll ;
 };
 

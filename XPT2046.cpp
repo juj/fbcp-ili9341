@@ -134,10 +134,11 @@ void XPT2046::read_touchscreen(bool interruptEnable) {
 	if (z > 100) 
 	{
 		char output[30] = "";
-        fd = open(tcfifo, O_WRONLY | O_NONBLOCK);
+        	fd = open(tcfifo, O_WRONLY | O_NONBLOCK);
 		sprintf(output, "x:%d, y:%d, z:%d\n", x, y, z);
 		write(fd, output, strlen(output) + 1);
-        close(fd);
+        	close(fd);
+		this->lastTouchTick = tick();
 	}
     
 	//spi->cs = (old_spi_cs | 1 << 4 | 1 << 5) & (~(1 << 7)); //Clear Fifos and TA

@@ -17,6 +17,10 @@ short bufLen = 0;
 #define LOOP_INTERVAL 500
 static int loop = 0;
 
+bool activeTouchscreen() {
+   return (touch.ticksSinceLastTouch() < TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY); 
+}
+
 void ChipSelectHigh()
 {
   WAIT_SPI_FINISHED();

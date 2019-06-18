@@ -196,7 +196,7 @@
 // #define USE_DMA_TRANSFERS
 
 // If defined, enables code to manage the backlight.
-// #define BACKLIGHT_CONTROL
+#define BACKLIGHT_CONTROL
 
 #if defined(BACKLIGHT_CONTROL)
 
@@ -212,6 +212,10 @@
 #define TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY (1 * 60 * 1000000)
 
 #endif
+//
+// Sleep for up to 1 / N of a second.  With sendNoOpCommand() to Display, the side effect is sampling
+// the touch screen N times per second. 
+#define SLEEP_TIME_USECS_NODRAWING (1)
 
 // If less than this much % of the screen changes per frame, the screen is considered to be inactive, and
 // the display backlight can automatically turn off, if TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY is 
