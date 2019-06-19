@@ -151,18 +151,24 @@ void InitKeDeiV63()
 
 void TurnBacklightOff()
 {
+  SPI_TRANSFER(DISPLAY_BACKLIT_BRIT,0xFF);
+  SPI_TRANSFER(DISPLAY_BACKLIT_CTRL,0x00); // 5-Backlight contro, 3-Display dimming, 2-BacklihtOff
 }
 
 void TurnBacklightOn()
 {
+  SPI_TRANSFER(DISPLAY_BACKLIT_BRIT,0x00);
+  SPI_TRANSFER(DISPLAY_BACKLIT_CTRL,0x2C); // 5-Backlight contro, 3-Display dimming, 2-BacklihtON
 }
 
 void TurnDisplayOff()
 {
+  SPI_TRANSFER(DISPLAY_OFF); 
 }
 
 void TurnDisplayOn()
 {
+  SPI_TRANSFER(DISPLAY_ON); 
 }
 
 void DeinitSPIDisplay()
