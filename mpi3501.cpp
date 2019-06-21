@@ -44,6 +44,11 @@ void InitKeDeiV63()
 {
   // output device
   touch = XPT2046();
+
+  touch.setRotation(0);
+#ifdef DISPLAY_ROTATE_180_DEGREES
+  touch.setRotation(1);
+#endif
  
   // If a Reset pin is defined, toggle it briefly high->low->high to enable the device. Some devices do not have a reset pin, in which case compile with GPIO_TFT_RESET_PIN left undefined.
 #if defined(GPIO_TFT_RESET_PIN) && GPIO_TFT_RESET_PIN >= 0
