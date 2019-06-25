@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <regex>
 
 #include "VG/openvg.h"
 #include "VG/vgu.h"
@@ -13,14 +14,37 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#define xHairLines_ROWS 8
+int xHairLines[8][4] = {
+    10, 15, 20, 15, // lower left
+    15, 10, 15, 20,
+    -20, 15, -10, 15, // lower right
+    -15, 10, -15, 20,
+    10, -15, 20, -15, // upper left
+    15, -10, 15, -20,
+    -20, -15, -10, -15, // upper right
+    -15, -10, -15, -20
+};
+
 // touch state structure
 typedef struct {
     int fd;
-    char[80] evbuff;
+    char* evbuff[80];
     VGfloat x, y, z;
     int max_x, max_y;
     void parse(const char *buff) {
+        std::regex re( "x:(\\d+),\\s*y:(\\d+),\\s*z:(\\d+)\\s*"  ) ;
+        std::cmatch match_results;
+    
+        x = 0;
+        y = 0;
+        z = 0;
         
+        if( std::regex_match( (const char *)buff, match_results, re ) && match_results.size() >= 3 ) {
+            x = std::stoi(match_results[1].str());
+            y = std::stoi(match_results[2].str());
+            z = std::stoi(match_results[3].str());
+        }
     }
 } touch_t;
 
@@ -43,49 +67,8 @@ void *eventThread(void *arg) {
     
     while (1) {
         read(touch.fd, &touch.evbuff, sizeof(char[80]));
-        // printf("[%4.0f,%4.0f]\r",touch.x,touch.y);
-        
-        // Check events
-        touch.left = CUR_SIZ * 2;           // Reset touch button states
-        touch.right = CUR_SIZ * 2;
-        
-        if (touch.ev.type == EV_REL) {
-            if (touch.ev.code == REL_X) {
-                touch.x += (VGfloat) touch.ev.value;
-                if (touch.x < 0) {
-                    touch.x = 0;
-                }
-                if (touch.x > touch.max_x) {
-                    touch.x = touch.max_x;
-                }
-            }
-            if (touch.ev.code == REL_Y) {       //This ones goes backwards hence the minus
-                touch.y -= (VGfloat) touch.ev.value;
-                if (touch.y < 0) {
-                    touch.y = 0;
-                }
-                if (touch.y > touch.max_y) {
-                    touch.y = touch.max_y;
-                }
-            }
-        }
-        
-        if (touch.ev.type == EV_KEY) {
-            //printf("Time Stamp:%d - type %d, code %d, value %d\n",
-            //      touch.ev.time.tv_usec,touch.ev.type,touch.ev.code,touch.ev.value);
-            if (touch.ev.code == BTN_LEFT) {
-                touch.left = 1;
-                //   printf("Left button\n");
-                left_count++;
-                // printf("User Quit\n");
-                // quitState = 1;
-                // return &quitState;  //Left touch to quit
-            }
-            if (touch.ev.code == BTN_RIGHT) {
-                touch.right = 1;
-                //  printf("Right button\n");
-            }
-        }
+        touch.parse((const char *)touch.evbuff);
+        printf("[%4.0f,%4.0f]\r",touch.x,touch.y);
     }
 }
 
@@ -163,8 +146,22 @@ int main() {
     Fill(44, 77, 232, 1);                   // Big blue marble
     Circle(width / 2, 0, width);               // The "world"
     Fill(255, 255, 255, 1);                   // White text
-    TextMid(width / 2, height / 2, "hello, world", SerifTypeface, width / 10);    // Greetings
+    TextMid(width / 2, height / 2, "Screen Calibration", SerifTypeface, width / 15);    // Greetings
+    
+    // Draw lines
+    Stroke(255, 255, 255, 0.5);
+    StrokeWidth(2);
+    for( int i = 0; i < xHairLines_ROWS; i++) {
+        Line(  ( xHairLines[i][0] < 0 ? width + xHairLines[i][0] : xHairLines[i][0] )
+             , ( xHairLines[i][1] < 0 ? height + xHairLines[i][1] : xHairLines[i][1] )
+             , ( xHairLines[i][2] < 0 ? width + xHairLines[i][2] : xHairLines[i][2] )
+             , ( xHairLines[i][3] < 0 ? height + xHairLines[i][3] : xHairLines[i][3] )
+             );
+    }
+    
     End();                           // update picture
+    
+    
     
     // MAIN LOOP
     while (left_count < 2) {               // Loop until the left touch button pressed & released
