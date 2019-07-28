@@ -262,6 +262,10 @@ void WaitForPolledSPITransferToFinish()
 
 #ifdef ALL_TASKS_SHOULD_DMA
 
+#ifndef USE_DMA_TRANSFERS
+#error When building with #define ALL_TASKS_SHOULD_DMA enabled, -DUSE_DMA_TRANSFERS=ON should be set in CMake command line!
+#endif
+
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
 {
