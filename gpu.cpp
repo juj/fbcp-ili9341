@@ -318,7 +318,7 @@ uint64_t PredictNextFrameArrivalTime()
   uint64_t timeNow = tick();
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
   // "Deep sleep" options: is user leaves the device with static content on screen for a long time.
-  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
+  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 100ms.
   if (timeNow - mostRecentFrame > 5000000) return lastFramePollTime + 100000; // if it's been more than 5 seconds since last seen update, assume interval of 100ms.
 #endif
   uint64_t interval = EstimateFrameRateInterval();
