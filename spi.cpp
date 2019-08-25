@@ -488,6 +488,7 @@ void *spi_thread(void *unused)
 #endif
     }
   }
+  pthread_exit(0);
 }
 #endif
 
