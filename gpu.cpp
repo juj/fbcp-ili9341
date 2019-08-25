@@ -340,7 +340,7 @@ void InitGPU()
   // Initialize GPU frame grabbing subsystem
   bcm_host_init();
   display = vc_dispmanx_display_open(0);
-  if (!display) FATAL_ERROR("vc_dispmanx_display_open failed!");
+  if (!display) FATAL_ERROR("vc_dispmanx_display_open failed! Make sure to have hdmi_force_hotplug=1 setting in /boot/config.txt");
   DISPMANX_MODEINFO_T display_info;
   int ret = vc_dispmanx_display_get_info(display, &display_info);
   if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
