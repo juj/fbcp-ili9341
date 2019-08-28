@@ -84,6 +84,7 @@ Run in the console of your Raspberry Pi:
 
 ```bash
 sudo apt-get install cmake
+cd ~
 git clone https://github.com/juj/fbcp-ili9341.git
 cd fbcp-ili9341
 mkdir build
