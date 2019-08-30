@@ -289,6 +289,10 @@ void sendNoOpCommand() {
 
 #ifdef ALL_TASKS_SHOULD_DMA
 
+#ifndef USE_DMA_TRANSFERS
+#error When building with #define ALL_TASKS_SHOULD_DMA enabled, -DUSE_DMA_TRANSFERS=ON should be set in CMake command line!
+#endif
+
 // Synchonously performs a single SPI command byte + N data bytes transfer on the calling thread. Call in between a BEGIN_SPI_COMMUNICATION() and END_SPI_COMMUNICATION() pair.
 void RunSPITask(SPITask *task)
 {
@@ -512,6 +516,7 @@ void *spi_thread(void *unused)
 #endif
     }
   }
+  pthread_exit(0);
 }
 #endif
 
@@ -564,6 +569,7 @@ int InitSPI()
   // fbcp-ili9341 assumes exclusive access to the SPI0 bus, and exclusive presence of only one device on the bus,
   // which is (permanently) activated here.
   SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
+  CLEAR_GPIO(GPIO_SPI0_CE0);
 #ifdef DISPLAY_USES_CS1
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0x01);
 #endif
