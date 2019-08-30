@@ -23,7 +23,9 @@
  */
 
 #include "XPT2046.h"
-
+extern "C" {
+ #include "calibrate.h"
+}
 #define XPT2046_CFG_START   1<<7
 
 #define XPT2046_CFG_MUX(v)  ((v&0b111) << (4))
