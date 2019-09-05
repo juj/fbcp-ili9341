@@ -318,7 +318,7 @@ uint64_t PredictNextFrameArrivalTime()
   uint64_t timeNow = tick();
 #ifdef SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE
   // "Deep sleep" options: is user leaves the device with static content on screen for a long time.
-  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 500ms.
+  if (timeNow - mostRecentFrame > 60000000) { histogramSize = 1; return lastFramePollTime + 100000; } // if it's been more than one minute since last seen update, assume interval of 100ms.
   if (timeNow - mostRecentFrame > 5000000) return lastFramePollTime + 100000; // if it's been more than 5 seconds since last seen update, assume interval of 100ms.
 #endif
   uint64_t interval = EstimateFrameRateInterval();
@@ -340,7 +340,7 @@ void InitGPU()
   // Initialize GPU frame grabbing subsystem
   bcm_host_init();
   display = vc_dispmanx_display_open(0);
-  if (!display) FATAL_ERROR("vc_dispmanx_display_open failed!");
+  if (!display) FATAL_ERROR("vc_dispmanx_display_open failed! Make sure to have hdmi_force_hotplug=1 setting in /boot/config.txt");
   DISPMANX_MODEINFO_T display_info;
   int ret = vc_dispmanx_display_get_info(display, &display_info);
   if (ret) FATAL_ERROR("vc_dispmanx_display_get_info failed!");
