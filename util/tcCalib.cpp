@@ -14,6 +14,21 @@
 #include <fcntl.h>
 #include <pthread.h>
 
+#include "calibrate.h"
+
+// Target on-screen points
+POINT pointTargets[4] = {
+    {15, 15},
+    {-15, 15},
+    {-15, -15},
+    {15, -15}
+};
+
+// Recorded touch points
+POINT pointTouches[4];
+
+MATRIX calibMatrix;
+
 #define xHairLines_ROWS 8
 int xHairLines[8][4] = {
     10, 15, 20, 15, // lower left
@@ -55,7 +70,7 @@ int quitState = 0;
 
 // evenThread reads from the touch input file
 void *eventThread(void *arg) {
-    
+    int count = 0, ptr = 0;
     // Open touch driver
     if ((touch.fd = open("/tmp/TCfifo", O_RDONLY)) < 0) {
         fprintf(stderr, "Error opening touch!\n");
@@ -66,9 +81,17 @@ void *eventThread(void *arg) {
     touch.y = touch.max_y / 2;
     
     while (1) {
-        read(touch.fd, &touch.evbuff, sizeof(char[80]));
+        usleep(100);
+        do {
+            count = read(touch.fd, (&touch.evbuff + ptr), sizeof(char[80])-ptr );
+            ptr = ptr + count;
+        } while (ptr >0 && ((const char *)touch.evbuff)[ptr-1] != '\n');
+        
+        fprintf(stdout, (const char *)touch.evbuff);
+        
         touch.parse((const char *)touch.evbuff);
-        printf("[%4.0f,%4.0f]\r",touch.x,touch.y);
+        memset(touch.evbuff, 0, sizeof(char[80]));
+        count = 0, ptr = 0;
     }
 }
 
@@ -128,6 +151,60 @@ int touchinit(int w, int h) {
     return pthread_create(&inputThread, NULL, &eventThread, NULL);
 }
 
+void getTouches(int captures, int width, int height, int &cursorx, int &cursory, VGImage &CursorBuffer) {
+    int changeCount = 0;
+    POINT pointCorrected, pointRaw;
+    int ztouch_thold = 50;
+    
+    do {
+        usleep(100000); // usec - slow loop for other threads
+        pointRaw.x = touch.x;
+        pointRaw.y = touch.y;
+        getDisplayPoint(&pointCorrected,&pointRaw,&calibMatrix);
+        
+        // Loop until a touch is registered by a change in cursor value
+        if ((pointCorrected.x != cursorx || pointCorrected.y != cursory) && ((int)touch.z) > ztouch_thold ) {
+            fprintf(stdout,"%d != %d || %d != %d) && %d > %d\n",
+                    pointCorrected.x, cursorx , pointCorrected.y, cursory,  ((int)touch.z) , ztouch_thold);
+
+            restoreCursor(CursorBuffer);
+            cursorx = pointCorrected.x;
+            cursory = pointCorrected.y;
+            saveCursor(CursorBuffer, cursorx, cursory, width, height, CUR_SIZ);
+            circleCursor(cursorx, cursory, width, height, CUR_SIZ);
+            changeCount = changeCount + 1;
+            touch.z = 0.0;
+            End();                           // update picture
+        }
+    } while (changeCount < captures);
+}
+
+void drawBackground(int width, int height) {
+    Background(0, 0, 0);                   // Black background
+    Fill(44, 77, 232, 1);                   // Big blue marble
+    Circle(width / 2, 0, width);               // The "world"
+    Fill(255, 255, 255, 1);                   // White text
+    TextMid(width / 2, height / 2, "Screen Calibration", SerifTypeface, width / 15);    // Greetings
+    End();                           // update picture
+}
+
+void drawCrosshair(int width, int height, int i) {
+    Stroke(255, 255, 255, 0.5);
+    StrokeWidth(2);
+    Line(  ( xHairLines[i][0] < 0 ? width + xHairLines[i][0] : xHairLines[i][0] )
+         , ( xHairLines[i][1] < 0 ? height + xHairLines[i][1] : xHairLines[i][1] )
+         , ( xHairLines[i][2] < 0 ? width + xHairLines[i][2] : xHairLines[i][2] )
+         , ( xHairLines[i][3] < 0 ? height + xHairLines[i][3] : xHairLines[i][3] )
+         );
+    
+    Line(  ( xHairLines[i+1][0] < 0 ? width + xHairLines[i+1][0] : xHairLines[i+1][0] )
+         , ( xHairLines[i+1][1] < 0 ? height + xHairLines[i+1][1] : xHairLines[i+1][1] )
+         , ( xHairLines[i+1][2] < 0 ? width + xHairLines[i+1][2] : xHairLines[i+1][2] )
+         , ( xHairLines[i+1][3] < 0 ? height + xHairLines[i+1][3] : xHairLines[i+1][3] )
+         );
+    End();                           // update picture
+}
+
 int main() {
     int width, height, cursorx, cursory, cbsize;
     
@@ -142,40 +219,38 @@ int main() {
         exit(1);
     }
     Start(width, height);                   // Start the picture
-    Background(0, 0, 0);                   // Black background
-    Fill(44, 77, 232, 1);                   // Big blue marble
-    Circle(width / 2, 0, width);               // The "world"
-    Fill(255, 255, 255, 1);                   // White text
-    TextMid(width / 2, height / 2, "Screen Calibration", SerifTypeface, width / 15);    // Greetings
-    
+    drawBackground(width,height);
+
+    // Set curser values initially
+    setCalibrationMatrix( (POINT*)&pointTargets, (POINT*)&pointTargets, &calibMatrix); // initialized 1:1 matrix
+    fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
+            ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
+
     // Draw lines
-    Stroke(255, 255, 255, 0.5);
-    StrokeWidth(2);
-    for( int i = 0; i < xHairLines_ROWS; i++) {
-        Line(  ( xHairLines[i][0] < 0 ? width + xHairLines[i][0] : xHairLines[i][0] )
-             , ( xHairLines[i][1] < 0 ? height + xHairLines[i][1] : xHairLines[i][1] )
-             , ( xHairLines[i][2] < 0 ? width + xHairLines[i][2] : xHairLines[i][2] )
-             , ( xHairLines[i][3] < 0 ? height + xHairLines[i][3] : xHairLines[i][3] )
-             );
+    for( int i = 0; i < xHairLines_ROWS - 2; i=i+2) {
+        drawCrosshair(width,height,i);
+        
+        getTouches(1,width,height,cursorx,cursory,CursorBuffer);
+        fprintf(stdout,"p:%d %d, %d \r\n",i, cursorx,cursory);
+        /*
+        // save touch points
+        pointTouches[i/2].x = cursorx;
+        pointTouches[i/2].y = cursory;
+        // Update for screen dimensions
+        pointTargets[i/2].x = (pointTargets[i/2].x < 0 ? width + pointTargets[i/2].x : pointTargets[i/2].x);
+        pointTargets[i/2].y = (pointTargets[i/2].y < 0 ? height + pointTargets[i/2].y : pointTargets[i/2].y);
+         */
     }
+
+    setCalibrationMatrix( (POINT*)&pointTargets, (POINT*)&pointTargets, &calibMatrix); // update matrix
+    fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
+            ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
+
+    // MAIN LOOP - show some more points
+    getTouches(10,width,height,cursorx,cursory,CursorBuffer);
     
-    End();                           // update picture
-    
-    
-    
-    // MAIN LOOP
-    while (left_count < 2) {               // Loop until the left touch button pressed & released
-        // if the touch moved...
-        if (touch.x != cursorx || touch.y != cursory) {
-            restoreCursor(CursorBuffer);
-            cursorx = touch.x;
-            cursory = touch.y;
-            saveCursor(CursorBuffer, cursorx, cursory, width, height, CUR_SIZ);
-            circleCursor(cursorx, cursory, width, height, CUR_SIZ);
-            End();                   // update picture
-        }
-    }
-    restoreCursor(CursorBuffer);               // not strictly necessary as display will be closed
+    //restoreCursor(CursorBuffer);               // not strictly necessary as display will be closed
+    //End();
     vgDestroyImage(CursorBuffer);               // tidy up memory
     finish();                       // Graphics cleanup
     exit(0);
