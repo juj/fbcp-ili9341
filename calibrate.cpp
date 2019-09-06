@@ -20,11 +20,7 @@
  * 
  *
  * 
-<<<<<<< HEAD
- *   File Name:  calibrate.c
-=======
  *   File Name:  calibrate.cpp
->>>>>>> e7d91bc2ac226b2820e0711076428a7b438d9748
  *
  *
  *   This file contains functions that implement calculations 
@@ -91,10 +87,7 @@
  *                                    resolution.
  *
  *
-<<<<<<< HEAD
-=======
  *  Revisions: Kevin Peck 2019
->>>>>>> e7d91bc2ac226b2820e0711076428a7b438d9748
  */
 
 
