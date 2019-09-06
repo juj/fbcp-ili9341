@@ -75,8 +75,7 @@
 
 
 typedef struct Point {
-                        INT32 x,
-                                 y ;
+                        INT32 x,y ;
                      } POINT ;
 
 
