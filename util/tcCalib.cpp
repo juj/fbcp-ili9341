@@ -81,7 +81,10 @@ void *eventThread(void *arg) {
     touch.y = touch.max_y / 2;
     
     while (1) {
+<<<<<<< HEAD
         usleep(100);
+=======
+>>>>>>> e7d91bc2ac226b2820e0711076428a7b438d9748
         do {
             count = read(touch.fd, (&touch.evbuff + ptr), sizeof(char[80])-ptr );
             ptr = ptr + count;
