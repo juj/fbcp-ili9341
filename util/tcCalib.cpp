@@ -47,20 +47,6 @@ typedef struct {
     char* evbuff[80];
     VGfloat x, y, z;
     int max_x, max_y;
-    void parse(const char *buff) {
-        std::regex re( "x:(\\d+),\\s*y:(\\d+),\\s*z:(\\d+)\\s*"  ) ;
-        std::cmatch match_results;
-    
-        x = 0;
-        y = 0;
-        z = 0;
-        
-        if( std::regex_match( (const char *)buff, match_results, re ) && match_results.size() >= 3 ) {
-            x = std::stoi(match_results[1].str());
-            y = std::stoi(match_results[2].str());
-            z = std::stoi(match_results[3].str());
-        }
-    }
 } touch_t;
 
 touch_t touch;            // global touch state
@@ -70,28 +56,26 @@ int quitState = 0;
 
 // evenThread reads from the touch input file
 void *eventThread(void *arg) {
-    int count = 0, ptr = 0;
+#define OPENDEVICE_TOUCH    if ((touch.fd = open("/tmp/TCfifo", O_RDONLY)) < 0) { \
+        fprintf(stderr, "Error opening touch!\n"); \
+        quitState = 1; \
+        return &quitState;}
+
     // Open touch driver
-    if ((touch.fd = open("/tmp/TCfifo", O_RDONLY)) < 0) {
-        fprintf(stderr, "Error opening touch!\n");
-        quitState = 1;
-        return &quitState;
-    }
+    OPENDEVICE_TOUCH
     touch.x = touch.max_x / 2;               //Reset touch
     touch.y = touch.max_y / 2;
     
     while (1) {
-        usleep(100);
-        do {
-            count = read(touch.fd, (&touch.evbuff + ptr), sizeof(char[80])-ptr );
-            ptr = ptr + count;
-        } while (ptr >0 && ((const char *)touch.evbuff)[ptr-1] != '\n');
-        
-        fprintf(stdout, (const char *)touch.evbuff);
-        
-        touch.parse((const char *)touch.evbuff);
-        memset(touch.evbuff, 0, sizeof(char[80]));
-        count = 0, ptr = 0;
+        uint16_t words16read[4];
+        usleep(500);
+        if(read(touch.fd, words16read, sizeof(uint16_t) * 4 )) {
+            touch.x = words16read[0];
+            touch.y = words16read[1];
+            touch.z = words16read[2];
+            close(touch.fd);
+            OPENDEVICE_TOUCH
+        }
     }
 }
 
@@ -157,16 +141,15 @@ void getTouches(int captures, int width, int height, int &cursorx, int &cursory,
     int ztouch_thold = 50;
     
     do {
-        usleep(100000); // usec - slow loop for other threads
+        usleep(10000); // usec - slow loop for other threads
         pointRaw.x = touch.x;
         pointRaw.y = touch.y;
         getDisplayPoint(&pointCorrected,&pointRaw,&calibMatrix);
         
         // Loop until a touch is registered by a change in cursor value
         if ((pointCorrected.x != cursorx || pointCorrected.y != cursory) && ((int)touch.z) > ztouch_thold ) {
-            fprintf(stdout,"%d != %d || %d != %d) && %d > %d\n",
-                    pointCorrected.x, cursorx , pointCorrected.y, cursory,  ((int)touch.z) , ztouch_thold);
-
+            //fprintf(stdout,"%d != %d || %d != %d) && %d > %d\n",
+             //       pointCorrected.x, cursorx , pointCorrected.y, cursory,  ((int)touch.z) , ztouch_thold);
             restoreCursor(CursorBuffer);
             cursorx = pointCorrected.x;
             cursory = pointCorrected.y;
@@ -227,19 +210,33 @@ int main() {
             ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
 
     // Draw lines
-    for( int i = 0; i < xHairLines_ROWS - 2; i=i+2) {
+    for( int i = 0; i < xHairLines_ROWS - 2; ) {
         drawCrosshair(width,height,i);
         
         getTouches(1,width,height,cursorx,cursory,CursorBuffer);
         fprintf(stdout,"p:%d %d, %d \r\n",i, cursorx,cursory);
-        /*
+        
         // save touch points
         pointTouches[i/2].x = cursorx;
         pointTouches[i/2].y = cursory;
         // Update for screen dimensions
         pointTargets[i/2].x = (pointTargets[i/2].x < 0 ? width + pointTargets[i/2].x : pointTargets[i/2].x);
         pointTargets[i/2].y = (pointTargets[i/2].y < 0 ? height + pointTargets[i/2].y : pointTargets[i/2].y);
-         */
+        
+        // Conditionally increment to next sample point
+        switch(i) {
+            case 0:
+                i = i + 2 * ( (cursorx < width / 2) && (cursory < height / 2) );
+                break;
+            case 2:
+                i = i + 2 * ( (cursorx > width / 2) && (cursory < height / 2) );
+                break;
+            case 4:
+                i = i + 2 * ( (cursorx < width / 2) && (cursory > height / 2) );
+                break;
+            default:
+                i = i + 2;
+        }
     }
 
     setCalibrationMatrix( (POINT*)&pointTargets, (POINT*)&pointTargets, &calibMatrix); // update matrix

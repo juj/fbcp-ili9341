@@ -135,11 +135,11 @@ void XPT2046::read_touchscreen(bool interruptEnable) {
     
 	if (z > 100) 
 	{
-		char output[30] = "";
-        	fd = open(tcfifo, O_WRONLY | O_NONBLOCK);
-		sprintf(output, "x:%d, y:%d, z:%d\n", x, y, z);
-		write(fd, output, strlen(output) + 1);
-        	close(fd);
+        uint16_t words16Write[4] = { x, y, z, 0x0000FFFF};
+        fd = open(tcfifo, O_WRONLY | O_NONBLOCK);
+        
+		write(fd, words16Write, 4 * sizeof(uint16_t));
+        close(fd);
 		this->lastTouchTick = tick();
 	}
     
