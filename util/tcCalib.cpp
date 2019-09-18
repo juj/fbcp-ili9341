@@ -16,16 +16,17 @@
 
 #include "calibrate.h"
 
+#define POINT_SAMPLES 4
 // Target on-screen points
-POINT pointTargets[4] = {
+POINT pointTargets[POINT_SAMPLES] = {
     {15, 15},
     {-15, 15},
-    {-15, -15},
-    {15, -15}
+    {15, -15},
+    {-15, -15}
 };
 
 // Recorded touch points
-POINT pointTouches[4];
+POINT pointTouches[POINT_SAMPLES];
 
 MATRIX calibMatrix;
 
@@ -144,12 +145,11 @@ void getTouches(int captures, int width, int height, int &cursorx, int &cursory,
         usleep(10000); // usec - slow loop for other threads
         pointRaw.x = touch.x;
         pointRaw.y = touch.y;
-        getDisplayPoint(&pointCorrected,&pointRaw,&calibMatrix);
+        getDisplayPoint((POINT *)&pointCorrected,(POINT *)&pointRaw,&calibMatrix);
         
         // Loop until a touch is registered by a change in cursor value
         if ((pointCorrected.x != cursorx || pointCorrected.y != cursory) && ((int)touch.z) > ztouch_thold ) {
-            //fprintf(stdout,"%d != %d || %d != %d) && %d > %d\n",
-             //       pointCorrected.x, cursorx , pointCorrected.y, cursory,  ((int)touch.z) , ztouch_thold);
+            fprintf(stdout,"actual (%d, %d) => corrected (%d, %d) \n", pointRaw.x, pointRaw.y, pointCorrected.x, pointCorrected.y);
             restoreCursor(CursorBuffer);
             cursorx = pointCorrected.x;
             cursory = pointCorrected.y;
@@ -205,7 +205,12 @@ int main() {
     drawBackground(width,height);
 
     // Set curser values initially
-    setCalibrationMatrix( (POINT*)&pointTargets, (POINT*)&pointTargets, &calibMatrix); // initialized 1:1 matrix
+    // Update for screen dimensions
+    for(int i = 0; i<POINT_SAMPLES;i++ ) {
+        pointTargets[i].x = (pointTargets[i].x < 0 ? width + pointTargets[i].x : pointTargets[i].x);
+        pointTargets[i].y = (pointTargets[i].y < 0 ? height + pointTargets[i].y : pointTargets[i].y);
+    }
+    setCalibrationMatrix( (POINT*)pointTargets, (POINT*)pointTargets, &calibMatrix); // initialized 1:1 matrix
     fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
             ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
 
@@ -214,14 +219,11 @@ int main() {
         drawCrosshair(width,height,i);
         
         getTouches(1,width,height,cursorx,cursory,CursorBuffer);
-        fprintf(stdout,"p:%d %d, %d \r\n",i, cursorx,cursory);
+        //fprintf(stdout,"p:%d %d, %d \r\n",i, cursorx,cursory);
         
         // save touch points
         pointTouches[i/2].x = cursorx;
         pointTouches[i/2].y = cursory;
-        // Update for screen dimensions
-        pointTargets[i/2].x = (pointTargets[i/2].x < 0 ? width + pointTargets[i/2].x : pointTargets[i/2].x);
-        pointTargets[i/2].y = (pointTargets[i/2].y < 0 ? height + pointTargets[i/2].y : pointTargets[i/2].y);
         
         // Conditionally increment to next sample point
         switch(i) {
@@ -238,13 +240,16 @@ int main() {
                 i = i + 2;
         }
     }
-
-    setCalibrationMatrix( (POINT*)&pointTargets, (POINT*)&pointTargets, &calibMatrix); // update matrix
+    // Show input values for matrix
+    for(int i = 0; i<POINT_SAMPLES;i++ ) {
+        fprintf(stdout,"p:%d (%d, %d) => (%d, %d) \r\n",i, pointTouches[i].x, pointTouches[i].y, pointTargets[i].x, pointTargets[i].y);
+    }
+    setCalibrationMatrix( (POINT*)pointTargets, (POINT*)pointTouches , &calibMatrix); // update matrix
     fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
             ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
 
     // MAIN LOOP - show some more points
-    getTouches(10,width,height,cursorx,cursory,CursorBuffer);
+    getTouches(100,width,height,cursorx,cursory,CursorBuffer);
     
     //restoreCursor(CursorBuffer);               // not strictly necessary as display will be closed
     //End();
