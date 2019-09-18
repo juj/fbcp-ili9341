@@ -38,6 +38,8 @@
 #include <sys/stat.h>
 
 #include "spi_user.h"
+#include "calibrate.h"
+
 
 class XPT2046 {
     public:
@@ -51,7 +53,7 @@ class XPT2046 {
         void read_touchscreen(bool interruptEnable);
 
         void setRotation(uint8_t m);
-        void setCalibration(uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY);
+        void initCalibration();
 
         void read(uint16_t * oX, uint16_t * oY, uint16_t * oZ);
         void readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ);
@@ -104,8 +106,11 @@ class XPT2046 {
         uint32_t spi_cs ;
 	
 	uint32_t z_average ;
-
+    
+    MATRIX calib;
+    
 	const char * tcfifo ;
+    const char *calibFile ;
         int interruptpoll ;
 };
 

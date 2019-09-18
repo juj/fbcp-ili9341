@@ -23,9 +23,10 @@
  */
 
 #include "XPT2046.h"
-extern "C" {
- #include "calibrate.h"
-}
+
+#include <sys/types.h>
+#include <stdio.h>
+
 #define XPT2046_CFG_START   1<<7
 
 #define XPT2046_CFG_MUX(v)  ((v&0b111) << (4))
@@ -45,11 +46,13 @@ extern "C" {
 #define XPT2046_MUX_Z2      0b100
 
 #define INTERRUPTDEC 10
+#define MAXLINE 128
 
 XPT2046::XPT2046() {
 	spi_cs = 0;
 	z_average = 0;
 	tcfifo = "/tmp/TCfifo";
+    calibFile = "/etc/xpt2046.conf";
 	
     _maxValue = 0x0fff;
     _width = 480;
@@ -81,6 +84,7 @@ XPT2046::XPT2046() {
 	// Creating the named file(FIFO) 
 	// mkfifo(<pathname>, <permission>) 
 	mkfifo(tcfifo, 0666);
+    initCalibration();
 }
 
 
@@ -152,40 +156,37 @@ void XPT2046::setRotation(uint8_t m) {
     _rotation = m % 4;
 }
 
-void XPT2046::setCalibration(uint16_t minX, uint16_t minY, uint16_t maxX, uint16_t maxY) {
-    _minX = minX;
-    _minY = minY;
-    _maxX = maxX;
-    _maxY = maxY;
+void XPT2046::initCalibration() {
+    FILE *stream;
+    char *line = NULL;
+    int reti;
+    size_t len = 0;
+    ssize_t nread;
+
+    stream = fopen(calibFile, "r");
+    if(stream != NULL)
+    {
+        while ((nread = getline(&line, &len, stream)) != -1) {
+            reti = sscanf((const char*)line,"%l,%l,%l,%l,%l,%l,%l",
+                   calib.An, calib.Bn, calib.Cn, calib.Dn, calib.En, calib.Fn);
+        }
+        free(line);
+        fclose(stream);
+    }
 }
+
 
 void XPT2046::read(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
     uint16_t x, y;
+    POINT pointCorrected, pointRaw;
     readRaw(&x, &y, oZ);
 	
-    uint32_t cX = x;
-    uint32_t cY = y;	
+    pointRaw.x = x;
+    pointRaw.y = y;    
+    getDisplayPoint((POINT *)&pointCorrected,(POINT *)&pointRaw,&calib);
 
-    if(cX < _minX) {
-        cX = 0;
-    } else  if(cX > _maxX) {
-        cX = _width;
-    } else {
-        cX -= _minX;
-        cX = ((cX << 8) / (((_maxX - _minX) << 8) / (_width << 8)) )>> 8;
-    }
-
-    if(cY < _minY) {
-        cY = 0;
-    } else if(cY > _maxY) {
-        cY = _height;
-    } else {
-        cY -= _minY;
-        cY = ((cY << 8) / (((_maxY - _minY) << 8) / (_height << 8))) >> 8;
-    }
-
-    *oX = cX;
-    *oY = cY;
+    *oX = pointCorrected.x;
+    *oY = pointCorrected.y;
 	*oZ = std::max(0,4096 - (int)(*oZ));
 }
 

@@ -27,7 +27,9 @@
  *
  *  Revisions: Kevin Peck 2019
  */
-
+#ifdef __cplusplus
+//extern "C" {
+#endif
 #ifndef _CALIBRATE_H_
 
 #define _CALIBRATE_H_
@@ -115,3 +117,6 @@ EXTERN int getDisplayPoint( POINT * display,
 
 #endif  /* _CALIBRATE_H_ */
 
+#ifdef __cplusplus
+//}
+#endif
