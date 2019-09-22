@@ -129,6 +129,7 @@ void getTouches(int captures, int width, int height, int &cursorx, int &cursory,
         
         // Loop until a touch is registered by a change in cursor value
         if ((touch.x != cursorx || touch.y != cursory) && ((int)touch.z) > ztouch_thold ) {
+            fprintf(stdout,"corrected (%f, %f) \n", touch.x, touch.y);
             restoreCursor(CursorBuffer);
             cursorx = touch.x;
             cursory = touch.y;

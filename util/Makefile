@@ -17,6 +17,6 @@ tcCalib: $(objs)
 	g++ -Wall $(CXXFLAGS) $(LIBFLAGS) $(objs) -o tcCalib
 
 tcTest: $(objs2)
-	g++ -Wall $(CXXFLAGS) $(LIBFLAGS) $(objs) -o tcTest
+	g++ -Wall $(CXXFLAGS) $(LIBFLAGS) $(objs2) -o tcTest
 
 

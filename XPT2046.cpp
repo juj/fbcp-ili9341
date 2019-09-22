@@ -167,27 +167,65 @@ void XPT2046::initCalibration() {
     if(stream != NULL)
     {
         while ((nread = getline(&line, &len, stream)) != -1) {
-            reti = sscanf((const char*)line,"%l,%l,%l,%l,%l,%l,%l",
-                   calib.An, calib.Bn, calib.Cn, calib.Dn, calib.En, calib.Fn);
+            //fprintf(stdout,"scanline: '%s'", line);
+            reti = sscanf((const char*)line,"%d,%d,%d,%d,%d,%d,%d",
+                   &calib.An, &calib.Bn, &calib.Cn, &calib.Dn, &calib.En, &calib.Fn,&calib.Divider);
         }
         free(line);
         fclose(stream);
+    } else { // Make standard identity calibration -- no translation
+        // Target on-screen points
+        POINT pointTargets[3] = {
+            {15, 15},
+            {-15, 15},
+            {15, -15},
+        };        
+        // Set curser values initially
+        // Update for screen dimensions
+        for(int i = 0; i<3;i++ ) {
+            pointTargets[i].x = (pointTargets[i].x < 0 ? _width + pointTargets[i].x : pointTargets[i].x);
+            pointTargets[i].y = (pointTargets[i].y < 0 ? _height + pointTargets[i].y : pointTargets[i].y);
+            fprintf(stdout, "%d,%d\n", pointTargets[i].x, pointTargets[i].y);
+        }
+        setCalibrationMatrix( (POINT*)pointTargets, (POINT*)pointTargets, &calib); // initialized 1:1 matrix
     }
+    fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
+            ,calib.An,calib.Bn,calib.Cn,calib.Dn,calib.En,calib.Fn,calib.Divider );
 }
 
 
 void XPT2046::read(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
     uint16_t x, y;
     POINT pointCorrected, pointRaw;
+    
     readRaw(&x, &y, oZ);
-	
+
     pointRaw.x = x;
-    pointRaw.y = y;    
+    pointRaw.y = y;
+
+    if(pointRaw.x < _minX) {
+        pointRaw.x = 0;
+    } else  if(pointRaw.x > _maxX) {
+        pointRaw.x = _width;
+    } else {
+        pointRaw.x -= _minX;
+        pointRaw.x = ((pointRaw.x << 8) / (((_maxX - _minX) << 8) / (_width << 8)) )>> 8;
+    }
+    
+    if(pointRaw.y < _minY) {
+        pointRaw.y = 0;
+    } else if(pointRaw.y > _maxY) {
+        pointRaw.y = _height;
+    } else {
+        pointRaw.y -= _minY;
+        pointRaw.y = ((pointRaw.y << 8) / (((_maxY - _minY) << 8) / (_height << 8))) >> 8;
+    }
+
     getDisplayPoint((POINT *)&pointCorrected,(POINT *)&pointRaw,&calib);
 
     *oX = pointCorrected.x;
     *oY = pointCorrected.y;
-	*oZ = std::max(0,4096 - (int)(*oZ));
+    *oZ = std::max(0,4096 - (int)(*oZ));
 }
 
 void XPT2046::readRaw(uint16_t * oX, uint16_t * oY, uint16_t * oZ) {
