@@ -96,7 +96,7 @@ cd ../kernel
 cd ../build
 tail -f /tmp/TCfifo &
 sudo ./fbcp-ili9341 &
-
+```
 
 Note especially the two dots `..` on the CMake line, which denote "up one directory" in this case (instead of referring to "more items go here").
 
@@ -269,6 +269,10 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 - The option `#define RUN_WITH_REALTIME_THREAD_PRIORITY` can be enabled to make the driver run at realtime process priority. This can lock up the system however, but still made available for advanced experimentation.
 
 - In `display.h` there is an option `#define TARGET_FRAME_RATE <number>`. Setting this to a smaller value, such as 30, will trade refresh rate to reduce CPU consumption.
+
+### Configuring touch screen and calibration
+
+In the 'util' folder, there is a calibration utility and a test utillity that assist with determining the 7 matrix parameters for calibration.  Wth the tcCalibration utillity, you touch three points and the values are output to the console.  These seven values are placed within a one-line file of just comma separated numbers and named '/etc/xpt2046.conf'.  The ctTest program is a demo program showing cursor tracking with the pointing device on based on the driver-calibrated values.
 
 ### About Input Latency
 
