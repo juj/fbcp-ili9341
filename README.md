@@ -272,7 +272,7 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 
 ### Configuring touch screen and calibration
 
-In the 'util' folder, there is a calibration utility and a test utillity that assist with determining the 7 matrix parameters for calibration.  Wth the tcCalibration utillity, the program on startup, deletes the config file ('/etc/xpt2046.config' -- it needs permission to do this), sends a USER1 signal to the display driver to signal it to re-load the driver (it won't find it and will therefore use a 1 to 1 mapping), you touch the three points indicated, the new matrix is written to the config file location, and another signal is sent to the driver to re-load the configuration.  Your touch display is now calibrated.  The ctTest program is a demo program showing cursor tracking with the pointing device based on the driver-calibrated values.
+In the 'util' folder, there is a calibration utility and a test utillity that assist with determining the 7 matrix parameters for calibration.  Wth the tcCalibration utillity, the program on startup, deletes the config file ('/etc/xpt2046.config' -- it needs permission to do this), sends a USER1 signal to the display driver to signal it to re-load the driver config  (it won't find it and will therefore use a 1 to 1 mapping), you touch the three points indicated, the new matrix is written to the config file location, and another signal is sent to the driver to re-load the configuration.  Your touch display is now calibrated.  The ctTest program is a demo program showing cursor tracking with the pointing device based on the driver-calibrated values.
 
 ### About Input Latency
 
