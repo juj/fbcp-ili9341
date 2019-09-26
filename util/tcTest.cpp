@@ -129,7 +129,6 @@ void getTouches(int captures, int width, int height, int &cursorx, int &cursory,
         
         // Loop until a touch is registered by a change in cursor value
         if ((touch.x != cursorx || touch.y != cursory) && ((int)touch.z) > ztouch_thold ) {
-            fprintf(stdout,"corrected (%f, %f) \n", touch.x, touch.y);
             restoreCursor(CursorBuffer);
             cursorx = touch.x;
             cursory = touch.y;
@@ -147,7 +146,7 @@ void drawBackground(int width, int height) {
     Fill(44, 77, 232, 1);                   // Big blue marble
     Circle(width / 2, 0, width);               // The "world"
     Fill(255, 255, 255, 1);                   // White text
-    TextMid(width / 2, height / 2, "Screen Calibration", SerifTypeface, width / 15);    // Greetings
+    TextMid(width / 2, height / 2, "Screen touch test", SerifTypeface, width / 15);    // Greetings
     End();                           // update picture
 }
 

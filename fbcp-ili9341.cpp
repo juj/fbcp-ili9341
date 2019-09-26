@@ -92,7 +92,8 @@ int main()
 {
   signal(SIGINT, ProgramInterruptHandler);
   signal(SIGQUIT, ProgramInterruptHandler);
-  signal(SIGUSR1, ProgramInterruptHandler);
+  // This signal is used by XPT2046 class as signal to re-load config file
+  //signal(SIGUSR1, ProgramInterruptHandler);
   signal(SIGUSR2, ProgramInterruptHandler);
   signal(SIGTERM, ProgramInterruptHandler);
 

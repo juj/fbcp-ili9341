@@ -7,7 +7,7 @@
 
 #include <memory.h>
 #include <stdio.h>
-
+#include <signal.h>
 #include <fcntl.h>
 
 XPT2046 touch;
@@ -19,6 +19,10 @@ static int loop = 0;
 
 bool activeTouchscreen() {
    return (touch.ticksSinceLastTouch() < TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY); 
+}
+
+void ReloadCalibration(int signal) {
+    touch.initCalibration();
 }
 
 void ChipSelectHigh()
@@ -42,8 +46,12 @@ void ChipSelectHigh()
 
 void InitKeDeiV63()
 {
-  // output device
-  touch = XPT2046();
+    // output device
+    touch = XPT2046();
+  
+    //Register for system signal
+    signal(SIGUSR1, ReloadCalibration);
+
 
   touch.setRotation(0);
 #ifdef DISPLAY_ROTATE_180_DEGREES
@@ -131,7 +139,7 @@ void InitKeDeiV63()
     SPI_TRANSFER(DISPLAY_MADCTL, 0x00, madctl);
 
     SPI_TRANSFER(DSPLAY_COLMOD, 0x00, 0x55);
-    SPI_TRANSFER(DISPLAY_WRCABC,0x00,0x01); // 00 - default, 01 - UI, 02 - still pic, 03 - video
+    SPI_TRANSFER(DISPLAY_WRCABC,0x00,0x00); // 00 - default, 01 - UI, 02 - still pic, 03 - video
       //SPI_TRANSFER(DISPLAY_IDMON); // Increases brightness+contrast
       //SPI_TRANSFER(DISPLAY_IDMOFF); // Darker but more accurate colour
     SPI_TRANSFER(DISPLAY_TESL, 0x00, 0x00, 0x00, 0x01);
@@ -159,18 +167,20 @@ void InitKeDeiV63()
 
 void TurnBacklightOff()
 {
+    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
+    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x08); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming On, 2bit-Backliht Off
+    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x7F);
 }
 
 void TurnBacklightOn()
 {
+    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
+    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x0C); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming, 2bit-Backliht
+    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x7F);
 }
 
 void TurnDisplayOff()
 {
-    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
-    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x2C); // 5-Backlight contro, 3-Display dimming, 2-BacklihtOff
-    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x00);
-    
     SPI_TRANSFER(DISPLAY_OFF); // Works but whith backlight on, it goes white -- a good 'light'
     SPI_TRANSFER(DISPLAY_SLPIN);
     usleep(120*1000);
@@ -181,10 +191,6 @@ void TurnDisplayOn()
     SPI_TRANSFER(DISPLAY_SLPOUT);
     usleep(120*1000);
     SPI_TRANSFER(DISPLAY_ON);
-
-    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
-    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x00); // 5-Backlight contro, 3-Display dimming, 2-BacklihtON
-    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0xFF);
 }
 
 void DeinitSPIDisplay()

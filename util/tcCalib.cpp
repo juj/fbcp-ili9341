@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <regex>
+#include <sys/types.h>
+#include <signal.h>
+#include <dirent.h>
 
 #include "VG/openvg.h"
 #include "VG/vgu.h"
@@ -15,6 +18,10 @@
 #include <pthread.h>
 
 #include "calibrate.h"
+
+#define FILE_COFIG (const char *)"/etc/xpt2046.conf"
+#define PROC_NAME (char *)"fbcp-ili9341"
+#define READ_BUF_SIZE 1024
 
 #define POINT_SAMPLES 4
 // Target on-screen points
@@ -188,6 +195,102 @@ void drawCrosshair(int width, int height, int i) {
     End();                           // update picture
 }
 
+/* This part of code is originated from busybox library
+ A memory location must be free() on return
+ */
+static pid_t *get_pid_by_name(char *process, int *len = 0)
+{
+    DIR *dir;
+    struct dirent *next;
+    pid_t* pidList = NULL;
+    int i = 0;
+    char *pidName;
+    
+    pidName = process;
+    
+    dir = opendir("/proc");
+    if (!dir)
+        printf("Cannot open /proc");
+    
+    while ((next = readdir(dir)) != NULL)
+    {
+        FILE *status;
+        char filename[READ_BUF_SIZE];
+        char buffer[READ_BUF_SIZE];
+        char name[READ_BUF_SIZE];
+        
+        /* Must skip ".." since that is outside /proc */
+        if (strcmp(next->d_name, "..") == 0)
+            continue;
+        
+        /* If it isn't a number, we don't want it */
+        if (!isdigit(*next->d_name))
+            continue;
+
+        sprintf(filename, "/proc/%s/status", next->d_name);
+        if (! (status = fopen(filename, "r")) )
+        {
+            continue;
+        }
+        if (fgets(buffer, READ_BUF_SIZE-1, status) == NULL)
+        {
+            fclose(status);
+            continue;
+        }
+        fclose(status);
+        
+        /* Buffer should contain a string like "Name:   binary_name" */
+        sscanf(buffer, "%*s %s", name);
+        if (strcmp(name, pidName) == 0)
+        {
+            pidList=(pid_t *)realloc( pidList, sizeof(pid_t) * (i+2));
+            pidList[i++]=(pid_t)strtol(next->d_name, NULL, 0);
+        }
+    }
+    if (pidList)
+    {
+        pidList[i]=0;
+        *len = i;
+    }
+    else
+    {
+        pidList=(pid_t *)realloc( pidList, sizeof(pid_t));
+        pidList[0]=(pid_t)-1;
+        *len = 1;
+    }
+    return pidList;
+}
+
+void reloadScreenConfig() {
+    pid_t *pid;
+    int i, icnt;
+    pid = get_pid_by_name(PROC_NAME,&icnt);
+    for(i=0; i<1; i++) // Send signal to only first instance of process (the parent)
+    {
+        fprintf(stdout, "SIGUSR1 to %d\n",pid[i]);
+        kill(pid[i],SIGUSR1);
+    }
+    free(pid);
+}
+
+void writeConfig(const char *fname, MATRIX *config) {
+    FILE *stream;
+    char *line = NULL;
+    int reti;
+    size_t len = 0;
+    ssize_t nread;
+    
+    stream = fopen(fname, "w");
+    if(stream != NULL)
+    {
+        fprintf(stream,"%d,%d,%d,%d,%d,%d,%d\n",
+                config->An, config->Bn, config->Cn, config->Dn, config->En, config->Fn,config->Divider);
+    }
+    free(line);
+    fclose(stream);
+}
+
+
 int main() {
     int width, height, cursorx, cursory, cbsize;
     
@@ -204,6 +307,10 @@ int main() {
     Start(width, height);                   // Start the picture
     drawBackground(width,height);
 
+    // Remove driver config, trigger reload on display
+    remove(FILE_COFIG);
+    reloadScreenConfig();
+    
     // Set curser values initially
     // Update for screen dimensions
     for(int i = 0; i<POINT_SAMPLES;i++ ) {
@@ -247,13 +354,13 @@ int main() {
     setCalibrationMatrix( (POINT*)pointTargets, (POINT*)pointTouches , &calibMatrix); // update matrix
     fprintf(stdout,"M: %d,%d,%d,%d,%d,%d,%d\r\n"
             ,calibMatrix.An,calibMatrix.Bn,calibMatrix.Cn,calibMatrix.Dn,calibMatrix.En,calibMatrix.Fn,calibMatrix.Divider );
-
-    // MAIN LOOP - show some more points
-    getTouches(100,width,height,cursorx,cursory,CursorBuffer);
     
-    //restoreCursor(CursorBuffer);               // not strictly necessary as display will be closed
-    //End();
+    // Write out driver config file, restart display
+    writeConfig(FILE_COFIG, &calibMatrix);
+    reloadScreenConfig();
+
     vgDestroyImage(CursorBuffer);               // tidy up memory
     finish();                       // Graphics cleanup
     exit(0);
 }
+
