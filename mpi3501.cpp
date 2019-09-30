@@ -143,6 +143,7 @@ void InitKeDeiV63()
       //SPI_TRANSFER(DISPLAY_IDMON); // Increases brightness+contrast
       //SPI_TRANSFER(DISPLAY_IDMOFF); // Darker but more accurate colour
     SPI_TRANSFER(DISPLAY_TESL, 0x00, 0x00, 0x00, 0x01);
+    
     SPI_TRANSFER(DISPLAY_GETICID, 0x00, 0x07, 0x00, 0x07, 0x00, 0x1D, 0x00, 0x03); // ?
     SPI_TRANSFER(0xD1001100, 0x00, 0x03, 0x00, 0x30, 0x00, 0x10); // ? 
     SPI_TRANSFER(0xD2001100, 0x00, 0x03, 0x00, 0x14, 0x00, 0x04); // ? 
@@ -167,30 +168,35 @@ void InitKeDeiV63()
 
 void TurnBacklightOff()
 {
-    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
-    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x08); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming On, 2bit-Backliht Off
-    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x7F);
 }
 
 void TurnBacklightOn()
 {
-    // TODO: Reference data sheet (another similar device) isn't accurate for these settings
-    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x0C); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming, 2bit-Backliht
-    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x7F);
 }
 
 void TurnDisplayOff()
 {
-    SPI_TRANSFER(DISPLAY_OFF); // Works but whith backlight on, it goes white -- a good 'light'
-    SPI_TRANSFER(DISPLAY_SLPIN);
-    usleep(120*1000);
+    // These settings appear to to work as per data sheet
+    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x10); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming off, 2bit-Backliht Off
+    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0x00);
+
+    // This does turn display off but you end up with white screen as backlight remains on
+    
+//    SPI_TRANSFER(DISPLAY_OFF); // Works but whith backlight on, it goes white -- a good 'light'
+//    SPI_TRANSFER(DISPLAY_SLPIN);
+//    usleep(120*1000);
 }
 
 void TurnDisplayOn()
 {
-    SPI_TRANSFER(DISPLAY_SLPOUT);
-    usleep(120*1000);
-    SPI_TRANSFER(DISPLAY_ON);
+    // These settings appear to to work as per data sheet
+    SPI_TRANSFER(DISPLAY_WRCTRLD,0x00,0x1C); // 5bit-Backlight control is DISPLAY_WRDISBV, 3bit-Display dimming on, 2bit-Backliht on
+    SPI_TRANSFER(DISPLAY_WRDISBV,0x00,0xFF);
+
+    // This does turn on display, but no need if you're not turning it off (TurnDisplayOff())
+//    SPI_TRANSFER(DISPLAY_SLPOUT);
+//    usleep(120*1000);
+//    SPI_TRANSFER(DISPLAY_ON);
 }
 
 void DeinitSPIDisplay()
