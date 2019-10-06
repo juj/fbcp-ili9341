@@ -6,9 +6,9 @@ objs2=tcTest.o
 
 all: tcCalib tcTest
 
-clean: $(objs)
-	rm $(objs)
-	rm tcCalib
+clean: 
+	rm -f -- $(objs) tcCalib
+	rm -f -- $(objs2) tcTest
 
 ../calibrate.o: ../calibrate.cpp
 	g++  $(CXXFLAGS)  -c -o ../calibrate.o ../calibrate.cpp
