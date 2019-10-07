@@ -1,4 +1,4 @@
-LIBFLAGS=-L/opt/vc/lib -lEGL -lGLESv2 -lbcm_host -lpthread -ljpeg -lshapes
+LIBFLAGS=-L/opt/vc/lib -lbrcmEGL -lbrcmGLESv2 -lbcm_host -lpthread -ljpeg -lshapes
 CXXFLAGS=-DDEBUG -fno-exceptions -DPI -std=gnu++11 -I/opt/vc/include -I/opt/vc/include/interface/vmcs_host/linux -I/opt/vc/include/interface/vcos/pthreads -I..
 
 objs=tcCalib.o ../calibrate.o
@@ -6,9 +6,9 @@ objs2=tcTest.o
 
 all: tcCalib tcTest
 
-clean: $(objs)
-	rm $(objs)
-	rm tcCalib
+clean: 
+	rm -f -- $(objs) tcCalib
+	rm -f -- $(objs2) tcTest
 
 ../calibrate.o: ../calibrate.cpp
 	g++  $(CXXFLAGS)  -c -o ../calibrate.o ../calibrate.cpp
