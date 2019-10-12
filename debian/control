@@ -1,0 +1,20 @@
+Source: fbcp-ili9341
+Section: misc
+Priority: optional
+Maintainer: kunzol <marco.schmidt@googlemail.com>
+Build-Depends: debhelper (>= 9), dkms, config-package-dev, debhelper
+Standards-Version: 3.9.8
+Homepage: https://github.com/kpishere/fbcp-ili9341
+#Vcs-Git: https://anonscm.debian.org/collab-maint/fbcp-ili9341.git
+#Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/fbcp-ili9341.git
+
+Package: fbcp-ili9341
+Architecture: armhf
+Depends: ${shlibs:Depends}, ${misc:Depends}, libc6, raspberrypi-kernel-headers, cmake, g++, make, binutils, kmod, libraspberrypi0, crudini, procps
+Description: SPI-based LCD displays for Raspberry Pi
+ This repository implements a driver for
+ certain SPI-based LCD displays for
+ Raspberry Pi A, B, 2, 3 and Zero
+ via dkms.
+ .
+

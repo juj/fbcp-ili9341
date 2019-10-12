@@ -1,0 +1,50 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#export DH_VERBOSE = 1
+
+include /usr/share/dpkg/default.mk
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+
+%:
+	dh $@ --with dkms
+
+override_dh_auto_install:
+	cp -f debian/$(DEB_SOURCE)-module debian/$(DEB_SOURCE)/usr/sbin/$(DEB_SOURCE)-module
+	install -d debian/$(DEB_SOURCE)/etc/modules-load.d/
+	cp -f debian/$(DEB_SOURCE).conf debian/$(DEB_SOURCE)/etc/modules-load.d/
+	install -d debian/$(DEB_SOURCE)/usr/src/$(DEB_SOURCE)-$(DEB_VERSION)
+	cp -f spi.h debian/$(DEB_SOURCE)/usr/src/$(DEB_SOURCE)-$(DEB_VERSION)
+	mv -f util/tcTest debian/$(DEB_SOURCE)/usr/sbin/
+	mv -f util/tcCalib debian/$(DEB_SOURCE)/usr/sbin/
+
+
+override_dh_install:
+	dh_install -Xdebian -X.git -X.o * usr/share/$(DEB_SOURCE)
+	dh_install -X.sh kernel usr/src/$(DEB_SOURCE)-$(DEB_VERSION)
+	find debian/$(DEB_SOURCE)/usr/share/$(DEB_SOURCE) -type f -perm -5 -print0 2>/dev/null | xargs -0r chmod a-X
+
+override_dh_dkms:
+	dh_dkms -V "${DEB_VERSION}"
+
+# Configure and compile util
+override_dh_auto_configure:
+	dh_auto_configure --builddirectory=util --buildsystem=makefile --
+
+override_dh_auto_build:
+	dh_auto_build --builddirectory=util --buildsystem=makefile --
+
+override_dh_strip:
+	strip debian/$(DEB_SOURCE)/usr/sbin/tcTest
+	strip debian/$(DEB_SOURCE)/usr/sbin/tcCalib
+
+override_dh_makeshlibs override_dh_shlibdeps:

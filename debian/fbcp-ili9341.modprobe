@@ -1,0 +1,3 @@
+
+install bcm2835_spi_display /usr/sbin/fbcp-ili9341-module start $CMDLINE_OPTS
+remove bcm2835_spi_display /usr/sbin/fbcp-ili9341-module stop

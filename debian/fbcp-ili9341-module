@@ -1,0 +1,65 @@
+#!/bin/bash
+command="${1}"
+shift
+fbcpmodopt="$*"
+fbcplog="/var/log/fbcp-ili9341-dkms.log"
+fbcpmod="bcm2835_spi_display"
+fbcpcmd="fbcp-ili9341"
+fbcpscript="$( readlink -f $0 )"
+
+function fbcp_log() {
+    logger -e -t "${fbcpcmd}" -p user.info -- "$$ $*"
+}
+
+case "${command,,}" in
+    run)
+        fbcp_log "${command}"
+        while IFS= read -r fbcp
+        do
+            fbcp_log "${fbcp}"
+        done < <( /usr/sbin/${fbcpcmd} ) &
+    ;;
+    start)
+        fbcp_log "${command}"
+        fbcp_log "$( modprobe -v --ignore-install ${fbcpmod} ${fbcpmodopt} )"
+# module loaded and fbcpcmd not running
+        if lsmod | grep -q ${fbcpmod} && pgrep -v ${fbcpcmd} > /dev/null ; then
+            exec ${fbcpscript} run 
+        fi
+    ;;
+    stop)
+        fbcp_log "${command}"
+# try killing fbcpcmd not more than 7 times
+        declare -i i=0
+        while pgrep -x ${fbcpcmd} > /dev/null && [ ${i} -lt 7 ]
+        do
+            pkill -x -TERM ${fbcpcmd}
+            if pgrep -x ${fbcpcmd} > /dev/null; then
+                ((i++))
+                sleep 1
+            else
+                break
+            fi
+        done
+
+# force kill fbcpcmd  
+        pgrep -x ${fbcpcmd} > /dev/null && pkill -x -KILL ${fbcpcmd} || true
+
+        if pgrep -x ${fbcpcmd} > /dev/null; then 
+            echo "fbcp-ili9341 still running. can not unload module." >&2
+            exit 1
+        else
+            modprobe -r --ignore-remove ${fbcpmod}
+        fi
+    ;;
+    status)
+        pgrep -x -l ${fbcpcmd} || echo "fbcp-ili9341 not running."
+        lsmod | grep ${fbcpmod} || echo "${fbcpmod} not loaded."
+    ;;
+    *)
+        echo "usage: $0 start|stop|status" >&2
+        exit 1
+    ;;
+esac
+
+fbcp_log "${command} end"
