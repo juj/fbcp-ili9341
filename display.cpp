@@ -1,6 +1,6 @@
 #include "config.h"
 #include "display.h"
-#include "spi.h"
+#include "spi_user.h"
 
 #include <memory.h>
 

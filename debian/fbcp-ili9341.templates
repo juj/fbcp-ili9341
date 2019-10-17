@@ -1,0 +1,42 @@
+Template: fbcp-ili9341/ishat
+Type: boolean
+Default: true
+Description: Is your controller stacked on top of the Pi?
+
+Template: fbcp-ili9341/hat
+Type: select
+Choices: ADAFRUIT_ILI9341_PITFT, ADAFRUIT_HX8357D_PITFT, FREEPLAYTECH_WAVESHARE32B, WAVESHARE35B_ILI9486, TONTEC_MZ61581, WAVESHARE_ST7789VW_HAT, WAVESHARE_ST7735S_HAT, KEDEI_V63_MPI3501
+Description: Which type of LCD display:
+ see the list at:
+ https://github.com/kpishere/fbcp-ili9341
+
+Template: fbcp-ili9341/wired
+Type: select
+Choices: ILI9341, ILI9340, HX8357D, SSD1351, ILI9486, ILI9486L, ST7735R, MZ61581, ST7789, ST7789VW, ST7735S, MPI3501
+Description: Which type of LCD display:
+ see the list at:
+ https://github.com/kpishere/fbcp-ili9341
+
+Template: fbcp-ili9341/divisor
+Type: string
+Default: 12
+Description: Enter divisor of the core_freq:
+ This must be an even number.
+ Sets the clock divisor number used with
+ core_freq from config.txt.
+
+Template: fbcp-ili9341/statistics
+Type: select
+Choices: 0, 1, 2
+Default: 0
+Description: Show statistics overlay?
+ Enable this to show a statistics overlay on
+ top of the screen.
+ The higher the number the more is shown.
+ .
+
+Template: fbcp-ili9341/hdmi
+Type: boolean
+Default: true
+Description: Configure config.txt for hdmi size?
+

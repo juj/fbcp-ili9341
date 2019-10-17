@@ -6,3 +6,8 @@
 *.S
 *.symvers
 *.order
+kernel/bcm2835_spi_display.mod.c
+build
+.DS_Store
+util/tcCalib
+util/tcTest

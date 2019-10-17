@@ -18,7 +18,7 @@
 
 #include "config.h"
 #include "text.h"
-#include "spi.h"
+#include "spi_user.h"
 #include "gpu.h"
 #include "statistics.h"
 #include "tick.h"
@@ -92,9 +92,11 @@ int main()
 {
   signal(SIGINT, ProgramInterruptHandler);
   signal(SIGQUIT, ProgramInterruptHandler);
-  signal(SIGUSR1, ProgramInterruptHandler);
+  // This signal is used by XPT2046 class as signal to re-load config file
+  //signal(SIGUSR1, ProgramInterruptHandler);
   signal(SIGUSR2, ProgramInterruptHandler);
   signal(SIGTERM, ProgramInterruptHandler);
+
 #ifdef RUN_WITH_REALTIME_THREAD_PRIORITY
   SetRealtimeThreadPriority();
 #endif
@@ -139,6 +141,7 @@ int main()
   printf("All initialized, now running main loop...\n");
   while(programRunning)
   {
+    sendNoOpCommand();
     prevFrameWasInterlacedUpdate = interlacedUpdate;
 
     // If last update was interlaced, it means we still have half of the image pending to be updated. In such a case,
@@ -150,7 +153,10 @@ int main()
 #ifdef THROTTLE_INTERLACING
       timespec timeout = {};
       timeout.tv_nsec = 1000 * MIN(1000000, MAX(1, 750/*0.75ms extra sleep so we know we should likely sleep long enough to see the next frame*/ + PredictNextFrameArrivalTime() - tick()));
-      if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) 
+      {
+        syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Start sleeping until we get new tasks
+      }
 #endif
       // If THROTTLE_INTERLACING is not defined, we'll fall right through and immediately submit the rest of the remaining content on screen to attempt to minimize the visual
       // observable effect of interlacing, although at the expense of smooth animation (falling through here causes jitter)
@@ -160,6 +166,7 @@ int main()
       uint64_t waitStart = tick();
       while(__atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST) == 0)
       {
+        sendNoOpCommand();
 #if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         if (!displayOff && tick() - waitStart > TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
         {
@@ -170,18 +177,30 @@ int main()
         if (!displayOff)
         {
           timespec timeout = {};
-          timeout.tv_sec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) / 1000000000;
-          timeout.tv_nsec = ((uint64_t)TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY * 1000) % 1000000000;
-          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); // Sleep until the next frame arrives
+          timeout.tv_nsec = ((uint64_t)SLEEP_TIME_USECS_NODRAWING * 1000) % 1000000000;
+          if (programRunning) 
+          {
+            // Sleep until the next frame arrives or up to SLEEP_TIME_USECS_NODRAWING time 
+            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); 
+          }
         }
-        else
+        else 
 #endif
-          if (programRunning) syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, 0, 0, 0); // Sleep until the next frame arrives
+        {
+          if (programRunning) 
+          {
+            timespec timeout = {};
+            timeout.tv_nsec = ((uint64_t)SLEEP_TIME_USECS_NODRAWING * 1000) % 1000000000;
+            // Sleep until the next frame arrives or up to SLEEP_TIME_USECS_NODRAWING time 
+            syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAIT, 0, &timeout, 0, 0); 
+     	  }
+        } 
       }
     }
-
     bool spiThreadWasWorkingHardBefore = false;
 
+    sendNoOpCommand();
+    
     // At all times keep at most two rendered frames in the SPI task queue pending to be displayed. Only proceed to submit a new frame
     // once the older of those has been displayed.
     bool once = true;
@@ -246,25 +265,25 @@ int main()
     if (gotNewFramebuffer)
     {
 #ifdef USE_GPU_VSYNC
-      // TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
-      // N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
-      // produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
+// TODO: Hardcoded vsync interval to 60 for now. Would be better to compute yet another histogram of the vsync arrival times, if vsync is not set to 60hz.
+// N.B. copying directly to videoCoreFramebuffer[1] that may be directly accessed by the main thread, so this could
+// produce a visible tear between two adjacent frames, but since we don't have vsync anyways, currently not caring too much.
 
       frameObtainedTime = tick();
       uint64_t framePollingStartTime = frameObtainedTime;
 
-#if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
+  #if defined(SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES) || defined(SAVE_BATTERY_BY_SLEEPING_WHEN_IDLE)
     uint64_t nextFrameArrivalTime = PredictNextFrameArrivalTime();
     int64_t timeToSleep = nextFrameArrivalTime - tick();
-    if (timeToSleep > 0)
+    if (timeToSleep > 0) {
       usleep(timeToSleep);
-#endif
+    }
+  #endif
 
       framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
 #else
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
-
 #ifdef STATISTICS
       uint64_t now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
@@ -273,17 +292,16 @@ int main()
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
       DrawStatisticsOverlay(framebuffer[0]);
-
 #ifdef USE_GPU_VSYNC
 
-#ifdef STATISTICS
+ #ifdef STATISTICS
       uint64_t completelyUnnecessaryTimeWastedPollingGPUStart = tick();
-#endif
+ #endif
 
       // DispmanX PROBLEM! When latching onto the vsync signal, the DispmanX API sends the signal at arbitrary phase with respect to the application actually producing its frames.
       // Therefore even while we do get a smooth 16.666.. msec interval vsync signal, we have no idea whether the application has actually produced a new frame at that time. Therefore
       // we must keep polling for frames until we find one that it has produced.
-#ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
+ #ifdef SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES
       framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       uint64_t timeToGiveUpThereIsNotGoingToBeANewFrame = framePollingStartTime + 1000000/TARGET_FRAME_RATE/2;
       while(!framebufferHasNewChangedPixels && tick() < timeToGiveUpThereIsNotGoingToBeANewFrame)
@@ -294,21 +312,21 @@ int main()
         DrawStatisticsOverlay(framebuffer[0]);
         framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
-#else
+ #else
       framebufferHasNewChangedPixels = true;
-#endif
+ #endif
 
       numNewFrames = __atomic_load_n(&numNewGpuFrames, __ATOMIC_SEQ_CST);
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
-#ifdef STATISTICS
+ #ifdef STATISTICS
       now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
         frameSkipTimeHistory[frameSkipTimeHistorySize++] = now;
 
       uint64_t completelyUnnecessaryTimeWastedPollingGPUStop = tick();
       __atomic_fetch_add(&timeWastedPollingGPU, completelyUnnecessaryTimeWastedPollingGPUStop-completelyUnnecessaryTimeWastedPollingGPUStart, __ATOMIC_RELAXED);
-#endif
+ #endif
 
 #else // !USE_GPU_VSYNC
       if (!displayOff)
@@ -528,7 +546,6 @@ int main()
       prevFrameEnd = curFrameEnd;
       curFrameEnd = spiTaskMemory->queueTail;
     }
-
 #if defined(BACKLIGHT_CONTROL) && defined(TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY)
     double percentageOfScreenChanged = (double)numChangedPixels/(DISPLAY_DRAWABLE_WIDTH*DISPLAY_DRAWABLE_HEIGHT);
     bool displayIsActive = percentageOfScreenChanged > DISPLAY_CONSIDERED_INACTIVE_PERCENTAGE;
@@ -536,7 +553,7 @@ int main()
       displayContentsLastChanged = tick();
 
     bool keyboardIsActive = TimeSinceLastKeyboardPress() < TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY;
-    if (displayIsActive || keyboardIsActive)
+    if (displayIsActive || keyboardIsActive || activeTouchscreen() )
     {
       if (displayOff)
       {

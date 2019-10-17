@@ -2,7 +2,7 @@
 
 #if defined(ILI9486) || defined(ILI9486L)
 
-#include "spi.h"
+#include "spi_user.h"
 
 #include <memory.h>
 #include <stdio.h>

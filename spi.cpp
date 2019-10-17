@@ -5,10 +5,11 @@
 #include <sys/mman.h> // mmap, munmap
 #include <pthread.h> // pthread_create
 #include <bcm_host.h> // bcm_host_get_peripheral_address, bcm_host_get_peripheral_size, bcm_host_get_sdram_address
+#include "config.h"
 #endif
 
 #include "config.h"
-#include "spi.h"
+#include "spi_user.h"
 #include "util.h"
 #include "dma.h"
 #include "mailbox.h"
@@ -43,6 +44,9 @@ static uint32_t writeCounter = 0;
   } while(0)
 
 int mem_fd = -1;
+int intr_fd = -1;
+static int numberPress = 0;
+static char numberAsString[21] = "                    ";
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
@@ -50,6 +54,21 @@ volatile SPIRegisterFile *spi = 0;
 // Points to the system timer register. N.B. spec sheet says this is two low and high parts, in an 32-bit aligned (but not 64-bit aligned) address. Profiling shows
 // that Pi 3 Model B does allow reading this as a u64 load, and even when unaligned, it is around 30% faster to do so compared to loading in parts "lo | (hi << 32)".
 volatile uint64_t *systemTimerRegister = 0;
+
+bool hasInterrupt() {
+    int lastNumberPress = numberPress;
+    
+    if(intr_fd<0) return false;
+    if ((read(intr_fd, numberAsString, sizeof(numberAsString))) < 0) {
+        if (errno != EWOULDBLOCK) {
+            perror("read/intr_fd");
+        }
+    } else {
+    	lseek(intr_fd,0,SEEK_SET);
+        numberPress = atoi(numberAsString);
+    }
+    return (numberPress != lastNumberPress);
+}
 
 void DumpSPICS(uint32_t reg)
 {
@@ -260,6 +279,14 @@ void WaitForPolledSPITransferToFinish()
   if ((cs & BCM2835_SPI0_CS_RXD)) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
 }
 
+void sendNoOpCommand() {
+  // Send a no-operation command to display (side effect is Touch display is polled)
+  SPITask *task = AllocTask(0);
+  task->cmd = DISPLAY_NO_OPERATION;
+  CommitTask(task);
+  IN_SINGLE_THREADED_MODE_RUN_TASK();
+}
+
 #ifdef ALL_TASKS_SHOULD_DMA
 
 #ifndef USE_DMA_TRANSFERS
@@ -274,14 +301,13 @@ void RunSPITask(SPITask *task)
   uint8_t *tEnd = task->PayloadEnd();
   const uint32_t payloadSize = tEnd - tStart;
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
-
 #define TASK_SIZE_TO_USE_DMA 4
   // Do a DMA transfer if this task is suitable in size for DMA to handle
   if (payloadSize >= TASK_SIZE_TO_USE_DMA && (task->cmd == DISPLAY_WRITE_PIXELS || task->cmd == DISPLAY_SET_CURSOR_X || task->cmd == DISPLAY_SET_CURSOR_Y))
   {
     if (previousTaskWasSPI)
       WaitForPolledSPITransferToFinish();
-//    printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
+    //printf("DMA cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
     SPIDMATransfer(task);
     previousTaskWasSPI = false;
   }
@@ -297,7 +323,7 @@ void RunSPITask(SPITask *task)
     else
       WaitForPolledSPITransferToFinish();
 
-//    printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
+    //printf("SPI cmd=0x%x, data=%d bytes\n", task->cmd, task->PayloadSize());
 
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
 #ifndef SPI_3WIRE_PROTOCOL
@@ -458,7 +484,7 @@ void ExecuteSPITasks()
 #endif
 }
 
-#if !defined(KERNEL_MODULE) && defined(USE_SPI_THREAD)
+#if defined(USE_SPI_THREAD)
 pthread_t spiThread;
 
 // A worker thread that keeps the SPI bus filled at all times
@@ -480,7 +506,9 @@ void *spi_thread(void *unused)
       spiThreadSleepStartTime = t0;
       __atomic_store_n(&spiThreadSleeping, 1, __ATOMIC_RELAXED);
 #endif
-      if (programRunning) syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      if (programRunning) {
+	syscall(SYS_futex, &spiTaskMemory->queueTail, FUTEX_WAIT, spiTaskMemory->queueHead, 0, 0, 0); // Start sleeping until we get new tasks
+      }
 #ifdef STATISTICS
       __atomic_store_n(&spiThreadSleeping, 0, __ATOMIC_RELAXED);
       uint64_t t1 = tick();
@@ -492,21 +520,10 @@ void *spi_thread(void *unused)
 }
 #endif
 
+
+
 int InitSPI()
 {
-#ifdef KERNEL_MODULE
-
-#define BCM2835_PERI_BASE               0x3F000000
-#define BCM2835_GPIO_BASE               0x200000
-#define BCM2835_SPI0_BASE               0x204000
-  printk("ioremapping %p\n", (void*)(BCM2835_PERI_BASE+BCM2835_GPIO_BASE));
-  void *bcm2835 = ioremap(BCM2835_PERI_BASE+BCM2835_GPIO_BASE, 32768);
-  printk("Got bcm address %p\n", bcm2835);
-  if (!bcm2835) FATAL_ERROR("Failed to map BCM2835 address!");
-  spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE - BCM2835_GPIO_BASE);
-  gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835);
-
-#else // Userland version
   // Memory map GPIO and SPI peripherals for direct access
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
@@ -517,8 +534,11 @@ int InitSPI()
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
   systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
-#endif
 
+  // Touch screen interrupt
+  intr_fd = open("/sys/tft/gpio25/numberPresses", O_RDONLY|O_NONBLOCK);
+  //if (intr_fd < 0) FATAL_ERROR("can't open /sys/tft/gpio25/numberPresses (run as sudo)");
+    
   uint32_t currentBcmCoreSpeed = MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
   uint32_t maxBcmCoreTurboSpeed = MailboxRet2(0x00030004/*Get Max Clock Rate*/, 0x4/*CORE*/);
 
@@ -527,7 +547,6 @@ int InitSPI()
 
   printf("BCM core speed: current: %uhz, max turbo: %uhz. SPI CDIV: %d, SPI max frequency: %.0fhz\n", currentBcmCoreSpeed, maxBcmCoreTurboSpeed, SPI_BUS_CLOCK_DIVISOR, (double)maxBcmCoreTurboSpeed / SPI_BUS_CLOCK_DIVISOR);
 
-#if !defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES)
   // By default all GPIO pins are in input mode (0x00), initialize them for SPI and GPIO writes
 #ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0x01); // Data/Control pin to output (0x01)
@@ -558,38 +577,9 @@ int InitSPI()
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
   spi->clk = SPI_BUS_CLOCK_DIVISOR; // Clock Divider determines SPI bus speed, resulting speed=256MHz/clk
-#endif
 
-  // Initialize SPI thread task buffer memory
-#ifdef KERNEL_MODULE_CLIENT
-  int driverfd = open("/proc/bcm2835_spi_display_bus", O_RDWR|O_SYNC);
-  if (driverfd < 0) FATAL_ERROR("Could not open SPI ring buffer - kernel driver module not running?");
-  spiTaskMemory = (SharedMemory*)mmap(NULL, SHARED_MEMORY_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED/* | MAP_NORESERVE | MAP_POPULATE | MAP_LOCKED*/, driverfd, 0);
-  close(driverfd);
-  if (spiTaskMemory == MAP_FAILED) FATAL_ERROR("Could not mmap SPI ring buffer!");
-  printf("Got shared memory block %p, ring buffer head %p, ring buffer tail %p, shared memory block phys address: %p\n", (const char *)spiTaskMemory, spiTaskMemory->queueHead, spiTaskMemory->queueTail, spiTaskMemory->sharedMemoryBaseInPhysMemory);
-
-#ifdef USE_DMA_TRANSFERS
-  printf("DMA TX channel: %d, DMA RX channel: %d\n", spiTaskMemory->dmaTxChannel, spiTaskMemory->dmaRxChannel);
-#endif
-
-#else
-
-#ifdef KERNEL_MODULE
-  spiTaskMemory = (SharedMemory*)kmalloc(SHARED_MEMORY_SIZE, GFP_KERNEL | GFP_DMA);
-  // TODO: Ideally we would be able to directly perform the DMA from the SPI ring buffer in 'spiTaskMemory'. However
-  // that pointer is shared to userland, and it is proving troublesome to make it both userland-writable as well as cache-bypassing DMA coherent.
-  // Therefore these two memory areas are separate for now, and we memcpy() from SPI ring buffer to the following intermediate 'dmaSourceMemory'
-  // memory area to perform the DMA transfer. Is there a way to avoid this intermediate buffer? That would improve performance a bit.
-  dmaSourceMemory = (SharedMemory*)dma_alloc_writecombine(0, SHARED_MEMORY_SIZE, &spiTaskMemoryPhysical, GFP_KERNEL);
-  LOG("Allocated DMA memory: mem: %p, phys: %p", spiTaskMemory, (void*)spiTaskMemoryPhysical);
-  memset((void*)spiTaskMemory, 0, SHARED_MEMORY_SIZE);
-#else
   spiTaskMemory = (SharedMemory*)Malloc(SHARED_MEMORY_SIZE, "spi.cpp shared task memory");
-#endif
-
   spiTaskMemory->queueHead = spiTaskMemory->queueTail = spiTaskMemory->spiBytesQueued = 0;
-#endif
 
 #ifdef USE_DMA_TRANSFERS
   InitDMA();
@@ -598,7 +588,6 @@ int InitSPI()
   // Enable fast 8 clocks per byte transfer mode, instead of slower 9 clocks per byte.
   UNLOCK_FAST_8_CLOCKS_SPI();
 
-#if !defined(KERNEL_MODULE) && (!defined(KERNEL_MODULE_CLIENT) || defined(KERNEL_MODULE_CLIENT_DRIVES))
   printf("Initializing display\n");
   InitSPIDisplay();
 
@@ -612,9 +601,6 @@ int InitSPI()
   // We will be running SPI tasks continuously from the main thread, so keep SPI Transfer Active throughout the lifetime of the driver.
   BEGIN_SPI_COMMUNICATION();
 #endif
-
-#endif
-
   LOG("InitSPI done");
   return 0;
 }
@@ -632,7 +618,6 @@ void DeinitSPI()
 
   spi->cs = BCM2835_SPI0_CS_CLEAR | DISPLAY_SPI_DRIVE_SETTINGS;
 
-#ifndef KERNEL_MODULE_CLIENT
 #ifdef GPIO_TFT_DATA_CONTROL
   SET_GPIO_MODE(GPIO_TFT_DATA_CONTROL, 0);
 #endif
@@ -641,7 +626,6 @@ void DeinitSPI()
   SET_GPIO_MODE(GPIO_SPI0_MISO, 0);
   SET_GPIO_MODE(GPIO_SPI0_MOSI, 0);
   SET_GPIO_MODE(GPIO_SPI0_CLK, 0);
-#endif
 
   if (bcm2835)
   {
@@ -654,16 +638,10 @@ void DeinitSPI()
     close(mem_fd);
     mem_fd = -1;
   }
-
-#ifndef KERNEL_MODULE_CLIENT
-
-#ifdef KERNEL_MODULE
-  kfree(spiTaskMemory);
-  dma_free_writecombine(0, SHARED_MEMORY_SIZE, dmaSourceMemory, spiTaskMemoryPhysical);
-  spiTaskMemoryPhysical = 0;
-#else
+  if (intr_fd >= 0) {
+    close(intr_fd);
+    intr_fd = -1;
+  }
   free(spiTaskMemory);
-#endif
-#endif
   spiTaskMemory = 0;
 }

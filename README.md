@@ -5,33 +5,33 @@ This repository implements a driver for certain SPI-based LCD displays for Raspb
 ![PiTFT display](/example.jpg "Adafruit PiTFT 2.8 with ILI9341 controller")
 
 The work was motivated by curiosity after seeing this series of videos on the RetroManCave YouTube channel:
- - [RetroManCave: Waveshare 3.5" Raspberry Pi Screen | Review](https://www.youtube.com/watch?v=SGMC0t33C50)
- - [RetroManCave: Waveshare 3.2" vs 3.5" LCD screen gaming test | Raspberry Pi / RetroPie](https://www.youtube.com/watch?v=8bazEcXemiA)
- - [Elecrow 5 Inch LCD Review | RetroPie & Raspberry Pi](https://www.youtube.com/watch?v=8VgNBDMOssg)
+- [RetroManCave: Waveshare 3.5" Raspberry Pi Screen | Review](https://www.youtube.com/watch?v=SGMC0t33C50)
+- [RetroManCave: Waveshare 3.2" vs 3.5" LCD screen gaming test | Raspberry Pi / RetroPie](https://www.youtube.com/watch?v=8bazEcXemiA)
+- [Elecrow 5 Inch LCD Review | RetroPie & Raspberry Pi](https://www.youtube.com/watch?v=8VgNBDMOssg)
 
 In these videos, the SPI (GPIO) bus is referred to being the bottleneck. SPI based displays update over a serial data bus, transmitting one bit per clock cycle on the bus. A 320x240x16bpp display hence requires a SPI bus clock rate of 73.728MHz to achieve a full 60fps refresh frequency. Not many SPI LCD controllers can communicate this fast in practice, but are constrained to e.g. a 16-50MHz SPI bus clock speed, capping the maximum update rate significantly. Can we do anything about this?
 
 The fbcp-ili9341 project started out as a display driver for the [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) display that utilizes the ILI9341 controller. On that display, fbcp-ili9341 can achieve a 60fps update rate, depending on the content that is being displayed. Check out these videos for examples of the driver in action:
 
- - [fbcp-ili9341 frame delivery smoothness test on Pi 3B and Adafruit ILI9341 at 119Hz](https://youtu.be/IqzKT33Rwjc)
- - [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8)
- - [Latency and tearing test: KeDei 3.5" 320x480 HDMI vs Adafruit 2.8" PiTFT ILI9341 240x320 SPI](https://www.youtube.com/watch?v=1yvmvv0KtNs)
- - [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4)
- - [Quake 60 fps inside Gameboy Advance (ILI9341)](https://www.youtube.com/watch?v=xmO8t3XlxVM)
- - First implementation of a statistics overlay: [fbcp-ili9341 SPI display driver on Adafruit PiTFT 2.8"](http://youtu.be/rKSH048XRjA)
- - Initial proof of concept video: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
+- [fbcp-ili9341 frame delivery smoothness test on Pi 3B and Adafruit ILI9341 at 119Hz](https://youtu.be/IqzKT33Rwjc)
+- [Latency and tearing test #2: GPIO input to display latency in fbcp-ili9341 and tearing modes](https://www.youtube.com/watch?v=EOICdpjiqv8)
+- [Latency and tearing test: KeDei 3.5" 320x480 HDMI vs Adafruit 2.8" PiTFT ILI9341 240x320 SPI](https://www.youtube.com/watch?v=1yvmvv0KtNs)
+- [fbcp-ili9341 ported to ILI9486 WaveShare 3.5" (B) SpotPear 320x480 SPI display](https://www.youtube.com/watch?v=dqOLIHOjLq4)
+- [Quake 60 fps inside Gameboy Advance (ILI9341)](https://www.youtube.com/watch?v=xmO8t3XlxVM)
+- First implementation of a statistics overlay: [fbcp-ili9341 SPI display driver on Adafruit PiTFT 2.8"](http://youtu.be/rKSH048XRjA)
+- Initial proof of concept video: [fbcp-ili9341 driver first demo](https://youtu.be/h1jhuR-oZm0)
 
 ### How It Works
 
 Given that the SPI bus can be so constrained on bandwidth, how come fbcp-ili9341 seems to be able to update at up to 60fps? The way this is achieved is by what could be called *adaptive display stream updates*. Instead of uploading each pixel at each display refresh cycle, only the actually changed pixels on screen are submitted to the display. This is doable because the ILI9341 controller, as many other popular controllers, have communication interface functions that allow specifying partial screen updates, down to subrectangles or even individual pixel levels. This allows beating the bandwidth limit: for example in Quake, even though it is a fast pacing game, on average only about 46% of all pixels on screen change each rendered frame. Some parts, such as the UI stay practically constant across multiple frames.
 
 Other optimizations are also utilized to squeeze out even more performance:
- - The program directly communicates with the BCM2835 ARM Peripherals controller registers, bypassing the usual Linux software stack.
- - A hybrid of both Polled Mode SPI and DMA based transfers are utilized. Long sequential transfer bursts are performed using DMA, and when DMA would have too much latency, Polled Mode SPI is applied instead.
- - Undocumented BCM2835 features are used to squeeze out maximum bandwidth: [SPI CDIV is driven at even numbers](https://www.raspberrypi.org/forums/viewtopic.php?t=43442) (and not just powers of two), and the [SPI DLEN register is forced in non-DMA mode](https://www.raspberrypi.org/forums/viewtopic.php?t=181154) to avoid an idle 9th clock cycle for each transferred byte.
- - Good old **interlacing** is added into the mix: if the amount of pixels that needs updating is detected to be too much that the SPI bus cannot handle it, the driver adaptively resorts to doing an interlaced update, uploading even and odd scanlines at subsequent frames. Once the number of pending pixels to write returns to manageable amounts, progressive updating is resumed. This effectively doubles the maximum display update rate. (If you do not like the visual appearance that interlacing causes, it is easy to disable this by uncommenting the line `#define NO_INTERLACING` in file `config.h`)
- - A dedicated SPI communication thread is used in order to keep the SPI bus active at all times.
- - A number of other micro-optimization techniques are used, such as batch updating rectangular spans of pixels, merging disjoint-but-close spans of pixels on the same scanline, and latching Column and Page End Addresses to bottom-right corner of the display to be able to cut CASET and PASET messages in mid-communication.
+- The program directly communicates with the BCM2835 ARM Peripherals controller registers, bypassing the usual Linux software stack.
+- A hybrid of both Polled Mode SPI and DMA based transfers are utilized. Long sequential transfer bursts are performed using DMA, and when DMA would have too much latency, Polled Mode SPI is applied instead.
+- Undocumented BCM2835 features are used to squeeze out maximum bandwidth: [SPI CDIV is driven at even numbers](https://www.raspberrypi.org/forums/viewtopic.php?t=43442) (and not just powers of two), and the [SPI DLEN register is forced in non-DMA mode](https://www.raspberrypi.org/forums/viewtopic.php?t=181154) to avoid an idle 9th clock cycle for each transferred byte.
+- Good old **interlacing** is added into the mix: if the amount of pixels that needs updating is detected to be too much that the SPI bus cannot handle it, the driver adaptively resorts to doing an interlaced update, uploading even and odd scanlines at subsequent frames. Once the number of pending pixels to write returns to manageable amounts, progressive updating is resumed. This effectively doubles the maximum display update rate. (If you do not like the visual appearance that interlacing causes, it is easy to disable this by uncommenting the line `#define NO_INTERLACING` in file `config.h`)
+- A dedicated SPI communication thread is used in order to keep the SPI bus active at all times.
+- A number of other micro-optimization techniques are used, such as batch updating rectangular spans of pixels, merging disjoint-but-close spans of pixels on the same scanline, and latching Column and Page End Addresses to bottom-right corner of the display to be able to cut CASET and PASET messages in mid-communication.
 
 The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usual, to maximize the utilization rate of the bus, while only transmitting practically the minimum number of bytes needed to describe each new frame.
 
@@ -39,11 +39,11 @@ The result is that the SPI bus can be kept close to 100% saturation, ~94-97% usu
 
 The driver has been checked to work (at least some point in the past) on the following systems:
 
- - Raspberry Pi 3 Model B+ with Raspbian Stretch (GCC 6.3.0)
- - Raspberry Pi 3 Model B Rev 1.2 with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
- - Raspberry Pi Zero W with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
- - Raspberry Pi 2 Model B
- - Raspberry Pi B Rev. 2.0 (old board from Q4 2012, board revision ID 000e)
+- Raspberry Pi 3 Model B+ with Raspbian Stretch (GCC 6.3.0)
+- Raspberry Pi 3 Model B Rev 1.2 with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
+- Raspberry Pi Zero W with Raspbian Jessie (GCC 4.9.2) and Raspbian Stretch (GCC 6.3.0)
+- Raspberry Pi 2 Model B
+- Raspberry Pi B Rev. 2.0 (old board from Q4 2012, board revision ID 000e)
 
 although not all boards are actively tested on, so ymmv especially on older boards. (Bug fixes welcome, use https://elinux.org/RPi_HardwareHistory to identify which board you are running on)
 
@@ -51,20 +51,20 @@ although not all boards are actively tested on, so ymmv especially on older boar
 
 The following LCD displays have been tested:
 
- - [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) with ILI9341 controller
- - [Adafruit PiTFT 2.2" HAT Mini Kit - 320x240 2.2" TFT - No Touch](https://www.adafruit.com/product/2315) with ILI9340 controller
- - [Adafruit PiTFT - Assembled 480x320 3.5" TFT+Touchscreen for Raspberry Pi](https://www.adafruit.com/product/2097) with HX8357D controller
- - [Adafruit 128x96 OLED Breakout Board - 16-bit Color 1.27" w/microSD holder](https://www.adafruit.com/product/1673) with SSD1351 controller
- - [Waveshare 3.5inch RPi LCD (B) 320*480 Resolution Touch Screen IPS TFT Display](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) with ILI9486 controller
- - [maithoga 3.5 inch 8PIN SPI TFT LCD Color Screen with Adapter Board ILI9486](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) with **ILI9486L** controller
- - [BuyDisplay.com 320x480 Serial SPI 3.2"TFT LCD Module Display](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) with ILI9341 controller
- - [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
- - [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
- - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
- - [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
- - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
- - [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
- - Unbranded 2.8" 320x240 display with ILI9340 controller
+- [Adafruit 2.8" 320x240 TFT w/ Touch screen for Raspberry Pi](https://www.adafruit.com/product/1601) with ILI9341 controller
+- [Adafruit PiTFT 2.2" HAT Mini Kit - 320x240 2.2" TFT - No Touch](https://www.adafruit.com/product/2315) with ILI9340 controller
+- [Adafruit PiTFT - Assembled 480x320 3.5" TFT+Touchscreen for Raspberry Pi](https://www.adafruit.com/product/2097) with HX8357D controller
+- [Adafruit 128x96 OLED Breakout Board - 16-bit Color 1.27" w/microSD holder](https://www.adafruit.com/product/1673) with SSD1351 controller
+- [Waveshare 3.5inch RPi LCD (B) 320*480 Resolution Touch Screen IPS TFT Display](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) with ILI9486 controller
+- [maithoga 3.5 inch 8PIN SPI TFT LCD Color Screen with Adapter Board ILI9486](https://www.aliexpress.com/item/3-5-inch-8P-SPI-TFT-LCD-Color-Screen-Module-ILI9486-Drive-IC-320-480-RGB/32828284227.html) with **ILI9486L** controller
+- [BuyDisplay.com 320x480 Serial SPI 3.2"TFT LCD Module Display](https://www.buydisplay.com/default/serial-spi-3-2-inch-tft-lcd-module-display-ili9341-power-than-sainsmart) with ILI9341 controller
+- [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
+- [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
+- [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
+- [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
+- [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
+- [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
+- Unbranded 2.8" 320x240 display with ILI9340 controller
 
 ### Installation
 
@@ -76,7 +76,7 @@ This driver does not utilize the [notro/fbtft](https://github.com/notro/fbtft) f
 
 This program neither utilizes the default SPI driver, so a line such as `dtparam=spi=on` in `/boot/config.txt` should also be removed so that it will not cause conflicts.
 
-Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, those should be removed as well to avoid conflicts. It would be possible to add touch support to fbcp-ili9341 if someone wants to take a stab at it.
+Likewise, if you have any touch controller related dtoverlays active, such as `dtoverlay=ads7846,...` or anything that has a `penirq=` directive, those should be removed as well to avoid conflicts. The driver has its own touch screen driver (thanks to contributors).
 
 ##### Building and running
 
@@ -91,7 +91,11 @@ mkdir build
 cd build
 cmake [options] ..
 make -j
-sudo ./fbcp-ili9341
+cd ../kernel
+./start_kernel_module.sh
+cd ../build
+tail -f /tmp/TCfifo &
+sudo ./fbcp-ili9341 &
 ```
 
 Note especially the two dots `..` on the CMake line, which denote "up one directory" in this case (instead of referring to "more items go here").
@@ -266,6 +270,10 @@ On the other hand, it is desirable to control how much CPU time fbcp-ili9341 is 
 
 - In `display.h` there is an option `#define TARGET_FRAME_RATE <number>`. Setting this to a smaller value, such as 30, will trade refresh rate to reduce CPU consumption.
 
+### Configuring touch screen and calibration
+
+In the 'util' folder, there is a calibration utility and a test utillity that assist with determining the 7 matrix parameters for calibration.  Wth the tcCalibration utillity, the program on startup, deletes the config file ('/etc/xpt2046.config' -- it needs permission to do this), sends a USER1 signal to the display driver to signal it to re-load the driver config  (it won't find it and will therefore use a 1 to 1 mapping), you touch the three points indicated, the new matrix is written to the config file location, and another signal is sent to the driver to re-load the configuration.  Your touch display is now calibrated.  The ctTest program is a demo program showing cursor tracking with the pointing device based on the driver-calibrated values.
+
 ### About Input Latency
 
 A pleasing aspect of fbcp-ili9341 is that it introduces very little latency overhead: on a 119Hz refreshing ILI9341 display, [fbcp-ili9341 gets pixels as response from GPIO input to screen in well less than 16.66 msecs](https://www.youtube.com/watch?v=EOICdpjiqv8) time. I only have a 120fps recording camera, so can't easily measure delays shorter than that, but rough statistical estimate of slow motion video footage suggests this delay could be as low as 2-3 msecs, dominated by the ~8.4msecs panel refresh rate of the ILI9341.
@@ -303,71 +311,71 @@ There are two other main options that affect frame delivery timings, `#define SE
 This mode uses the DispmanX HDMI vsync signal callback to drive frames to the display.
 
 Pros:
- - least CPU overhead if content runs at 60Hz
- - works on Pi Zero
+- least CPU overhead if content runs at 60Hz
+- works on Pi Zero
 
 Cons:
- - animation stutters badly on content that is < 60Hz  but also on 60Hz content
- - excessive +1 vsync interval input to display latency
- - wastes CPU overhead if content runs at less than 60Hz
+- animation stutters badly on content that is < 60Hz  but also on 60Hz content
+- excessive +1 vsync interval input to display latency
+- wastes CPU overhead if content runs at less than 60Hz
 
 **2. vc_dispmanx_vsync_callback() + self synchronization (top right)**, set `#define USE_GPU_VSYNC` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES`:
 
 This mode uses the GPU vsync signal, but also aims to find and synchronize to the edge trigger when content is producing frames. This is the default build mode on Pi Zero.
 
 Pros:
- - works on Pi Zero
- - reduced input to display latency compared to previous mode
- - content that runs at 60hz stutters less
+- works on Pi Zero
+- reduced input to display latency compared to previous mode
+- content that runs at 60hz stutters less
 
 Cons:
- - content that runs < 60 Hz still stutters badly
- - wastes CPU overhead if content runs at less than 60Hz
- - consumes slightly extra CPU compared to previous method
+- content that runs < 60 Hz still stutters badly
+- wastes CPU overhead if content runs at less than 60Hz
+- consumes slightly extra CPU compared to previous method
 
 **3. gpu polling thread + sleep heuristic (bottom left)**, unset `#define USE_GPU_VSYNC` and set `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
 
 This mode runs a dedicated background thread that drives frames from the GPU to the SPI display. This is the default build mode on Pi 3B.
 
 Pros:
- - smooth animation at all content frame rates
- - low input to display latency
+- smooth animation at all content frame rates
+- low input to display latency
 
 Cons:
- - uses excessive CPU time, around +34% more CPU than the vsync signal based approach
- - uses excessive GPU time, the VideoCore GPU will be downscaling and snapshotting redundant frames
- - when content changes frame rate, has difficulties to adjust quickly - takes a bit of time to ramp to the new frame rate
- - requires a continuously running background thread, not feasible on Pi Zero
+- uses excessive CPU time, around +34% more CPU than the vsync signal based approach
+- uses excessive GPU time, the VideoCore GPU will be downscaling and snapshotting redundant frames
+- when content changes frame rate, has difficulties to adjust quickly - takes a bit of time to ramp to the new frame rate
+- requires a continuously running background thread, not feasible on Pi Zero
 
 **4. gpu polling thread without sleeping (bottom right)**, unset `#define USE_GPU_VSYNC` and unset `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES`:
 
 This mode runs the dedicated GPU thread as fast as possible, without attempting to sleep CPU.
 
 Pros:
- - smoothest animation at all content frame rates
- - lowest input to display latency
- - adapts instantaneously to variable frame rate content
+- smoothest animation at all content frame rates
+- lowest input to display latency
+- adapts instantaneously to variable frame rate content
 
 Cons:
- - uses ridiculously much CPU overhead, a full 100% core
- - uses ridiculously much GPU overhead, the VideoCore GPU will be very busy downscaling and snapshotting redundant frames
- - requires a continuously running background thread, not feasible on Pi Zero
+- uses ridiculously much CPU overhead, a full 100% core
+- uses ridiculously much GPU overhead, the VideoCore GPU will be very busy downscaling and snapshotting redundant frames
+- requires a continuously running background thread, not feasible on Pi Zero
 
 ### Known Issues
 
 Be aware of the following limitations:
 
 ###### No rendered frame delivery via events from VideoCore IV GPU
- - The codebase captures screen framebuffers by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not exist an event-based mechanism to get new frames from the GPU as they are produced. The result is inefficient and can easily cause stuttering, since different applications produce frames at different paces. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality does not exist in the current GPU driver stack. In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect. This GPU limitation is discussed at https://github.com/raspberrypi/userland/issues/440. If you'd like to see fbcp-ili9341 operation reduce latency, stuttering and power consumption, please throw a (kind!) comment or a thumbs up emoji in that bug thread to share that you care about this, and perhaps Raspberry Pi engineers might pick the improvement up on the development roadmap. If this issue is resolved, all of the `#define USE_GPU_VSYNC`, `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` hacks from the previous section could be deleted from the driver, hopefully leading to a best of all worlds scenario without drawbacks.
+- The codebase captures screen framebuffers by snapshotting via the VideoCore `vc_dispmanx_snapshot()` API, and the obtained pixels are then routed on to the SPI-based display. This kind of polling is performed, since there does not exist an event-based mechanism to get new frames from the GPU as they are produced. The result is inefficient and can easily cause stuttering, since different applications produce frames at different paces. **Ideally the code would ask the VideoCore API to receive finished frames in callback notifications immediately after they are rendered**, but this kind of functionality does not exist in the current GPU driver stack. In the absence of such event delivery mechanism, the code has to resort to polling snapshots of the display framebuffer using carefully timed heuristics to balance between keeping latency and stuttering low, while not causing excessive power consumption. These heuristics keep continuously guessing the update rate of the animation on screen, and they have been tuned to ensure that CPU usage goes down to 0% when there is no detected activity on screen, but it is certainly not perfect. This GPU limitation is discussed at https://github.com/raspberrypi/userland/issues/440. If you'd like to see fbcp-ili9341 operation reduce latency, stuttering and power consumption, please throw a (kind!) comment or a thumbs up emoji in that bug thread to share that you care about this, and perhaps Raspberry Pi engineers might pick the improvement up on the development roadmap. If this issue is resolved, all of the `#define USE_GPU_VSYNC`, `#define SAVE_BATTERY_BY_PREDICTING_FRAME_ARRIVAL_TIMES` and `#define SELF_SYNCHRONIZE_TO_GPU_VSYNC_PRODUCED_NEW_FRAMES` hacks from the previous section could be deleted from the driver, hopefully leading to a best of all worlds scenario without drawbacks.
 
 ###### Screen resize freezes DispmanX
- - Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
+- Currently if one resizes the video frame size at runtime, this causes DispmanX API to go sideways. See https://github.com/raspberrypi/userland/issues/461 for more information. Best workaround is to set the desired screen resolution in `/boot/config.txt` and configure all applications to never change that at runtime.
 
 ###### CPU Turbo is needed for good SPI bus bandwidth
- - The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
+- The speed of the SPI bus is linked to the BCM2835 core frequency. This frequency is at 250MHz by default (on e.g. Pi Zero, 3B and 3B+), and under CPU load, the core turbos up to 400MHz. This turboing directly scales up the SPI bus speed by `400/250=+60%` as well. Therefore when choosing the SPI `CDIV` value to use, one has to pick one that works for both idle and turbo clock speeds. Conversely, the BCM core reverts to non-turbo speed when there is only light CPU load active, and this slows down the display, so if an application is graphically intensive but light on CPU, the SPI display bus does not get a chance to run at maximum speeds. A way to work around this is to force the BCM core to always stay in its turbo state with `force_turbo=1` option in `/boot/config.txt`, but this has an unfortunate effect of causing the ARM CPU to always run in turbo speed as well, consuming excessive amounts of power. At the time of writing, there does not yet exist a good solution to have both power saving and good performance. This limitation is being discussed in more detail at https://github.com/raspberrypi/firmware/issues/992.
 
 ###### Raspbian + 32-bit only(?)
- - At the moment fbcp-ili9341 is only likely to work on 32-bit OSes, on Raspbian/Ubuntu/Debian family of distributions, where Broadcom and DispmanX libraries are available. 64-bit operating systems do not currently work (see [issue #43](https://github.com/juj/fbcp-ili9341/issues/43)). It should be possible to port the driver to 64-bit and other OSes, though the amount of work has not been explored.
+- At the moment fbcp-ili9341 is only likely to work on 32-bit OSes, on Raspbian/Ubuntu/Debian family of distributions, where Broadcom and DispmanX libraries are available. 64-bit operating systems do not currently work (see [issue #43](https://github.com/juj/fbcp-ili9341/issues/43)). It should be possible to port the driver to 64-bit and other OSes, though the amount of work has not been explored.
 
 For more known issues and limitations, check out the [bug tracker](https://github.com/juj/fbcp-ili9341/issues), especially the entries marked *retired*, for items that are beyond current scope.
 
@@ -428,10 +436,10 @@ If fbcp-ili9341 does not support your display controller, you will have to write
 Perhaps. This is a more recent experimental feature that may not be as stable, and there are some limitations, but 3-wire ("9-bit") SPI display support is now available. If you have a 3-wire SPI display, i.e. one that does not have a Data/Control (DC) GPIO pin to connect, configure it via CMake with directive `-DGPIO_TFT_DATA_CONTROL=-1` to tell fbcp-ili9341 that it should be driving the display with 3-wire protocol.
 
 Current limitations of 3-wire communication are:
- - The performance option `ALL_TASKS_SHOULD_DMA` is currently not supported, there is an issue with DMA chaining that prevents this from being enabled. As result, CPU usage on 3-wire displays will be slightly higher than on 4-wire displays.
- - The performance option `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` is currently not supported. As a result, 3-wire displays may not work that well on single core Pis like Pi Zero.
- - This has only been tested on my Adafruit SSD1351 128x96 RGB OLED display, which can be soldered to operate in 3-wire SPI mode, so testing has not been particularly extensive.
- - Displays that have a 16-bit wide command word, such as ILI9486, do not currently work in 3-wire ("17-bit") mode. (But ILI9486L has 8-bit command word, so that does work)
+- The performance option `ALL_TASKS_SHOULD_DMA` is currently not supported, there is an issue with DMA chaining that prevents this from being enabled. As result, CPU usage on 3-wire displays will be slightly higher than on 4-wire displays.
+- The performance option `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` is currently not supported. As a result, 3-wire displays may not work that well on single core Pis like Pi Zero.
+- This has only been tested on my Adafruit SSD1351 128x96 RGB OLED display, which can be soldered to operate in 3-wire SPI mode, so testing has not been particularly extensive.
+- Displays that have a 16-bit wide command word, such as ILI9486, do not currently work in 3-wire ("17-bit") mode. (But ILI9486L has 8-bit command word, so that does work)
 
 #### Does fbcp-ili9341 work with I2C, DPI, MIPI DSI or USB connected displays?
 
@@ -554,7 +562,7 @@ The ILI9486L controller based maithoga display runs a bit faster than ILI9486 Wa
 
 If manufacturing variances turn out not to be high between copies, and you'd like to have a bigger 320x480 display instead of a 240x320 one, then it is recommended to avoid ILI9486, they indeed are slow.
 
-The KeDei v6.3 display with MPI3501 controller takes the crown of being horrible, in all aspects imaginable. It is able to run at 33.33 MHz, but due to technical design limitations of the display (see [#40](https://github.com/juj/fbcp-ili9341/issues/40#issuecomment-441480557)), effective bus speed is halved, and only about 72% utilization of the remaining bus rate is achieved. DMA cannot be used, so CPU usage will be off the charts. Even though fbcp-ili9341 supports this display, level of support is expected to be poor, because the hardware design is a closed secret without open documentation publicly available from the manufacturer. Stay clear of KeDei or MPI3501 displays.
+The KeDei v6.3 display with MPI3501 controller takes the crown of being horrible, in all aspects imaginable. It is able to run at 33.33 MHz, but due to technical design limitations of the display (see [#40](https://github.com/juj/fbcp-ili9341/issues/40#issuecomment-441480557)), effective bus speed is halved, and only about 72% utilization of the remaining bus rate is achieved. DMA cannot be used, so CPU usage will be off the charts. Even though fbcp-ili9341 supports this display. The hardware design is closed BUT it is not that special and is so close to other data sheets of like chips, 98% of the commands work as described on other data sheets.  What does NOT work is backlight control by software, the commands for that don't cause errors but they also have no effect. Stay clear of KeDei or MPI3501 displays if you need any sort of motion.  They are fine for control displays that are nearly static and have only partial screen refreshes.
 
 The Tontec MZ61581 controller based 320x480 3.5" display on the other hand can be driven insanely fast at up to 140MHz! These seem to be quite hard to come by though and they are expensive. Tontec seems to have gone out of business and for example the domain itontec.com from which the supplied instructions sheet asks to download original drivers from is no longer registered. I was able to find one from eBay for testing.
 
@@ -567,46 +575,45 @@ Ultimately, it should be noted that parallel displays (DPI) are the proper metho
 ### Resources
 
 The following links proved helpful when writing this:
- - [ARM BCM2835 Peripherals Manual PDF](https://www.raspberrypi.org/app/uploads/2012/02/BCM2835-ARM-Peripherals.pdf),
- - [ILI9341 Display Controller Manual PDF](https://cdn-shop.adafruit.com/datasheets/ILI9341.pdf),
- - [notro/fbtft](https://github.com/notro/fbtft): Linux Framebuffer drivers for small TFT LCD display modules,
- - [BCM2835 driver](http://www.airspayce.com/mikem/bcm2835/) for Raspberry Pi,
- - [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp), original framebuffer driver,
- - [tasanakorn/rpi-fbcp/#16](https://github.com/tasanakorn/rpi-fbcp/issues/16), discussion about performance,
- - [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf), a useful research paper about merging monochrome bitmap images to rectangles, which gave good ideas for optimizing SPI span merges across multiple scan lines,
- - [VC DispmanX source code](https://github.com/raspberrypi/userland/blob/master/interface/vmcs_host/vc_vchi_dispmanx.c) (more or less the only official documentation bit on DispmanX I could ever find)
+- [ARM BCM2835 Peripherals Manual PDF](https://www.raspberrypi.org/app/uploads/2012/02/BCM2835-ARM-Peripherals.pdf),
+- [ILI9341 Display Controller Manual PDF](https://cdn-shop.adafruit.com/datasheets/ILI9341.pdf),
+- [notro/fbtft](https://github.com/notro/fbtft): Linux Framebuffer drivers for small TFT LCD display modules,
+- [BCM2835 driver](http://www.airspayce.com/mikem/bcm2835/) for Raspberry Pi,
+- [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp), original framebuffer driver,
+- [tasanakorn/rpi-fbcp/#16](https://github.com/tasanakorn/rpi-fbcp/issues/16), discussion about performance,
+- [Tomáš Suk, Cyril Höschl IV, and Jan Flusser, Rectangular Decomposition of Binary Images.](http://library.utia.cas.cz/separaty/2012/ZOI/suk-rectangular%20decomposition%20of%20binary%20images.pdf), a useful research paper about merging monochrome bitmap images to rectangles, which gave good ideas for optimizing SPI span merges across multiple scan lines,
+- [VC DispmanX source code](https://github.com/raspberrypi/userland/blob/master/interface/vmcs_host/vc_vchi_dispmanx.c) (more or less the only official documentation bit on DispmanX I could ever find)
 
 ### I Want To Contribute / Future Work / TODOs
 
 If you would like to help push Raspberry Pi SPI display support further, there are always more things to do in the project. Here is a list of ideas and TODOs for recognized work items to contribute, roughly rated in order of increasing difficulty.
 
- - Vote up issue [raspberrypi/userland/#440](https://github.com/raspberrypi/userland/issues/440) if you would like to see Raspberry Pi Foundation improve CPU performance and reduce latency of the Pi when used with SPI displays.
- - Vote up issue [raspberrypi/userland/#461](https://github.com/raspberrypi/userland/issues/461) if you would like to see fbcp-ili9341 not die (due to DispmanX dying) when HDMI display resolution changes.
- - Vote up issue [raspberrypi/firmware/#992](https://github.com/raspberrypi/firmware/issues/992) if you would like to see Raspberry Pi SPI bus to have high throughput even when the Pi CPU is not under heavy CPU load (better SPI throughput with lower power consumption), a performance feature only SDHOST on the Pi currently enjoys.
- - Benchmark fbcp-ili9341 performance in your use case with CPU tool `top`/`htop`, or with a power meter off the wall and report the results.
- - Do you have a display with an unlisted or unknown display controller? Post close up photos of it to an issue in the tracker, and report if you were able to make it work with fbcp-ili9341?
- - Did you have to do something unexpected or undocumented to get fbcp-ili9341 to work in your environment or use case? Write up a tutorial or record a video to let people know about the gotchas.
- - If you have access to a high frequency scope/logic analyzer (~128MHz), audit the utilization of the SPI MOSI bus to find any remaining idle times on the bus, and analyze their sources.
- - Port fbcp-ili9341 to work as a static code library that one can link to another application for CPU-based drawing directly to display, bypassing inefficiencies and latency of the general purpose Linux DispmanX/graphics stack.
- - Improve existing display initialization routines with options to control e.g. gamma curves, color saturation, driving voltages, refresh rates or other potentially useful features that the display controller protocols expose.
- - Add support to fbcp-ili9341 to a new display controller. (e.g. [#26](https://github.com/juj/fbcp-ili9341/issues/26))
- - Implement support for reading the MISO line for display identification numbers/strings for potentially interesting statistics (could some of the displays be autodetected this way?)
- - Add support for other color modes, like RGB666 or RGB888. Currently fbcp-ili9341 only knows about RGB565 display mode.
- - Implement a kernel module that enables userland programs to allocate DMA channels, which fbcp-ili9341 could use to amicably reserve its own DMA channels without danger of conflicting.
- - Implement support for touch control while fbcp-ili9341 is active. ([#33](https://github.com/juj/fbcp-ili9341/issues/33))
- - Implement support for SPI-based SD card readers that are sometimes attached to displays.
- - Port fbcp-ili9341 to work with I2C displays.
- - Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
- - Add support to building fbcp-ili9341 on another operating system than Raspbian. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
- - Add support for building on 64-bit operating systems. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
- - Port fbcp-ili9341 over to a new single-board computer hardware. (e.g. [#30](https://github.com/juj/fbcp-ili9341/issues/30))
- - Improve support for 3-wire displays, e.g. for 1) "17-bit" 3-wire communication, 2) fix up `SPI_3WIRE_PROTOCOL` + `ALL_TASKS_SHOULD_DMA` to work together, or 3) fix up `SPI_3WIRE_PROTOCOL` + `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` to work together.
- - Optimize away unnecessary zero padding that 3-wire communication currently incurs, by keeping a queue of leftover untransmitted partial bits of a byte, and piggybacking them onto the next transfer that comes in.
- - Port the high performance DMA-based SPI communication technique from fbcp-ili9341 over to another project that uses the SPI bus for something else, for close to 100% saturation of the SPI bus in the project.
- - Improve the implementation of chaining DMA transfers to not only chain transfers within a single SPI task, but also across multiple SPI tasks.
- - Optimize `ALL_TASKS_SHOULD_DMA` mode to be always superior in performance and CPU usage so that the non-`ALL_TASKS_SHOULD_DMA` path can be dropped from the codebase. (probably requires the above chaining to function efficiently)
- - If you are knowledgeable with BCM2835 DMA, investigate whether the hacky dance where two DMA channels need to be used to reset and resume DMA SPI transfers when chaining, can be avoided?
- - If you have contacts with Broadcom, ask them to promote use of the SoC hardware with DMA chaining + mixed SPI & non-SPI tasks as a first class tested use case. Current DMA SPI hardware behavior of BCM2835 is, to say the least, surprising.
+- Vote up issue [raspberrypi/userland/#440](https://github.com/raspberrypi/userland/issues/440) if you would like to see Raspberry Pi Foundation improve CPU performance and reduce latency of the Pi when used with SPI displays.
+- Vote up issue [raspberrypi/userland/#461](https://github.com/raspberrypi/userland/issues/461) if you would like to see fbcp-ili9341 not die (due to DispmanX dying) when HDMI display resolution changes.
+- Vote up issue [raspberrypi/firmware/#992](https://github.com/raspberrypi/firmware/issues/992) if you would like to see Raspberry Pi SPI bus to have high throughput even when the Pi CPU is not under heavy CPU load (better SPI throughput with lower power consumption), a performance feature only SDHOST on the Pi currently enjoys.
+- Benchmark fbcp-ili9341 performance in your use case with CPU tool `top`/`htop`, or with a power meter off the wall and report the results.
+- Do you have a display with an unlisted or unknown display controller? Post close up photos of it to an issue in the tracker, and report if you were able to make it work with fbcp-ili9341?
+- Did you have to do something unexpected or undocumented to get fbcp-ili9341 to work in your environment or use case? Write up a tutorial or record a video to let people know about the gotchas.
+- If you have access to a high frequency scope/logic analyzer (~128MHz), audit the utilization of the SPI MOSI bus to find any remaining idle times on the bus, and analyze their sources.
+- Port fbcp-ili9341 to work as a static code library that one can link to another application for CPU-based drawing directly to display, bypassing inefficiencies and latency of the general purpose Linux DispmanX/graphics stack.
+- Improve existing display initialization routines with options to control e.g. gamma curves, color saturation, driving voltages, refresh rates or other potentially useful features that the display controller protocols expose.
+- Add support to fbcp-ili9341 to a new display controller. (e.g. [#26](https://github.com/juj/fbcp-ili9341/issues/26))
+- Implement support for reading the MISO line for display identification numbers/strings for potentially interesting statistics (could some of the displays be autodetected this way?)
+- Add support for other color modes, like RGB666 or RGB888. Currently fbcp-ili9341 only knows about RGB565 display mode.
+- Implement a kernel module that enables userland programs to allocate DMA channels, which fbcp-ili9341 could use to amicably reserve its own DMA channels without danger of conflicting.
+- üImplement support for SPI-based SD card readers that are sometimes attached to displays.
+- Port fbcp-ili9341 to work with I2C displays.
+- Port more key algorithms to ARM assembly to optimize performance of fbcp-ili9341 in hotspots, or optimize execution in some other ways?
+- Add support to building fbcp-ili9341 on another operating system than Raspbian. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
+- Add support for building on 64-bit operating systems. (see [#43](https://github.com/juj/fbcp-ili9341/issues/43))
+- Port fbcp-ili9341 over to a new single-board computer hardware. (e.g. [#30](https://github.com/juj/fbcp-ili9341/issues/30))
+- Improve support for 3-wire displays, e.g. for 1) "17-bit" 3-wire communication, 2) fix up `SPI_3WIRE_PROTOCOL` + `ALL_TASKS_SHOULD_DMA` to work together, or 3) fix up `SPI_3WIRE_PROTOCOL` + `OFFLOAD_PIXEL_COPY_TO_DMA_CPP` to work together.
+- Optimize away unnecessary zero padding that 3-wire communication currently incurs, by keeping a queue of leftover untransmitted partial bits of a byte, and piggybacking them onto the next transfer that comes in.
+- Port the high performance DMA-based SPI communication technique from fbcp-ili9341 over to another project that uses the SPI bus for something else, for close to 100% saturation of the SPI bus in the project.
+- Improve the implementation of chaining DMA transfers to not only chain transfers within a single SPI task, but also across multiple SPI tasks.
+- Optimize `ALL_TASKS_SHOULD_DMA` mode to be always superior in performance and CPU usage so that the non-`ALL_TASKS_SHOULD_DMA` path can be dropped from the codebase. (probably requires the above chaining to function efficiently)
+- If you are knowledgeable with BCM2835 DMA, investigate whether the hacky dance where two DMA channels need to be used to reset and resume DMA SPI transfers when chaining, can be avoided?
+- If you have contacts with Broadcom, ask them to promote use of the SoC hardware with DMA chaining + mixed SPI & non-SPI tasks as a first class tested use case. Current DMA SPI hardware behavior of BCM2835 is, to say the least, surprising.
 
 ### License
 
@@ -615,3 +622,4 @@ This driver is licensed under the MIT License. See LICENSE.txt. In nonlegal term
 If you found fbcp-ili9341 useful, it makes me happy to hear back about the projects it found a home in. If you did a build or a project where fbcp-ili9341 worked out, it'd be great to see a video or some photos or read about your experiences.
 
 I hope you build something you enjoy!
+

@@ -1,473 +1,222 @@
-#include <linux/buffer_head.h>
-#include <linux/debugfs.h>
-#include <linux/delay.h>
-#include <linux/dma-mapping.h>
-#include <linux/fb.h>
-#include <linux/fs.h>
-#include <linux/futex.h>
 #include <linux/init.h>
-#include <linux/interrupt.h>
-#include <linux/irq.h>
-#include <linux/kernel.h>
-#include <linux/kthread.h>
-#include <linux/math64.h>
-#include <linux/mm.h>
 #include <linux/module.h>
-#include <linux/platform_data/dma-bcm2708.h>
-#include <linux/proc_fs.h>
-#include <linux/slab.h>
-#include <linux/spi/spidev.h>
-#include <linux/time.h>
-#include <linux/timer.h>
-#include <asm/io.h>
-#include <asm/segment.h>
-#include <asm/uaccess.h>
+#include <linux/kernel.h>
+#include <linux/gpio.h>       // Required for the GPIO functions
+#include <linux/interrupt.h>  // Required for the IRQ code
+#include <linux/kobject.h>    // Using kobjects for the sysfs bindings
+#include <linux/time.h>       // Using the clock to measure time between button presses
+#define  DEBOUNCE_TIME 200    ///< The default bounce time -- 200ms
 
-#include "../config.h"
-#include "../display.h"
 #include "../spi.h"
-#include "../util.h"
-#include "../dma.h"
 
-static inline uint64_t tick(void)
-{
-    struct timespec start = current_kernel_time();
-    return start.tv_sec * 1000000 + start.tv_nsec / 1000;
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Kevin Peck"); // Thanks to Derek Molloy!
+MODULE_DESCRIPTION("Touch screen interrupt driver");
+MODULE_VERSION("0.1");
+
+static bool isRising = 0;                   ///< Rising edge is the default IRQ property
+module_param(isRising, bool, S_IRUGO);      ///< Param desc. S_IRUGO can be read/not changed
+MODULE_PARM_DESC(isRising, " Rising edge = 1, Falling edge = 0 (default)");  ///< parameter description
+
+static unsigned int gpioTouch = GPIO_SPI0_INTR;
+module_param(gpioTouch, uint, S_IRUGO);    ///< Param desc. S_IRUGO can be read/not changed
+MODULE_PARM_DESC(gpioTouch, " GPIO Touch number (default=GPIO_SPI0_INTR)");  ///< parameter description
+
+static bool isDebug = 0;
+module_param(isDebug, bool, S_IRUGO);
+MODULE_PARM_DESC(isDebug, " debug = 1, no-debug = 0 (default)");
+
+static char   gpioName[8] = "gpioXXX";      ///< Null terminated default string -- just in case
+static int    irqNumber;                    ///< Used to share the IRQ number within this file
+static int    numberPresses = 0;            ///< For information, store the number of button presses
+static bool   isDebounce = 1;               ///< Use to store the debounce state (on by default)
+static struct timespec ts_last, ts_current, ts_diff;  ///< timespecs from linux/time.h (has nano precision)
+
+/// Function prototype for the custom IRQ handler function -- see below for the implementation
+static irq_handler_t  tftgpio_irq_handler(unsigned int irq, void *dev_id, struct pt_regs *regs);
+
+/** @brief A callback function to output the numberPresses variable
+ *  @param kobj represents a kernel object device that appears in the sysfs filesystem
+ *  @param attr the pointer to the kobj_attribute struct
+ *  @param buf the buffer to which to write the number of presses
+ *  @return return the total number of characters written to the buffer (excluding null)
+ */
+static ssize_t numberPresses_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf){
+    return sprintf(buf, "%d\n", numberPresses);
 }
 
-// TODO: Super-dirty temp, factor this into kbuild Makefile.
-#include "../spi.cpp"
-#include "../dma.cpp"
-
-volatile SPITask *currentTask = 0;
-volatile uint8_t *taskNextByte = 0;
-volatile uint8_t *taskEndByte = 0;
-
-#define SPI_BUS_PROC_ENTRY_FILENAME "bcm2835_spi_display_bus"
-
-typedef struct mmap_info
-{
-  char *data;
-} mmap_info;
-
-static void p_vm_open(struct vm_area_struct *vma)
-{
+/** @brief A callback function to read in the numberPresses variable
+ *  @param kobj represents a kernel object device that appears in the sysfs filesystem
+ *  @param attr the pointer to the kobj_attribute struct
+ *  @param buf the buffer from which to read the number of presses (e.g., reset to 0).
+ *  @param count the number characters in the buffer
+ *  @return return should return the total number of characters used from the buffer
+ */
+static ssize_t numberPresses_store(struct kobject *kobj, struct kobj_attribute *attr,
+                                   const char *buf, size_t count){
+    sscanf(buf, "%du", &numberPresses);
+    return count;
 }
 
-static void p_vm_close(struct vm_area_struct *vma)
-{
+/** @brief Displays the last time the button was pressed -- manually output the date (no localization) */
+static ssize_t lastTime_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf){
+    return sprintf(buf, "%.2lu:%.2lu:%.2lu:%.9lu \n", (ts_last.tv_sec/3600)%24,
+                   (ts_last.tv_sec/60) % 60, ts_last.tv_sec % 60, ts_last.tv_nsec );
 }
 
-static int p_vm_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-  mmap_info *info = (mmap_info *)vma->vm_private_data;
-  if (info->data)
-  {
-    struct page *page = virt_to_page(info->data + vmf->pgoff*PAGE_SIZE);
-    get_page(page);
-    vmf->page = page;
-  }
-  return 0;
+/** @brief Display the time difference in the form secs.nanosecs to 9 places */
+static ssize_t diffTime_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf){
+    return sprintf(buf, "%lu.%.9lu\n", ts_diff.tv_sec, ts_diff.tv_nsec);
 }
 
-static struct vm_operations_struct vm_ops =
-{
-  .open = p_vm_open,
-  .close = p_vm_close,
-  .fault = p_vm_fault,
+/** @brief Displays if button debouncing is on or off */
+static ssize_t isDebounce_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf){
+    return sprintf(buf, "%d\n", isDebounce);
+}
+
+/** @brief Stores and sets the debounce state */
+static ssize_t isDebounce_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count){
+    unsigned int temp;
+    sscanf(buf, "%du", &temp);                // use a temp varable for correct int->bool
+    gpio_set_debounce(gpioTouch,0);
+    isDebounce = temp;
+    if(isDebounce) { gpio_set_debounce(gpioTouch, DEBOUNCE_TIME);
+        printk(KERN_INFO "TFT Display: Debounce on\n");
+    }
+    else { gpio_set_debounce(gpioTouch, 0);  // set the debounce time to 0
+        printk(KERN_INFO "TFT Display: Debounce off\n");
+    }
+    return count;
+}
+
+/**  Use these helper macros to define the name and access levels of the kobj_attributes
+ *  The kobj_attribute has an attribute attr (name and mode), show and store function pointers
+ *  The count variable is associated with the numberPresses variable and it is to be exposed
+ *  with mode 0666 using the numberPresses_show and numberPresses_store functions above
+ */
+#undef VERIFY_OCTAL_PERMISSIONS
+#define VERIFY_OCTAL_PERMISSIONS(perms) (perms)
+static struct kobj_attribute count_attr = __ATTR(numberPresses, 0666, numberPresses_show, numberPresses_store);
+static struct kobj_attribute debounce_attr = __ATTR(isDebounce, 0666, isDebounce_show, isDebounce_store);
+
+/**  The __ATTR_RO macro defines a read-only attribute. There is no need to identify that the
+ *  function is called _show, but it must be present. __ATTR_WO can be  used for a write-only
+ *  attribute but only in Linux 3.11.x on.
+ */
+static struct kobj_attribute time_attr  = __ATTR_RO(lastTime);  ///< the last time pressed kobject attr
+static struct kobj_attribute diff_attr  = __ATTR_RO(diffTime);  ///< the difference in time attr
+
+/**  The tft_attrs[] is an array of attributes that is used to create the attribute group below.
+ *  The attr property of the kobj_attribute is used to extract the attribute struct
+ */
+static struct attribute *tft_attrs[] = {
+    &count_attr.attr,                  ///< The number of button presses
+    &time_attr.attr,                   ///< Time of the last button press in HH:MM:SS:NNNNNNNNN
+    &diff_attr.attr,                   ///< The difference in time between the last two presses
+    &debounce_attr.attr,               ///< Is the debounce state true or false
+    NULL,
 };
 
-static int p_mmap(struct file *filp, struct vm_area_struct *vma)
-{
-  vma->vm_ops = &vm_ops;
-  vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
-  vma->vm_private_data = filp->private_data;
-  p_vm_open(vma);
-  return 0;
-}
-
-static int p_open(struct inode *inode, struct file *filp)
-{
-  mmap_info *info = kmalloc(sizeof(mmap_info), GFP_KERNEL);
-  info->data = (void*)spiTaskMemory;
-  filp->private_data = info;
-  return 0;
-}
-
-static int p_release(struct inode *inode, struct file *filp)
-{
-  mmap_info *info;
-  info = filp->private_data;
-  kfree(info);
-  filp->private_data = NULL;
-  return 0;
-}
-
-static const struct file_operations fops =
-{
-  .mmap = p_mmap,
-  .open = p_open,
-  .release = p_release,
+/**  The attribute group uses the attribute array and a name, which is exposed on sysfs -- in this
+ *  case it is gpio115, which is automatically defined in the tftDisplay_init() function below
+ *  using the custom kernel parameter that can be passed when the module is loaded.
+ */
+static struct attribute_group attr_group = {
+    .name  = gpioName,                 ///< The name is generated in tftDisplay_init()
+    .attrs = tft_attrs,                ///< The attributes array defined just above
 };
 
-#ifdef KERNEL_DRIVE_WITH_IRQ
-static irqreturn_t irq_handler(int irq, void* dev_id)
-{
-#ifndef KERNEL_MODULE_CLIENT_DRIVES
-  uint32_t cs = spi->cs;
-  if (!taskNextByte)
-  {
-    if (currentTask) DoneTask((SPITask*)currentTask);
-    currentTask = GetTask();
-    if (!currentTask)
-    {
-      spi->cs = (cs & ~BCM2835_SPI0_CS_TA) | BCM2835_SPI0_CS_CLEAR;
-      return IRQ_HANDLED;
+static struct kobject *tft_kobj;
+
+/** @brief The LKM initialization function
+ *  The static keyword restricts the visibility of the function to within this C file. The __init
+ *  macro means that for a built-in driver (not a LKM) the function is only used at initialization
+ *  time and that it can be discarded and its memory freed up after that point. In this example this
+ *  function sets up the GPIOs and the IRQ
+ *  @return returns 0 if successful
+ */
+static int __init tftDisplay_init(void){
+    int result = 0;
+    unsigned long IRQflags = IRQF_TRIGGER_FALLING;      // The default is a falling-edge interrupt
+    
+    printk(KERN_INFO "TFT Disply: Initializing the Touch interrupt\n");
+    sprintf(gpioName, "gpio%d", gpioTouch);           // Create the gpioXXX name for /sys/tft/gpioXXX
+    
+    // create the kobject sysfs entry at /sys/tft
+    tft_kobj = kobject_create_and_add("tft", kernel_kobj->parent); // kernel_kobj points to /sys/kernel
+    if(!tft_kobj){
+        printk(KERN_ALERT "TFT Display: failed to create kobject mapping\n");
+        return -ENOMEM;
     }
-
-    if ((cs & (BCM2835_SPI0_CS_RXF|BCM2835_SPI0_CS_RXR))) (void)spi->fifo;
-    while (!(spi->cs & BCM2835_SPI0_CS_DONE))
-    {
-      if ((spi->cs & (BCM2835_SPI0_CS_RXF|BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXD)))
-        (void)spi->fifo;
+    // add the attributes to /sys/tft/ -- for example, /sys/tft/gpio115/numberPresses
+    result = sysfs_create_group(tft_kobj, &attr_group);
+    if(result) {
+        printk(KERN_ALERT "TFT Display: failed to create sysfs group\n");
+        kobject_put(tft_kobj);                          // clean up -- remove the kobject sysfs entry
+        return result;
     }
-    CLEAR_GPIO(GPIO_TFT_DATA_CONTROL);
-    spi->fifo = currentTask->cmd;
-    if (currentTask->size == 0) // Was this a task without data bytes? If so, nothing more to do here, go to sleep to wait for next IRQ event
-    {
-      DoneTask((SPITask*)currentTask);
-      taskNextByte = 0;
-      currentTask = 0;
+    getnstimeofday(&ts_last);                          // set the last time to be the current time
+    ts_diff = timespec_sub(ts_last, ts_last);          // set the initial time difference to be 0
+    
+    // the bool argument prevents the direction from being changed
+    gpio_request(gpioTouch, "sysfs");       // Set up the gpioTouch
+    gpio_direction_input(gpioTouch);        // Set the button GPIO to be an input
+    gpio_set_debounce(gpioTouch, DEBOUNCE_TIME); // Debounce the button with a delay of 200ms
+    gpio_export(gpioTouch, false);          // Causes gpio115 to appear in /sys/class/gpio
+    // the bool argument prevents the direction from being changed
+    
+    // Perform a quick test to see that the button is working as expected on LKM load
+    printk(KERN_INFO "TFT Display: The touch state is currently: %d\n", gpio_get_value(gpioTouch));
+    
+    /// GPIO numbers and IRQ numbers are not the same! This function performs the mapping for us
+    irqNumber = gpio_to_irq(gpioTouch);
+    printk(KERN_INFO "TFT Display: The touch is mapped to IRQ: %d\n", irqNumber);
+    
+    if(isRising){                           // If the kernel parameter isRising=0 is supplied
+        IRQflags = IRQF_TRIGGER_RISING;      // Set the interrupt to be on the falling edge
     }
-    else
-    {
-      taskNextByte = currentTask->data;
-      taskEndByte = currentTask->data + currentTask->size;
-    }
-#if 0 // Testing overhead of not returning after command byte, but synchronously polling it out..
-    while (!(spi->cs & BCM2835_SPI0_CS_DONE)) ;
-    (void)spi->fifo;
-#else
-    return IRQ_HANDLED;
-#endif
-  }
-  if (taskNextByte == currentTask->data)
-  {
-    SET_GPIO(GPIO_TFT_DATA_CONTROL);
-    __sync_synchronize();
-  }
-
-  // Test code: write and read from FIFO as many bytes as spec says we should be allowed to, without checking CS in between.
-//  int maxBytesToSend = (cs & BCM2835_SPI0_CS_DONE) ? 16 : 12;
-//  if ((cs & BCM2835_SPI0_CS_RXF)) (void)spi->fifo;
-//  if ((cs & BCM2835_SPI0_CS_RXR)) for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; (void)spi->fifo; }
-//  else for(int i = 0; i < MIN(maxBytesToSend, taskEndByte-taskNextByte); ++i) { spi->fifo = *taskNextByte++; }
-
-  while(taskNextByte < taskEndByte)
-  {
-    uint32_t cs = spi->cs;
-    if ((cs & (BCM2835_SPI0_CS_RXR | BCM2835_SPI0_CS_RXF))) spi->cs = cs | BCM2835_SPI0_CS_CLEAR_RX;
-    if ((cs & BCM2835_SPI0_CS_TXD)) spi->fifo = *taskNextByte++;
-    if ((cs & BCM2835_SPI0_CS_RXD)) (void)spi->fifo;
-    else break;
-  }
-
-  if (taskNextByte >= taskEndByte)
-  {
-    if ((cs & BCM2835_SPI0_CS_INTR)) spi->cs = (cs & ~BCM2835_SPI0_CS_INTR) | BCM2835_SPI0_CS_INTD;
-    taskNextByte = 0;
-  }
-  else
-  {
-    if (!(cs & BCM2835_SPI0_CS_INTR)) spi->cs = (cs | BCM2835_SPI0_CS_INTR) & ~BCM2835_SPI0_CS_INTR;
-  }
-#endif
-  return IRQ_HANDLED;
-}
-#endif
-
-#define req(cnd) if (!(cnd)) { LOG("!!!%s!!!\n", #cnd);}
-
-uint32_t virt_to_bus_address(volatile void *virtAddress)
-{
-  return (uint32_t)virt_to_phys((void*)virtAddress) | 0x40000000U;
+    // This next call requests an interrupt line
+    result = request_irq(irqNumber,             // The interrupt number requested
+                         (irq_handler_t) tftgpio_irq_handler, // The pointer to the handler function below
+                         IRQflags,              // Use the custom kernel param to set interrupt type
+                         "tft_touch_handler",  // Used in /proc/interrupts to identify the owner
+                         NULL);                 // The *dev_id for shared interrupt lines, NULL is okay
+    return result;
 }
 
-volatile int shuttingDown = 0;
-dma_addr_t spiTaskMemoryPhysical = 0;
-
-#ifdef USE_DMA_TRANSFERS
-
-void DMATest(void);
-
-// Debug code to verify memory->memory streaming of DMA, no SPI peripheral interaction (remove this)
-void DMATest()
-{
-  LOG("Testing DMA transfers");
-
-  dma_addr_t dma_mem_phys = 0;
-  void *dma_mem = dma_alloc_writecombine(0, SHARED_MEMORY_SIZE, &dma_mem_phys, GFP_KERNEL);
-  LOG("Allocated DMA memory: mem: %p, phys: %p", dma_mem, (void*)dma_mem_phys);
-
-  spiTaskMemory = (SharedMemory *)dma_mem;
-  while(!shuttingDown)
-  {
-    msleep(100);
-    static int ctr = 0;
-    uint32_t base = (ctr++ * 34153) % SPI_QUEUE_SIZE;
-    uint32_t size = 65;
-    uint32_t base2 = base + size;
-    if (base2 + size > SPI_QUEUE_SIZE) continue;
-
-    memset((void*)spiTaskMemory->buffer, 0xCB, SPI_QUEUE_SIZE);
-
-    uint8_t *src = (uint8_t *)(spiTaskMemory->buffer + base);
-    src = (uint8_t *)((uintptr_t)src);
-    for(int i = 0; i < size; ++i)
-      src[i] = i;
-
-    uint8_t *dst = (uint8_t *)(spiTaskMemory->buffer + base2);
-    dst = (uint8_t *)((uintptr_t)dst);
-
-#define TO_BUS(ptr) (( ((uint32_t)dma_mem_phys + ((uintptr_t)(ptr) - (uintptr_t)dma_mem))) | 0xC0000000U)
-
-    volatile DMAChannelRegisterFile *dmaCh = dma+dmaTxChannel;
-//    printk(KERN_INFO "CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
-//      dmaCh->cs, (void*)dmaCh->cbAddr, dmaCh->cb.ti, (void*)dmaCh->cb.src, (void*)dmaCh->cb.dst, dmaCh->cb.len, dmaCh->cb.stride, (void*)dmaCh->cb.next, dmaCh->cb.debug);
-
-    volatile DMAControlBlock *cb = &spiTaskMemory->cb[0].cb;
-    req(((uintptr_t)cb) % 256 == 0);
-    cb->ti = BCM2835_DMA_TI_SRC_INC | BCM2835_DMA_TI_DEST_INC;
-    cb->src = TO_BUS(src);
-    cb->dst = TO_BUS(dst);
-    cb->len = size;
-    cb->stride = 0;
-    cb->next = 0;
-    cb->debug = 0;
-    cb->reserved = 0;
-//    DumpCS(dmaCh->cs);
-//    DumpDebug(dmaCh->cb.debug);
-//    DumpTI(dmaCh->cb.ti);
-    LOG("Waiting for transfer %d, src:%p(phys:%p) to dst:%p (phys:%p)", ctr, (void*)src, (void*)cb->src, (void*)dst, (void*)cb->dst);
-    writel(TO_BUS(cb), &dmaCh->cbAddr);
-    writel(BCM2835_DMA_CS_ACTIVE | BCM2835_DMA_CS_END | BCM2835_DMA_CS_INT | BCM2835_DMA_CS_WAIT_FOR_OUTSTANDING_WRITES | BCM2835_DMA_CS_SET_PRIORITY(0xF) | BCM2835_DMA_CS_SET_PANIC_PRIORITY(0xF), &dmaCh->cs);
-
-    while((readl(&dmaCh->cs) & BCM2835_DMA_CS_ACTIVE) && !shuttingDown)
-    {
-      cpu_relax();
-    }
-
-    if (shuttingDown)
-    {
-      LOG("Module shutdown");
-      spiTaskMemory = 0;
-      return;
-    }
-    int errors = 0;
-    for(int i = 0; i < size; ++i)
-      if (dst[i] != src[i])
-      {
-        errors = true;
-        break;
-      }
-
-    if (errors)
-    {
-      printk(KERN_INFO "CS: %x, cbAddr: %p, ti: %x, src: %p, dst: %p, len: %u, stride: %u, nextConBk: %p, debug: %x",
-        dmaCh->cs, (void*)dmaCh->cbAddr, dmaCh->cb.ti, (void*)dmaCh->cb.src, (void*)dmaCh->cb.dst, dmaCh->cb.len, dmaCh->cb.stride, (void*)dmaCh->cb.next, dmaCh->cb.debug);
-      for(int i = 0; i < size; ++i)
-      {
-        printk(KERN_INFO "Result %p %d: %x vs dst %p %x\n", (void*)virt_to_phys(src+i), i, src[i], (void*)virt_to_phys(dst+i), dst[i]);
-      }
-      DumpCS(dmaCh->cs);
-      DumpDebug(dmaCh->cb.debug);
-      DumpTI(dmaCh->cb.ti);
-      LOG("Abort");
-      break;
-    }
-  }
-  LOG("DMA transfer test done");
-  spiTaskMemory = 0;
-}
-#endif
-
-void PumpSPI(void)
-{
-#ifdef KERNEL_DRIVE_WITH_IRQ
-  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_INTR | BCM2835_SPI0_CS_INTD; // Initialize the Control and Status register to defaults: CS=0 (Chip Select), CPHA=0 (Clock Phase), CPOL=0 (Clock Polarity), CSPOL=0 (Chip Select Polarity), TA=0 (Transfer not active), and reset TX and RX queues.
-#else
-  if (spiTaskMemory->queueTail != spiTaskMemory->queueHead)
-  {
-    BEGIN_SPI_COMMUNICATION();
-    {
-      int i = 0;
-      while(spiTaskMemory->queueTail != spiTaskMemory->queueHead)
-      {
-        ++i;
-        if (i > 500) break;
-        SPITask *task = GetTask();
-        if (task)
-        {
-          RunSPITask(task);
-          DoneTask(task);
-        }
-        else
-          break;
-      }
-    }
-    END_SPI_COMMUNICATION();
-  }
-#endif
+/** @brief The LKM cleanup function
+ *  Similar to the initialization function, it is static. The __exit macro notifies that if this
+ *  code is used for a built-in driver (not a LKM) that this function is not required.
+ */
+static void __exit tftDisplay_exit(void){
+    printk(KERN_INFO "TFT Display: The touch was pressed %d times\n", numberPresses);
+    kobject_put(tft_kobj);                   // clean up -- remove the kobject sysfs entry
+    free_irq(irqNumber, NULL);               // Free the IRQ number, no *dev_id required in this case
+    gpio_unexport(gpioTouch);               // Unexport the Button GPIO
+    gpio_free(gpioTouch);                   // Free the Button GPIO
+    printk(KERN_INFO "TFT Display: Goodbye from the touch driver!\n");
 }
 
-static struct timer_list my_timer;
- void my_timer_callback( unsigned long data )
-{
-  if (shuttingDown) return;
-
-  PumpSPI();
-  int ret = mod_timer( &my_timer, jiffies + msecs_to_jiffies(1) );
-  if (ret) printk("Error in mod_timer\n");
+/** @brief The GPIO IRQ Handler function
+ *  This function is a custom interrupt handler that is attached to the GPIO above. The same interrupt
+ *  handler cannot be invoked concurrently as the interrupt line is masked out until the function is complete.
+ *  This function is static as it should not be invoked directly from outside of this file.
+ *  @param irq    the IRQ number that is associated with the GPIO -- useful for logging.
+ *  @param dev_id the *dev_id that is provided -- can be used to identify which device caused the interrupt
+ *  Not used in this example as NULL is passed.
+ *  @param regs   h/w specific register values -- only really ever used for debugging.
+ *  return returns IRQ_HANDLED if successful -- should return IRQ_NONE otherwise.
+ */
+static irq_handler_t tftgpio_irq_handler(unsigned int irq, void *dev_id, struct pt_regs *regs){
+    getnstimeofday(&ts_current);         // Get the current time as ts_current
+    ts_diff = timespec_sub(ts_current, ts_last);   // Determine the time difference between last 2 presses
+    ts_last = ts_current;                // Store the current time as the last time ts_last
+    if(isDebug) printk(KERN_INFO "TFT Display: The touch state is currently: %d\n", gpio_get_value(gpioTouch));
+    numberPresses++;                     // Global counter, will be outputted when the module is unloaded
+    return (irq_handler_t) IRQ_HANDLED;  // Announce that the IRQ has been handled correctly
 }
 
-static int display_initialization_thread(void *unused)
-{
-  printk(KERN_INFO "BCM2835 SPI Display driver thread started");
-
-#ifndef KERNEL_MODULE_CLIENT_DRIVES
-
-  // Initialize display. TODO: Move to be shared with ili9341.cpp.
-  QUEUE_SPI_TRANSFER(0xC0/*Power Control 1*/, 0x23/*VRH=4.60V*/); // Set the GVDD level, which is a reference level for the VCOM level and the grayscale voltage level.
-  QUEUE_SPI_TRANSFER(0xC1/*Power Control 2*/, 0x10/*AVCC=VCIx2,VGH=VCIx7,VGL=-VCIx4*/); // Sets the factor used in the step-up circuits. To reduce power consumption, set a smaller factor.
-  QUEUE_SPI_TRANSFER(0xC5/*VCOM Control 1*/, 0x3e/*VCOMH=4.250V*/, 0x28/*VCOML=-1.500V*/); // Adjusting VCOM 1 and 2 can control display brightness
-  QUEUE_SPI_TRANSFER(0xC7/*VCOM Control 2*/, 0x86/*VCOMH=VMH-58,VCOML=VML-58*/);
-
-#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
-#define MADCTL_BGR_PIXEL_ORDER (1<<3)
-#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
-  uint8_t madctl = MADCTL_BGR_PIXEL_ORDER;
-#ifdef DISPLAY_OUTPUT_LANDSCAPE
-  madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
-#endif
-#ifdef DISPLAY_ROTATE_180_DEGREES
-    madctl ^= MADCTL_ROTATE_180_DEGREES;
-#endif
-  QUEUE_SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
-  QUEUE_SPI_TRANSFER(0x3A/*COLMOD: Pixel Format Set*/, 0x55/*DPI=16bits/pixel,DBI=16bits/pixel*/);
-  QUEUE_SPI_TRANSFER(0xB1/*Frame Rate Control (In Normal Mode/Full Colors)*/, 0x00/*DIVA=fosc*/, 0x18/*RTNA(Frame Rate)=79Hz*/);
-  QUEUE_SPI_TRANSFER(0xB6/*Display Function Control*/, 0x08/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x82/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x27/*LCD Driver Lines=320*/);
-  QUEUE_SPI_TRANSFER(0x26/*Gamma Set*/, 0x01/*Gamma curve 1 (G2.2)*/);
-  QUEUE_SPI_TRANSFER(0xE0/*Positive Gamma Correction*/, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00);
-  QUEUE_SPI_TRANSFER(0xE1/*Negative Gamma Correction*/, 0x00, 0x0E, 0x14, 0x03, 0x11, 0x07, 0x31, 0xC1, 0x48, 0x08, 0x0F, 0x0C, 0x31, 0x36, 0x0F);
-  QUEUE_SPI_TRANSFER(0x11/*Sleep Out*/);
-
-  PumpSPI();
-  msleep(1000);
-  QUEUE_SPI_TRANSFER(/*Display ON*/0x29);
-
-#if 1
-  // XXX Debug: Random garbage to verify screen updates working
-  for(int y = 0; y < DISPLAY_HEIGHT; ++y)
-  {
-    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-    SPITask *clearLine = AllocTask(DISPLAY_SCANLINE_SIZE);
-    clearLine->cmd = DISPLAY_WRITE_PIXELS;
-    clearLine->size = DISPLAY_SCANLINE_SIZE;
-    for(int i = 0; i < DISPLAY_SCANLINE_SIZE; ++i)
-      clearLine->data[i] = tick() * y + i;
-    CommitTask(clearLine);
-  }
-  PumpSPI();
-  msleep(1000);
-#endif
-
-  // Initial screen clear
-  for(int y = 0; y < DISPLAY_HEIGHT; ++y)
-  {
-    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-    QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, y >> 8, y & 0xFF, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-    SPITask *clearLine = AllocTask(DISPLAY_SCANLINE_SIZE);
-    clearLine->cmd = DISPLAY_WRITE_PIXELS;
-    clearLine->size = DISPLAY_SCANLINE_SIZE;
-    memset((void*)clearLine->data, 0, DISPLAY_SCANLINE_SIZE);
-    CommitTask(clearLine);
-  }
-  PumpSPI();
-
-  QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_X, 0, 0, DISPLAY_WIDTH >> 8, DISPLAY_WIDTH & 0xFF);
-  QUEUE_SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, DISPLAY_HEIGHT >> 8, DISPLAY_HEIGHT & 0xFF);
-
-  spi->cs = BCM2835_SPI0_CS_CLEAR | BCM2835_SPI0_CS_TA | BCM2835_SPI0_CS_INTR | BCM2835_SPI0_CS_INTD;
-#endif
-
-  PumpSPI();
-
-  // Expose SPI worker ring bus to user space driver application.
-  proc_create(SPI_BUS_PROC_ENTRY_FILENAME, 0, NULL, &fops);
-
-#if 0
-  // XXX Debug:
-  DMATest();
-#endif
-
-  setup_timer(&my_timer, my_timer_callback, 0);
-   printk("Starting timer to fire in 200ms (%ld)\n", jiffies);
-  int ret = mod_timer( &my_timer, jiffies + msecs_to_jiffies(200) );
-  if (ret) printk("Error in mod_timer\n");
- 
-  return 0;
-}
-
-static struct task_struct *displayThread = 0;
-static uint32_t irqHandlerCookie = 0;
-static uint32_t irqRegistered = 0;
-
-int bcm2835_spi_display_init(void)
-{
-  InitSPI();
-#ifdef KERNEL_DRIVE_WITH_IRQ
-  int ret = request_irq(84, irq_handler, IRQF_SHARED, "spi_handler", &irqHandlerCookie);
-  if (ret != 0) FATAL_ERROR("request_irq failed!");
-  irqRegistered = 1;
-#endif
-
-  if (!spiTaskMemory) FATAL_ERROR("Shared memory block not initialized!");
-
-#ifdef USE_DMA_TRANSFERS
-  printk(KERN_INFO "DMA TX channel: %d, irq: %d", dmaTxChannel, dmaTxIrq);
-  printk(KERN_INFO "DMA RX channel: %d, irq: %d", dmaRxChannel, dmaRxIrq);
-  spiTaskMemory->dmaTxChannel = dmaTxChannel;
-  spiTaskMemory->dmaRxChannel = dmaRxChannel;
-#endif
-
-  spiTaskMemory->sharedMemoryBaseInPhysMemory = (uint32_t)virt_to_phys(spiTaskMemory) | 0x40000000U;
-  LOG("PhysBase: %p", (void*)spiTaskMemory->sharedMemoryBaseInPhysMemory);
-
-  displayThread = kthread_create(display_initialization_thread, NULL, "display_thread");
-  if (displayThread) wake_up_process(displayThread);
-
-  return 0;
-}
-
-void bcm2835_spi_display_exit(void)
-{
-  shuttingDown = 1;
-  msleep(2000);
-  spi->cs = BCM2835_SPI0_CS_CLEAR;
-  msleep(200);
-  DeinitSPI();
-
-  if (irqRegistered)
-  {
-    free_irq(84, &irqHandlerCookie);
-    irqRegistered = 0;
-  }
-
-  remove_proc_entry(SPI_BUS_PROC_ENTRY_FILENAME, NULL);
-
-  int ret = del_timer( &my_timer );
-  if (ret) printk("The timer is still in use...\n");}
-
-module_init(bcm2835_spi_display_init);
-module_exit(bcm2835_spi_display_exit);
+// This next calls are  mandatory -- they identify the initialization function
+// and the cleanup function (as above).
+module_init(tftDisplay_init);
+module_exit(tftDisplay_exit);

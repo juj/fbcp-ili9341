@@ -1,0 +1,9 @@
+PACKAGE_NAME="fbcp-ili9341"
+PACKAGE_VERSION=#MODULE_VERSION#
+#BUILD_EXCLUSIVE_ARCH="armhf"
+BUILT_MODULE_NAME[0]="bcm2835_spi_display"
+MAKE[0]="cd kernel; KDIR=${install_tree}/${kernelver} make; cd .."
+BUILT_MODULE_LOCATION[0]="kernel/"
+CLEAN="cd kernel; KDIR=${install_tree}/${kernelver} make clean; cd .."
+DEST_MODULE_LOCATION[0]=/extra
+AUTOINSTALL=yes
