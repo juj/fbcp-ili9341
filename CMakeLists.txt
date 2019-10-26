@@ -91,6 +91,12 @@ if (GPIO_TFT_BACKLIGHT)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGPIO_TFT_BACKLIGHT=${GPIO_TFT_BACKLIGHT}")
 endif()
 
+set(LOW_BATT_PIN 0 CACHE STRING "Explicitly specify the low batt GPIO pin (leave out if there is no low batt signal)")
+if (GPIO_TFT_BACKLIGHT)
+    message(STATUS "Using GPIO pin ${LOW_BATT_PIN} for low batt status")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DLOW_BATT_PIN=${LOW_BATT_PIN}")
+endif()
+
 option(BACKLIGHT_CONTROL "If true, enables fbcp-ili9341 to take control of backlight" OFF)
 if (BACKLIGHT_CONTROL)
 	message(STATUS "Enabling fbcp-ili9341 backlight control")

@@ -213,6 +213,19 @@
 
 #endif
 
+// If defined, enable a low batt icon triggered by a GPIO pin whose BCM number is given.
+// #define LOW_BATT_PIN 19
+
+#if defined(LOW_BATT_PIN)
+
+// Which state of the LOW_BATT_PIN is considered to be low batt (1 is up, 0 is down).
+#define LOW_BATT_STATE 0
+
+// Polling interval (in micro-second) for the low batt pin.
+#define LOW_BATT_POLLING_TIME 1000000
+
+#endif
+
 // If less than this much % of the screen changes per frame, the screen is considered to be inactive, and
 // the display backlight can automatically turn off, if TURN_DISPLAY_OFF_AFTER_USECS_OF_INACTIVITY is 
 // defined.
