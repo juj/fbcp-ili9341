@@ -16,7 +16,7 @@ uninstall: stop
 	@depmod -a
 
 start: 
-	modprobe -v $(obj-m:%.o=%)
+	@modprobe -v $(obj-m:%.o=%)
 
 stop:
 	@pgrep "fbcp-ili9341.*" && pkill "fbcp-ili9341.*" || true
@@ -24,9 +24,9 @@ stop:
 	@modprobe -vr $(obj-m:%.o=%) || true
 
 status:
-	modinfo $(obj-m:%.o=%)
-	echo loaded:
-	lsmod | grep $(obj-m:%.o=%) || echo not loaded
+	@modinfo $(obj-m:%.o=%)
+	@echo loaded:
+	@lsmod | grep $(obj-m:%.o=%) || echo not loaded
 
 debug: $(obj-m:%.o=%.ko)
 	@objdump -dS $< > $(obj-m:%.o=%.S)
