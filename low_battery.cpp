@@ -14,11 +14,11 @@
 #define LOW_BATTERY_FORE_COLOR 65535
 #define LOW_BATTERY_BACK_COLOR 0
 
-bool lowBattery = false;
-uint64_t lowBatteryLastPolled = 0;
+static bool lowBattery = false;
+static uint64_t lowBatteryLastPolled = 0;
 
 // Battery icon from: https://github.com/martinohanlon/grrl-bat-monitor
-uint16_t lowBatteryIcon [LOW_BATTERY_ICON_HEIGHT][LOW_BATTERY_ICON_WIDTH] = {
+static uint16_t lowBatteryIcon [LOW_BATTERY_ICON_HEIGHT][LOW_BATTERY_ICON_WIDTH] = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         {0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0},
@@ -41,15 +41,15 @@ uint16_t lowBatteryIcon [LOW_BATTERY_ICON_HEIGHT][LOW_BATTERY_ICON_WIDTH] = {
         {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 
 
-void initLowBatterySystem()
+void InitLowBatterySystem()
 {
   for(int y = 0; y < LOW_BATTERY_ICON_HEIGHT; ++y)
     for(int x = 0; x < LOW_BATTERY_ICON_WIDTH; ++x)
       lowBatteryIcon[y][x] = lowBatteryIcon[y][x] ? LOW_BATTERY_FORE_COLOR : LOW_BATTERY_BACK_COLOR;
-  pollLowBattery();
+  PollLowBattery();
 }
 
-void pollLowBattery()
+void PollLowBattery()
 {
   uint64_t now = tick();
   if (now - lowBatteryLastPolled > LOW_BATTERY_POLLING_INTERVAL)
@@ -59,7 +59,7 @@ void pollLowBattery()
   }
 }
 
-void drawLowBatteryIcon(uint16_t *framebuffer)
+void DrawLowBatteryIcon(uint16_t *framebuffer)
 {
   if (!lowBattery)
     return;
@@ -73,8 +73,8 @@ void drawLowBatteryIcon(uint16_t *framebuffer)
 
 #else 
   
-void initLowBatterySystem() {}
-void pollLowBattery() {}  
-void drawLowBatteryIcon(uint16_t *framebuffer) {}
+void InitLowBatterySystem() {}
+void PollLowBattery() {}  
+void DrawLowBatteryIcon(uint16_t *framebuffer) {}
 
 #endif

@@ -103,7 +103,7 @@ int main()
   InitSPI();
   displayContentsLastChanged = tick();
   displayOff = false;
-  initLowBatterySystem();
+  InitLowBatterySystem();
 
   // Track current SPI display controller write X and Y cursors.
   int spiX = -1;
@@ -267,7 +267,7 @@ int main()
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
 
-      pollLowBattery();
+      PollLowBattery();
 
 #ifdef STATISTICS
       uint64_t now = tick();
@@ -277,7 +277,7 @@ int main()
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
       DrawStatisticsOverlay(framebuffer[0]);
-      drawLowBatteryIcon(framebuffer[0]);
+      DrawLowBatteryIcon(framebuffer[0]);
 
 #ifdef USE_GPU_VSYNC
 
@@ -297,7 +297,7 @@ int main()
         frameObtainedTime = tick();
         framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
-        drawLowBatteryIcon(framebuffer[0]);
+        DrawLowBatteryIcon(framebuffer[0]);
         framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
 #else
