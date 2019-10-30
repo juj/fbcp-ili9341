@@ -28,6 +28,7 @@
 #include "diff.h"
 #include "mem_alloc.h"
 #include "keyboard.h"
+#include "low_battery.h"
 
 int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
 {
@@ -102,6 +103,7 @@ int main()
   InitSPI();
   displayContentsLastChanged = tick();
   displayOff = false;
+  InitLowBatterySystem();
 
   // Track current SPI display controller write X and Y cursors.
   int spiX = -1;
@@ -265,6 +267,8 @@ int main()
       memcpy(framebuffer[0], videoCoreFramebuffer[1], gpuFramebufferSizeBytes);
 #endif
 
+      PollLowBattery();
+
 #ifdef STATISTICS
       uint64_t now = tick();
       for(int i = 0; i < numNewFrames - 1 && frameSkipTimeHistorySize < FRAMERATE_HISTORY_LENGTH; ++i)
@@ -273,6 +277,7 @@ int main()
       __atomic_fetch_sub(&numNewGpuFrames, numNewFrames, __ATOMIC_SEQ_CST);
 
       DrawStatisticsOverlay(framebuffer[0]);
+      DrawLowBatteryIcon(framebuffer[0]);
 
 #ifdef USE_GPU_VSYNC
 
@@ -292,6 +297,7 @@ int main()
         frameObtainedTime = tick();
         framebufferHasNewChangedPixels = SnapshotFramebuffer(framebuffer[0]);
         DrawStatisticsOverlay(framebuffer[0]);
+        DrawLowBatteryIcon(framebuffer[0]);
         framebufferHasNewChangedPixels = framebufferHasNewChangedPixels && IsNewFramebuffer(framebuffer[0], framebuffer[1]);
       }
 #else

@@ -172,6 +172,7 @@ The following build options are general to all displays and Pi boards, they furt
 - `-DDISPLAY_SWAP_BGR=ON`: If this option is passed, red and blue color channels are reversed (RGB<->BGR) swap. Some displays have an opposite color panel subpixel layout that the display controller does not automatically account for, so define this if blue and red are mixed up.
 - `-DDISPLAY_INVERT_COLORS=ON`: If this option is passed, pixel color value interpretation is reversed (white=0, black=31/63). Default: black=0, white=31/63. Pass this option if the display image looks like a color negative of the actual colors.
 - `-DDISPLAY_ROTATE_180_DEGREES=ON`: If set, display is rotated 180 degrees. This does not affect HDMI output, only the SPI display output.
+- `-DLOW_BATTERY_PIN=<num>`: Specifies a GPIO pin that can be polled to get the battery state. By default, when this is set, a low battery icon will be displayed if the pin is pulled low (see `config.h` for ways in which this can be tweaked).
 
 In addition to the above CMake directives, there are various defines scattered around the codebase, mostly in [config.h](https://github.com/juj/fbcp-ili9341/blob/master/config.h), that control different runtime options. Edit those directly to further tune the behavior of the program. In particular, after you have finished with the setup, you may want to build with `-DSTATISTICS=0` option in CMake configuration line.
 
