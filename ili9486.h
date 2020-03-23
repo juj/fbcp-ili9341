@@ -23,3 +23,6 @@
 
 void InitILI9486(void);
 #define InitSPIDisplay InitILI9486
+
+// for the waveshare35b version 2 (IPS) we have to disable gamma control; uncomment if you use version 2
+// #define WAVESHARE_SKIP_GAMMA_CONTROL
