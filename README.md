@@ -471,6 +471,9 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 - shut down and physically power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to reset,
 - if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving fbcp-ili9341 without specifying the reset pin,
 - make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode. Support for 3-wire SPI displays does exist, but it is more limited and a bit experimental.
+- If connecting the wires directly ensure that the values given are BCM pin numbers and not the physical pin numbers. See [RPi pinout](https://pinout.xyz/#).
+- Try changing the BCM pins used for the reset, backlight and data control.
+
 
 #### The display stays blank at boot without lighting up
 
