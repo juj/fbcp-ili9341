@@ -90,7 +90,7 @@ cd fbcp-ili9341
 mkdir build
 cd build
 cmake [options] ..
-make -j
+make -j `nproc`
 sudo ./fbcp-ili9341
 ```
 
@@ -188,7 +188,7 @@ cd fbcp-ili9341
 mkdir build
 cd build
 cmake -DSPI_BUS_CLOCK_DIVISOR=6 -DADAFRUIT_ILI9341_PITFT=ON ..
-make -j
+make -j `nproc`
 sudo ./fbcp-ili9341
 ```
 
@@ -394,7 +394,7 @@ Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This shoul
 
 Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the appropriate line in the file. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
 
-After having edited and saved the file, reissue `make -j` in the build directory and restart fbcp-ili9341.
+After having edited and saved the file, reissue ``make -j `nproc` `` in the build directory and restart fbcp-ili9341.
 
 Some options are passed to the build from the CMake configuration script. You can run with `make VERBOSE=1` to see which configuration items the CMake build is passing. See the above *Configuring Build Options* section to customize the CMake configure items. For example, to remove the statistics overlay, pass `-DSTATISTICS=0` directive to CMake.
 
