@@ -62,7 +62,7 @@ void InitILI9341()
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
     // The set value of MADCTL is the exclusive OR between 1st param of IFCTL and MADCTL, see spec pg. 192
-    SPI_TRANSFER(0xF6/*IFCTL: Interface Control*/, (uint8_t) ~madctl);
+    SPI_TRANSFER(0xF6/*IFCTL: Interface Control*/, 0);
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
 
 #ifdef DISPLAY_INVERT_COLORS
