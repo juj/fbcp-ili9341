@@ -287,7 +287,7 @@ void RefreshStatisticsOverlayText()
 #endif
 }
 #else
-int InitStatistics() {}
+void InitStatistics() {}
 void RefreshStatisticsOverlayText() {}
 void DrawStatisticsOverlay(uint16_t *) {}
 #endif // ~STATISTICS
