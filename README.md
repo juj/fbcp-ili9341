@@ -472,7 +472,7 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 - if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving fbcp-ili9341 without specifying the reset pin,
 - make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode. Support for 3-wire SPI displays does exist, but it is more limited and a bit experimental.
 - If connecting the wires directly ensure that the values given are BCM pin numbers and not the physical pin numbers. See [RPi pinout](https://pinout.xyz/#).
-- Try changing the BCM pins used for the reset, backlight and data control.
+- If nothing else works, try changing the BCM pins used for the reset, backlight and data control.
 
 
 #### The display stays blank at boot without lighting up
