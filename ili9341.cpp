@@ -88,8 +88,7 @@ void InitILI9341()
 
     SPI_TRANSFER(0xB1/*Frame Rate Control (In Normal Mode/Full Colors)*/, 0x00/*DIVA=fosc*/, ILI9341_UPDATE_FRAMERATE/*RTNA(Frame Rate)*/);
 //    SPI_TRANSFER(0xB5/*Blanking Porch Control*/, 0x02/*VFP, vertical front porch*/, 0x02/*VBP, vertical back porch*/, 0x0A/*HFP, horizontal front porch*/, 0x14/*HBP, horizontal back porch*/); // These are the default values at power on
-    //SPI_TRANSFER(0xB6/*Display Function Control*/, 0x08/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x82/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x27/*LCD Driver Lines=320*/);
-    SPI_TRANSFER(0xB6/*Display Function Control*/, 0x02/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x02/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x3B/*LCD Driver Lines=320*/);
+    SPI_TRANSFER(0xB6/*Display Function Control*/, 0x08/*PTG=Interval Scan,PT=V63/V0/VCOML/VCOMH*/, 0x82/*REV=1(Normally white),ISC(Scan Cycle)=5 frames*/, 0x27/*LCD Driver Lines=320*/);
     SPI_TRANSFER(0xF2/*Enable 3G*/, 0x02/*False*/); // This one is present only in ILI9341 Data Sheet v1.11 (2011/06/10)
     SPI_TRANSFER(0x26/*Gamma Set*/, 0x01/*Gamma curve 1 (G2.2)*/);
     SPI_TRANSFER(0xE0/*Positive Gamma Correction*/, 0x0F, 0x31, 0x2B, 0x0C, 0x0E, 0x08, 0x4E, 0xF1, 0x37, 0x07, 0x10, 0x03, 0x0E, 0x09, 0x00);
