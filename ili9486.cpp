@@ -27,102 +27,83 @@ void InitILI9486()
 
   BEGIN_SPI_COMMUNICATION();
   {
-      SPI_TRANSFER(0xE0, 0x00, 0x03, 0x09, 0x08, 0x16, 0x0A, 0x3F, 0x78, 0x4C, 0x09, 0x0A, 0x08, 0x16, 0x1A, 0x0F);
-      SPI_TRANSFER(0xE1, 0x00, 0x16, 0x19, 0x03, 0x0F, 0x05, 0x32, 0x45, 0x46, 0x04, 0x0E, 0x0D, 0x35, 0x37, 0x0F);
-      SPI_TRANSFER(0xC0, 0x17, 0x15);
-      SPI_TRANSFER(0xC1, 0x41);
-      SPI_TRANSFER(0xC5, 0x00, 0x12, 0x80);
-      SPI_TRANSFER(0x36, 0xE8);//0x28);//0x48);
-      SPI_TRANSFER(0x3A, 0x66);
-      SPI_TRANSFER(0xB0, 0x80);
-      SPI_TRANSFER(0xB1, 0xA0);
-      SPI_TRANSFER(0xB4, 0x02);
-      SPI_TRANSFER(0xB6, 0x02, 0x02);
-      SPI_TRANSFER(0xE9, 0x00);
-      SPI_TRANSFER(0xF7, 0xA9, 0x51, 0x2C, 0x82);
-      SPI_TRANSFER(0x11/*Sleep OUT*/);
-      usleep(120*1000);
-      SPI_TRANSFER(0x29/*Display ON*/);
-      SPI_TRANSFER(0x38/*Idle Mode OFF*/);
-      SPI_TRANSFER(0x13/*Normal Display Mode ON*/);
-//#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    SPI_TRANSFER(0xB0/*Interface Mode Control*/, 0x00, 0x00/*DE polarity=High enable, PCKL polarity=data fetched at rising time, HSYNC polarity=Low level sync clock, VSYNC polarity=Low level sync clock*/);
+#else
+    SPI_TRANSFER(0xB0/*Interface Mode Control*/, 0x00/*DE polarity=High enable, PCKL polarity=data fetched at rising time, HSYNC polarity=Low level sync clock, VSYNC polarity=Low level sync clock*/);
+#endif
+    SPI_TRANSFER(0x11/*Sleep OUT*/);
+    usleep(120*1000);
 
-//    SPI_TRANSFER(0xB0/*Interface Mode Control*/, 0x00, 0x00/*DE polarity=High enable, PCKL polarity=data fetched at rising time, HSYNC polarity=Low level sync clock, VSYNC polarity=Low level sync clock*/);
-//#else
-//    SPI_TRANSFER(0xB0/*Interface Mode Control*/, 0x00/*DE polarity=High enable, PCKL polarity=data fetched at rising time, HSYNC polarity=Low level sync clock, VSYNC polarity=Low level sync clock*/);
-//#endif
-//    SPI_TRANSFER(0x11/*Sleep OUT*/);
-//    usleep(120*1000);
-//
-//#ifdef DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2
-//    const uint8_t pixelFormat = 0x66; /*DPI(RGB Interface)=18bits/pixel, DBI(CPU Interface)=18bits/pixel*/
-//#else
-//    const uint8_t pixelFormat = 0x55; /*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/
-//#endif
-//
-//#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
-//    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x00, pixelFormat);
-//#else
-//    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, pixelFormat);
-//#endif
-//
-//    // Oddly, WaveShare 3.5" (B) seems to need Display Inversion ON, whereas WaveShare 3.5" (A) seems to need Display Inversion OFF for proper image. See https://github.com/juj/fbcp-ili9341/issues/8
-//#ifdef DISPLAY_INVERT_COLORS
-//    SPI_TRANSFER(0x21/*Display Inversion ON*/);
-//#else
-//    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
-//#endif
-//
-//#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
-//    SPI_TRANSFER(0xC0/*Power Control 1*/, 0x00, 0x09, 0x00, 0x09);
-//    SPI_TRANSFER(0xC1/*Power Control 2*/, 0x00, 0x41, 0x00, 0x00);
-//    SPI_TRANSFER(0xC2/*Power Control 3*/, 0x00, 0x33);
-//    SPI_TRANSFER(0xC5/*VCOM Control*/, 0x00, 0x00, 0x00, 0x36);
-//#else
-//    SPI_TRANSFER(0xC0/*Power Control 1*/, 0x09, 0x09);
-//    SPI_TRANSFER(0xC1/*Power Control 2*/, 0x41, 0x00);
-//    SPI_TRANSFER(0xC2/*Power Control 3*/, 0x33);
-//    SPI_TRANSFER(0xC5/*VCOM Control*/, 0x00, 0x36);
-//#endif
-//
-//#define MADCTL_BGR_PIXEL_ORDER (1<<3)
-//#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
-//#define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
-//#define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
-//#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
-//
-//    uint8_t madctl = 0;
-//#ifndef DISPLAY_SWAP_BGR
-//    madctl |= MADCTL_BGR_PIXEL_ORDER;
-//#endif
-//#if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
-//    madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
-//#endif
-//#ifdef DISPLAY_ROTATE_180_DEGREES
-//    madctl ^= MADCTL_ROTATE_180_DEGREES;
-//#endif
-//
-//#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
-//    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, 0x00, madctl);
-//    #ifndef WAVESHARE_SKIP_GAMMA_CONTROL
-//        SPI_TRANSFER(0xE0/*Positive Gamma Control*/, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x2C, 0x00, 0x0B, 0x00, 0x0C, 0x00, 0x04, 0x00, 0x4C, 0x00, 0x64, 0x00, 0x36, 0x00, 0x03, 0x00, 0x0E, 0x00, 0x01, 0x00, 0x10, 0x00, 0x01, 0x00, 0x00);
-//        SPI_TRANSFER(0xE1/*Negative Gamma Control*/, 0x00, 0x0F, 0x00, 0x37, 0x00, 0x37, 0x00, 0x0C, 0x00, 0x0F, 0x00, 0x05, 0x00, 0x50, 0x00, 0x32, 0x00, 0x36, 0x00, 0x04, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x19, 0x00, 0x14, 0x00, 0x0F);
-//    #endif
-//    SPI_TRANSFER(0xB6/*Display Function Control*/, 0, 0, 0, /*ISC=2*/2, 0, /*Display Height h=*/59); // Actual display height = (h+1)*8 so (59+1)*8=480
-//#else
-//    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
-//    #ifndef WAVESHARE_SKIP_GAMMA_CONTROL
-//        SPI_TRANSFER(0xE0/*Positive Gamma Control*/, 0x00, 0x2C, 0x2C, 0x0B, 0x0C, 0x04, 0x4C, 0x64, 0x36, 0x03, 0x0E, 0x01, 0x10, 0x01, 0x00);
-//        SPI_TRANSFER(0xE1/*Negative Gamma Control*/, 0x0F, 0x37, 0x37, 0x0C, 0x0F, 0x05, 0x50, 0x32, 0x36, 0x04, 0x0B, 0x00, 0x19, 0x14, 0x0F);
-//    #endif
-//    SPI_TRANSFER(0xB6/*Display Function Control*/, 0, /*ISC=2*/2, /*Display Height h=*/59); // Actual display height = (h+1)*8 so (59+1)*8=480
-//#endif
-//    SPI_TRANSFER(0x11/*Sleep OUT*/);
-//    usleep(120*1000);
-//    SPI_TRANSFER(0x29/*Display ON*/);
-//    SPI_TRANSFER(0x38/*Idle Mode OFF*/);
-//    SPI_TRANSFER(0x13/*Normal Display Mode ON*/);
-//
+#ifdef DISPLAY_COLOR_FORMAT_R6X2G6X2B6X2
+    const uint8_t pixelFormat = 0x66; /*DPI(RGB Interface)=18bits/pixel, DBI(CPU Interface)=18bits/pixel*/
+#else
+    const uint8_t pixelFormat = 0x55; /*DPI(RGB Interface)=16bits/pixel, DBI(CPU Interface)=16bits/pixel*/
+#endif
+
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, 0x00, pixelFormat);
+#else
+    SPI_TRANSFER(0x3A/*Interface Pixel Format*/, pixelFormat);
+#endif
+
+    // Oddly, WaveShare 3.5" (B) seems to need Display Inversion ON, whereas WaveShare 3.5" (A) seems to need Display Inversion OFF for proper image. See https://github.com/juj/fbcp-ili9341/issues/8
+#ifdef DISPLAY_INVERT_COLORS
+    SPI_TRANSFER(0x21/*Display Inversion ON*/);
+#else
+    SPI_TRANSFER(0x20/*Display Inversion OFF*/);
+#endif
+
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    SPI_TRANSFER(0xC0/*Power Control 1*/, 0x00, 0x09, 0x00, 0x09);
+    SPI_TRANSFER(0xC1/*Power Control 2*/, 0x00, 0x41, 0x00, 0x00);
+    SPI_TRANSFER(0xC2/*Power Control 3*/, 0x00, 0x33);
+    SPI_TRANSFER(0xC5/*VCOM Control*/, 0x00, 0x00, 0x00, 0x36);
+#else
+    SPI_TRANSFER(0xC0/*Power Control 1*/, 0x09, 0x09);
+    SPI_TRANSFER(0xC1/*Power Control 2*/, 0x41, 0x00);
+    SPI_TRANSFER(0xC2/*Power Control 3*/, 0x33);
+    SPI_TRANSFER(0xC5/*VCOM Control*/, 0x00, 0x36);
+#endif
+
+#define MADCTL_BGR_PIXEL_ORDER (1<<3)
+#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
+#define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
+#define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
+#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
+
+    uint8_t madctl = 0;
+#ifndef DISPLAY_SWAP_BGR
+    madctl |= MADCTL_BGR_PIXEL_ORDER;
+#endif
+#if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
+    madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
+#endif
+#ifdef DISPLAY_ROTATE_180_DEGREES
+    madctl ^= MADCTL_ROTATE_180_DEGREES;
+#endif
+
+#ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
+    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, 0x00, madctl);
+    #ifndef WAVESHARE_SKIP_GAMMA_CONTROL
+        SPI_TRANSFER(0xE0/*Positive Gamma Control*/, 0x00, 0x00, 0x00, 0x2C, 0x00, 0x2C, 0x00, 0x0B, 0x00, 0x0C, 0x00, 0x04, 0x00, 0x4C, 0x00, 0x64, 0x00, 0x36, 0x00, 0x03, 0x00, 0x0E, 0x00, 0x01, 0x00, 0x10, 0x00, 0x01, 0x00, 0x00);
+        SPI_TRANSFER(0xE1/*Negative Gamma Control*/, 0x00, 0x0F, 0x00, 0x37, 0x00, 0x37, 0x00, 0x0C, 0x00, 0x0F, 0x00, 0x05, 0x00, 0x50, 0x00, 0x32, 0x00, 0x36, 0x00, 0x04, 0x00, 0x0B, 0x00, 0x00, 0x00, 0x19, 0x00, 0x14, 0x00, 0x0F);
+    #endif
+    SPI_TRANSFER(0xB6/*Display Function Control*/, 0, 0, 0, /*ISC=2*/2, 0, /*Display Height h=*/59); // Actual display height = (h+1)*8 so (59+1)*8=480
+#else
+    SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
+    #ifndef WAVESHARE_SKIP_GAMMA_CONTROL
+        SPI_TRANSFER(0xE0/*Positive Gamma Control*/, 0x00, 0x2C, 0x2C, 0x0B, 0x0C, 0x04, 0x4C, 0x64, 0x36, 0x03, 0x0E, 0x01, 0x10, 0x01, 0x00);
+        SPI_TRANSFER(0xE1/*Negative Gamma Control*/, 0x0F, 0x37, 0x37, 0x0C, 0x0F, 0x05, 0x50, 0x32, 0x36, 0x04, 0x0B, 0x00, 0x19, 0x14, 0x0F);
+    #endif
+    SPI_TRANSFER(0xB6/*Display Function Control*/, 0, /*ISC=2*/2, /*Display Height h=*/59); // Actual display height = (h+1)*8 so (59+1)*8=480
+#endif
+    SPI_TRANSFER(0x11/*Sleep OUT*/);
+    usleep(120*1000);
+    SPI_TRANSFER(0x29/*Display ON*/);
+    SPI_TRANSFER(0x38/*Idle Mode OFF*/);
+    SPI_TRANSFER(0x13/*Normal Display Mode ON*/);
+
 #if defined(GPIO_TFT_BACKLIGHT) && defined(BACKLIGHT_CONTROL)
     printf("Setting TFT backlight on at pin %d\n", GPIO_TFT_BACKLIGHT);
     TurnBacklightOn();
