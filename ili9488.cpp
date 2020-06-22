@@ -58,8 +58,16 @@ void InitILI9488()
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
+    //
+    // Shifted value of bits [7:5] (MY - ROW_ADDRESS_ORDER_SWAP, MX - COLUMN_ADDRESS_ORDER_SWAP, MV ROW_COLUMN_EXCHANGE)
+    // and their resulting effect on the orientation of the image
+    // relative to the physical screen:
+    // 0x40 0 deg (W = 320, H = 480, FPC connector at bottom)
+    // 0x20 90 deg (W = 480, H = 320, FPC connector on right)
+    // 0x80 180 deg (W = 320, H = 480, FPC connector on top)
+    // 0xE0 270 deg (W = 480, H = 320, FPC connector on left)
       // 0x36 Memory Access Control - sets display rotation.
-      SPI_TRANSFER(0x36, madctl);// 0xE8);// 0x88); //0x28);//0x48);
+      SPI_TRANSFER(0x36, madctl);
 
       // 0x3A Interface Pixel Format (bit depth color space)
       SPI_TRANSFER(0x3A, 0x66);
@@ -75,6 +83,10 @@ void InitILI9488()
 // 0x01 1 dot inversion.
 // 0x02 2 dot inversion.
 // 0x20/0x21 engage and disengage the inversion itself.
+// 
+// I could not find a difference is using the three different
+// settings for 0xB4. It is left at 0x02 since that is what
+// the original test value was set to.
 #ifdef DISPLAY_INVERT_COLORS
       // 0xB4 Display Inversion Control.
       SPI_TRANSFER(0xB4, 0x02);
