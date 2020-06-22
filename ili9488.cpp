@@ -37,16 +37,56 @@ void InitILI9488()
       SPI_TRANSFER(0xC1, 0x41);
       // 0xC5 VCOM Control
       SPI_TRANSFER(0xC5, 0x00, 0x12, 0x80);
+
+// Memory access control. Determines display orientation,
+// display color filter and refresh order/direction.
+#define MADCTL_HORIZONTAL_REFRESH_ORDER (1<<2)
+#define MADCTL_BGR_PIXEL_ORDER (1<<3)
+#define MADCTL_VERTICAL_REFRESH_ORDER (1<<4)
+#define MADCTL_ROW_COLUMN_EXCHANGE (1<<5)
+#define MADCTL_COLUMN_ADDRESS_ORDER_SWAP (1<<6)
+#define MADCTL_ROW_ADDRESS_ORDER_SWAP (1<<7)
+#define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
+
+    uint8_t madctl(0);
+#ifndef DISPLAY_SWAP_BGR
+    madctl |= MADCTL_BGR_PIXEL_ORDER;
+#endif
+#if defined(DISPLAY_FLIP_ORIENTATION_IN_HARDWARE)
+    madctl |= MADCTL_ROW_COLUMN_EXCHANGE;
+#endif
+#ifdef DISPLAY_ROTATE_180_DEGREES
+    madctl ^= MADCTL_ROTATE_180_DEGREES;
+#endif
       // 0x36 Memory Access Control - sets display rotation.
-      SPI_TRANSFER(0x36, 0xE8);// 0x88); //0x28);//0x48);
+      SPI_TRANSFER(0x36, madctl);// 0xE8);// 0x88); //0x28);//0x48);
+
       // 0x3A Interface Pixel Format (bit depth color space)
       SPI_TRANSFER(0x3A, 0x66);
       // 0xB0 Interface Mode Control
       SPI_TRANSFER(0xB0, 0x80);
       // 0xB1 Frame Rate Control (in Normal Mode/Full Colors)
       SPI_TRANSFER(0xB1, 0xA0);
+
+// The display inversion is controlled by two registers:
+// 0xB4 determines how the LEDs are swapped.See page 224 of the datasheet:
+// The different values are:
+// 0x00 Column inversion.
+// 0x01 1 dot inversion.
+// 0x02 2 dot inversion.
+// 0x20/0x21 engage and disengage the inversion itself.
+#ifdef DISPLAY_INVERT_COLORS
       // 0xB4 Display Inversion Control.
       SPI_TRANSFER(0xB4, 0x02);
+      // 0x21 Display Inversion ON.
+      SPI_TRANSFER(0x21);
+#else
+      // 0xB4 Display Inversion Control.
+      SPI_TRANSFER(0xB4, 0x02);
+      // 0x20 Display Inversion OFF.
+      SPI_TRANSFER(0x20);
+#endif
+
       // 0xB6 Display Function Control.
       SPI_TRANSFER(0xB6, 0x02, 0x02);
       // 0xE9 Set Image Function.
