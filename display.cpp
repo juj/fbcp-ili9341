@@ -36,3 +36,4 @@ void ClearScreen()
   SPI_TRANSFER(DISPLAY_SET_CURSOR_Y, 0, 0, (DISPLAY_HEIGHT-1) >> 8, (DISPLAY_HEIGHT-1) & 0xFF);
 #endif
 }
+

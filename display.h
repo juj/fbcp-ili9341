@@ -9,6 +9,8 @@
 #include "ili9341.h"
 #elif defined(ILI9486L)
 #include "ili9486l.h"
+#elif defined(ILI9488)
+#include "ili9488.h"
 #elif defined(ILI9486)
 #include "ili9486.h"
 #elif defined(HX8357D)
