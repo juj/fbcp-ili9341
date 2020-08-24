@@ -565,6 +565,65 @@ One might think that since Pi Zero is slower than a Pi 3, the SPI bus speed migh
 
 Ultimately, it should be noted that parallel displays (DPI) are the proper method for getting fast framerates easily. SPI displays should only be preferred if display form factor is important and a desired product might only exist as SPI and not as DPI, or the number of GPIO pins that are available on the Pi is scarce that sacrificing dozens of pins to RGB data is not feasible.
 
+#### What other options/alternatives do I have to fbcp-ili9341?
+
+Hardware-wise, there are six different ways to connect displays to the Pi. Here are the pros and cons of each:
+
+1. [Composite video]([https://en.wikipedia.org/wiki/Composite_video](https://en.wikipedia.org/wiki/Composite_video))
+     - +simple one-wire connectivity
+     - +the Pi GPU drives the signal on its own without CPU assistance, no driver needed
+     - +has vsync, no tearing artifacts
+     - +available for a cheap price
+     - -low quality analog signal that is blurry and has color artifacts
+2. [I²C (Inter-Integrated Circuit)]([https://en.wikipedia.org/wiki/I%C2%B2C](https://en.wikipedia.org/wiki/I%C2%B2C))
+    - +fewest amount of digital signals (two): SDA (data) and SCL (clock)
+    - +available for a cheap price
+    - -slowest bandwidth, generally only the smallest displays with low resolution utilize this
+    - -need software CPU cycles to push pixels to display
+    - -no video vsync, causes tearing artifacts
+3. [SPI (Serial Peripheral Interface)]([https://en.wikipedia.org/wiki/Serial_Peripheral_Interface](https://en.wikipedia.org/wiki/Serial_Peripheral_Interface))
+     - the method used/supported by this driver
+     - +only few digital signal lines needed: SCLK (clock), MOSI (data), D/C (data/command) (MISO line is not read by fbcp-ili9341), CS (Chip Select) (sometimes optional)
+     - +much faster than I²C
+     - +very low video display latency
+     - +available for a cheap price
+     - -no single pin or protocol standard, be careful about hardware compatibility
+     - -need software CPU cycles to push pixels to display
+     - -no video vsync, causes tearing artifacts
+     - -low resolution, generally 480x320 or smaller
+4. [DPI (Display Parallel Interface)]([https://www.raspberrypi.org/documentation/hardware/raspberrypi/dpi/README.md](https://www.raspberrypi.org/documentation/hardware/raspberrypi/dpi/README.md))
+     - +high quality digital signal driven directly by the Pi GPU without CPU assistance
+     - +fixed 60hz updates without missed frames
+     - +has vsync, no tearing artifacts
+     - -no single pin or protocol standard, be careful about hardware compatibility
+     - -consumes most of the pins on the Pi GPIO header (20-28 digital signal pins)
+     - -no ability to disable vsync, likely more video latency than SPI
+5. [MIPI-DSI (Display Serial Interface)]([https://en.wikipedia.org/wiki/Display_Serial_Interface](https://en.wikipedia.org/wiki/Display_Serial_Interface))
+     - +high quality digital signal driven directly by the Pi GPU without CPU assistance
+     - +fixed 60hz updates without missed frames
+     - +has vsync, no tearing artifacts
+     - +does not require GPIO pins, leaving them free for other use
+     - +available in high resolution
+     - [-uses proprietary DSI connectivity on the Pi, not an open ecosystem]([https://www.raspberrypi.org/forums/viewtopic.php?t=153954](https://www.raspberrypi.org/forums/viewtopic.php?t=153954))
+     - [-only one official display exists]([https://www.raspberrypi.org/documentation/hardware/display/](https://www.raspberrypi.org/documentation/hardware/display/))
+6. [HDMI]([https://en.wikipedia.org/wiki/HDMI](https://en.wikipedia.org/wiki/HDMI))
+     - +high quality digital signal driven directly by the Pi GPU without CPU assistance
+     - +fixed 60hz updates without missed frames
+     - +has vsync, no tearing artifacts
+     - +does not require GPIO pins, leaving them free for other use
+     - +very standard, little configuration needed in /boot/config.txt
+     - +available in high resolution
+     - -bulky connector for most portable designs
+
+Displays are generally manufactured to utilize one specific interfacing method, with the exception that some displays have a both I²C and SPI modes that can be configured via soldering.
+
+Fbcp-ili9341 driver is about interfacing with SPI displays. If your display utilizes some other connection mechanism, fbcp-ili9341 will not apply.
+
+Software-wise, there are two possible alternatives to fbcp-ili9341:
+
+1. [notro/fbtft](https://github.com/notro/fbtft) + [tasanakorn/rpi-fbcp](https://github.com/tasanakorn/rpi-fbcp)
+2. Use an ad hoc drawing library that provides both drawing primitives plus the display interface, e.g. [adafruit/Adafruit_Python_ILI9341](https://github.com/adafruit/Adafruit_Python_ILI9341).
+
 ### Resources
 
 The following links proved helpful when writing this:
@@ -616,3 +675,15 @@ This driver is licensed under the MIT License. See LICENSE.txt. In nonlegal term
 If you found fbcp-ili9341 useful, it makes me happy to hear back about the projects it found a home in. If you did a build or a project where fbcp-ili9341 worked out, it'd be great to see a video or some photos or read about your experiences.
 
 I hope you build something you enjoy!
+
+### Donating
+
+I have been occassionally asked how to make a donation as a thank you for the work, so here is a PayPal link:
+
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=DD8A74WY6Q4L2&currency_code=EUR)
+
+Please note that a contribution is not expected, and you are free to use, publicize and redistribute the driver even without a payment.
+
+### Contacting
+
+Best way to discuss the driver is to open a GitHub issue. You may also be able to find me over at [sudomod.com Discord channel](https://sudomod.com/forum/viewtopic.php?f=42&t=438&sid=b868bb95ab5c3035b7810c71278637c6).
