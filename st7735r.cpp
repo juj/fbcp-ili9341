@@ -1,6 +1,5 @@
 #include "config.h"
-
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7796S)
 
 #include "spi.h"
 
