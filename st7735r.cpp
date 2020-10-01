@@ -45,7 +45,7 @@ void InitST7735R()
 #define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
 
     uint8_t madctl = 0;
-#if defined(ST7735R) || defined(ST7735S)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7796S)
     madctl |= MADCTL_BGR_PIXEL_ORDER;
 #endif
 #ifdef DISPLAY_SWAP_BGR
@@ -99,9 +99,14 @@ void InitST7735R()
 #endif
 
     // TODO: The 0xB1 command is not Frame Rate Control for ST7789VW, 0xB3 is (add support to it)
-#ifndef ST7789VW
+#if !defined(ST7789VW) || !defined(ST7796S)
     // Frame rate = 850000 / [ (2*RTNA+40) * (162 + FPA+BPA)]
     SPI_TRANSFER(0xB1/*FRMCTR1:Frame Rate Control*/, /*RTNA=*/6, /*FPA=*/1, /*BPA=*/1); // This should set frame rate = 99.67 Hz
+#endif
+    // The frame rate control on the ST7796S needs different values in order to work correctly.  Borrowing these values
+    // from the device tree files of the MHS-4.0 inch hat device tree files.  They fix all the problems I was having.
+#ifdef ST7796S
+    SPI_TRANSFER(0xB1, 0x80, 0x10);
 #endif
 
     SPI_TRANSFER(/*Display ON*/0x29);
