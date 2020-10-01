@@ -61,6 +61,10 @@ void InitST7735R()
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
 
+#if defined(ST7796S)
+    madctl ^= MADCTL_COLUMN_ADDRESS_ORDER_SWAP;
+#endif
+
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
