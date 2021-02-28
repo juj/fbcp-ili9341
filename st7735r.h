@@ -15,7 +15,7 @@
 #define DISPLAY_SET_CURSOR_Y 0x2B
 #define DISPLAY_WRITE_PIXELS 0x2C
 
-#if defined(ST7789) || defined(ST7789VW)
+#if (defined(ST7789) || defined(ST7789VW)) && !defined(WAVESHARE_GAMEPI20)
 #define DISPLAY_NATIVE_WIDTH 240
 #define DISPLAY_NATIVE_HEIGHT 240
 #elif defined(ST7735R)
@@ -39,6 +39,10 @@
 #include "waveshare_st7789vw_hat.h"
 #elif defined(WAVESHARE_ST7735S_HAT)
 #include "waveshare_st7735s_hat.h"
+#elif defined(WAVESHARE_GAMEPI20)
+#include "waveshare_gamepi20.h"
+#define DISPLAY_NATIVE_WIDTH 240
+#define DISPLAY_NATIVE_HEIGHT 320
 #endif
 
 #define InitSPIDisplay InitST7735R
