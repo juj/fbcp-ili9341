@@ -61,6 +61,7 @@ The following LCD displays have been tested:
  - [Arduino A000096 1.77" 160x128 LCD Screen](https://store.arduino.cc/arduino-lcd-screen) with ST7735R controller
  - [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) with MZ61581-PI-EXT 2016.1.28 controller
  - [Adafruit 1.54" 240x240 Wide Angle TFT LCD Display with MicroSD](https://www.adafruit.com/product/3787) with ST7789 controller
+ - [Pirate Audio 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://shop.pimoroni.com/collections/pirate-audio) with ST7789 controller
  - [WaveShare 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW controller
  - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
  - [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
@@ -115,6 +116,7 @@ When using one of the displays that stack on top of the Pi that are already reco
 - `-DFREEPLAYTECH_WAVESHARE32B=ON`: If you are running on the [Freeplay CM3 or Zero](https://www.freeplaytech.com/product/freeplay-cm3-diy-kit/) device, pass this flag. (this is not a hat, but still a preconfigured pin assignment)
 - `-DWAVESHARE35B_ILI9486=ON`: If specified, targets a [Waveshare 3.5" 480x320 ILI9486](https://www.amazon.co.uk/dp/B01N48NOXI/ref=pe_3187911_185740111_TE_item) display.
 - `-DTONTEC_MZ61581=ON`: If you are running on the [Tontec 3.5" 320x480 LCD Display](https://www.ebay.com/p/Tontec-3-5-Inches-Touch-Screen-for-Raspberry-Pi-Display-TFT-Monitor-480x320-LCD/1649448059) display, pass this.
+- `-DPIRATE_AUDIO_ST7789_HAT=ON`: If specified, targets a [Pirate Audio 240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://shop.pimoroni.com/collections/pirate-audio) with ST7789 display controller
 - `-DWAVESHARE_ST7789VW_HAT=ON`: If specified, targets a [240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW display controller.
 - `-DWAVESHARE_ST7735S_HAT=ON`: If specified, targets a [128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7735S display controller.
 - `-DKEDEI_V63_MPI3501=ON`: If specified, targets a [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) display with MPI3501 display controller.
