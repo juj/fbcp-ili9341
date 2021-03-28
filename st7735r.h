@@ -39,6 +39,8 @@
 #include "waveshare_st7789vw_hat.h"
 #elif defined(WAVESHARE_ST7735S_HAT)
 #include "waveshare_st7735s_hat.h"
+#elif defined(PIRATE_AUDIO_ST7789_HAT)
+#include "pirate_audio_st7789_hat.h"
 #endif
 
 #define InitSPIDisplay InitST7735R
