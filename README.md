@@ -389,9 +389,17 @@ The `fbcp` part in the name means *framebuffer copy*; specifically for the ILI93
 
 Yes, it does, although not quite as well as on Pi 3B. If you'd like it to run better on a Pi Zero, leave a thumbs up at https://github.com/raspberrypi/userland/issues/440 - hard problems are difficult to justify prioritizing unless it is known that many people care about them.
 
+#### The driver works well, but image is rotated 90 degrees. How do I rotate the display between landscape and portrait?
+
+Edit the file `config.h` and comment out the line `#define DISPLAY_OUTPUT_LANDSCAPE`. This will make the display output in portrait mode, effectively rotating it by 90 degrees. Note that this only affects the pixel memory reading mode of the display. It is not possible to change the panel scan order to run between landscape and portrait, the SPI displays typically always scan in portrait mode. The result is that it will change the panel vsync tearing mode from "straight line tearing" over to "diagonal tearing" (see the section About Tearing above).
+
+If you do not want to have diagonal tearing, but would prefer straight line tearing, then additionally enable the option `#define DISPLAY_FLIP_ORIENTATION_IN_SOFTWARE` in `config.h`. That will restore straight line tearing, but it will also increase overall CPU consumption.
+
 #### The driver works well, but image is upside down. How do I rotate the display?
 
 Enable the option `#define DISPLAY_ROTATE_180_DEGREES` in `config.h`. This should rotate the SPI display to show up the other way around, while keeping the HDMI connected display orientation unchanged. Another option is to utilize a `/boot/config.txt` option [display_rotate=2](https://www.raspberrypi.org/forums/viewtopic.php?t=120793), which rotates both the SPI output and the HDMI output.
+
+Note that the setting `DISPLAY_ROTATE_180_DEGREES` only affects the pixel memory reading mode of the display. It is not possible to flip the panel scan to run inverted by 180 degrees. This means that adjusting these settings will also have effects of changing the visual appearance of the vsync tearing artifact. If you have the ability to mount the display 180 degrees around in your project, it is recommended to do that instead of using the `DISPLAY_ROTATE_180_DEGREES` option.
 
 #### How exactly do I edit the build options to e.g. remove the statistics lines or change some other option?
 

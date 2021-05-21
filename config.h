@@ -157,8 +157,7 @@
 // install the display in its natural rotation order, if possible.
 // #define DISPLAY_ROTATE_180_DEGREES
 
-// If defined, displays in landscape. Undefine to display in portrait. When changing this, swap
-// values of DISPLAY_WIDTH and DISPLAY_HEIGHT accordingly
+// If defined, displays in landscape. Undefine to display in portrait.
 #define DISPLAY_OUTPUT_LANDSCAPE
 
 // If defined, the source video frame is scaled to fit the SPI display by stretching to fit, ignoring
