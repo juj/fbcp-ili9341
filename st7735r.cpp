@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ADAFRUIT_ST7789_PITFT_114)
 
 #include "spi.h"
 
@@ -69,7 +69,7 @@ void InitST7735R()
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
     usleep(10*1000);
 
-#ifdef ST7789
+#if defined(ST7789) || defined(ADAFRUIT_ST7789_PITFT_114)
     SPI_TRANSFER(0xBA/*DGMEN: Enable Gamma*/, 0x04);
     bool invertColors = true;
 #else
@@ -86,7 +86,7 @@ void InitST7735R()
     SPI_TRANSFER(0x13/*NORON: Partial off (normal)*/);
     usleep(10*1000);
 
-#ifdef ST7789
+#if defined(ST7789) || defined(ADAFRUIT_ST7789_PITFT_114)
     // The ST7789 controller is actually a unit with 320x240 graphics memory area, but only 240x240 portion
     // of it is displayed. Therefore if we wanted to swap row address mode above, writes to Y=0...239 range will actually land in
     // memory in row addresses Y = 319-(0...239) = 319...80 range. To view this range, we must scroll the view by +80 units in Y
