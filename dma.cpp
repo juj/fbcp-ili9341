@@ -25,8 +25,10 @@ volatile DMAChannelRegisterFile *dmaTx = 0;
 volatile DMAChannelRegisterFile *dmaRx = 0;
 int dmaTxChannel = -1;
 int dmaTxIrq = 0;
+extern int dmaTxChannelcustom; //nns: allow set dma channels from arguments
 int dmaRxChannel = -1;
 int dmaRxIrq = 0;
+extern int dmaRxChannelcustom; //nns: allow set dma channels from arguments
 
 #define PAGE_SIZE 4096
 
@@ -93,6 +95,10 @@ static int AllocateDMAChannel(int *dmaChannel, int *irq)
 #if defined(DMA_RX_CHANNEL)
   freeChannels[1] = DMA_RX_CHANNEL;
 #endif
+  
+  if(dmaTxChannelcustom!=-1){freeChannels[0] = dmaTxChannelcustom;} //nns: allow set dma channels from arguments
+  if(dmaRxChannelcustom!=-1){freeChannels[1] = dmaRxChannelcustom;} //nns: allow set dma channels from arguments
+  
   if (freeChannels[0] == freeChannels[1]) FATAL_ERROR("DMA TX and RX channels cannot be the same channel!");
 
   static int nextFreeChannel = 0;
