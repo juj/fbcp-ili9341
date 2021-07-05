@@ -66,7 +66,7 @@
 // too much for the display to handle)
 // #define NO_INTERLACING
 
-#if (defined(FREEPLAYTECH_WAVESHARE32B) || (defined(ILI9341) && SPI_BUS_CLOCK_DIVISOR <= 4)) && defined(USE_DMA_TRANSFERS) && !defined(NO_INTERLACING)
+#if (defined(FREEPLAYTECH_WAVESHARE32B) || (defined(ILI9341) && SPI_BUS_CLOCK_DIVISOR <= 4)  || (defined(ILI9342) && SPI_BUS_CLOCK_DIVISOR <= 4)) && defined(USE_DMA_TRANSFERS) && !defined(NO_INTERLACING)
 // The Freeplaytech CM3/Zero displays actually only have a visible display resolution of 302x202, instead of
 // 320x240, and this is enough to give them full progressive 320x240x60fps without ever resorting to
 // interlacing. Also, ILI9341 displays running with clock divisor of 4 have enough bandwidth to never need
