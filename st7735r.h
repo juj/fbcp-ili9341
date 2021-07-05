@@ -1,6 +1,5 @@
 #pragma once
-
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW) || defined(ST7796S)
 
 // On Arduino "A000096" 160x128 ST7735R LCD Screen, the following speed configurations have been tested (on a Pi 3B):
 // core_freq=355: CDIV=6, results in 59.167MHz, works
@@ -18,6 +17,9 @@
 #if defined(ST7789) || defined(ST7789VW)
 #define DISPLAY_NATIVE_WIDTH 240
 #define DISPLAY_NATIVE_HEIGHT 240
+#elif defined(ST7796S)
+#define DISPLAY_NATIVE_WIDTH 320
+#define DISPLAY_NATIVE_HEIGHT 480
 #elif defined(ST7735R)
 #define DISPLAY_NATIVE_WIDTH 128
 #define DISPLAY_NATIVE_HEIGHT 160
@@ -50,7 +52,7 @@ void InitST7735R(void);
 void TurnDisplayOn(void);
 void TurnDisplayOff(void);
 
-#if defined(ST7789) || defined(ST7789VW)
+#if defined(ST7789) || defined(ST7789VW) || defined(ST7796S)
 // Unlike all other displays developed so far, Adafruit 1.54" 240x240 ST7789 display
 // actually needs to observe the CS line toggle during execution, it cannot just be always activated.
 // (ST7735R does not care about this)
