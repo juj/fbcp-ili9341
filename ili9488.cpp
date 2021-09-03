@@ -58,6 +58,10 @@ void InitILI9488()
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
+#ifndef DISPLAY_OUTPUT_LANDSCAPE
+    madctl ^= MADCTL_COLUMN_ADDRESS_ORDER_SWAP;
+#endif
+
     //
     // Shifted value of bits [7:5] (MY - ROW_ADDRESS_ORDER_SWAP, MX - COLUMN_ADDRESS_ORDER_SWAP, MV ROW_COLUMN_EXCHANGE)
     // and their resulting effect on the orientation of the image
