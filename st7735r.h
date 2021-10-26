@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW) || defined(ST7789V2)
 
 // On Arduino "A000096" 160x128 ST7735R LCD Screen, the following speed configurations have been tested (on a Pi 3B):
 // core_freq=355: CDIV=6, results in 59.167MHz, works
@@ -21,6 +21,9 @@
 #elif defined(ST7735R)
 #define DISPLAY_NATIVE_WIDTH 128
 #define DISPLAY_NATIVE_HEIGHT 160
+#elif defined(ST7789V2)
+#define DISPLAY_NATIVE_WIDTH 320
+#define DISPLAY_NATIVE_HEIGHT 240
 #elif defined(ST7735S)
 // ST7735S displays are 128x128 pixels, but they have a somewhat odd offset that X,Y=(0,0) is not top-left corner pixel, but X,Y=(2,1) is.
 // Therefore consider the display two pixels wider and one pixel higher, and add a constant offset of X=+2, Y=+1 via the DISPLAY_COVERED_* mechanism.
@@ -39,6 +42,8 @@
 #include "waveshare_st7789vw_hat.h"
 #elif defined(WAVESHARE_ST7735S_HAT)
 #include "waveshare_st7735s_hat.h"
+#elif defined(PIMORONI_DISPLAY_HAT_MINI)
+#include "pimoroni_display_hat_mini.h"
 #elif defined(PIRATE_AUDIO_ST7789_HAT)
 #include "pirate_audio_st7789_hat.h"
 #endif
@@ -50,7 +55,7 @@ void InitST7735R(void);
 void TurnDisplayOn(void);
 void TurnDisplayOff(void);
 
-#if defined(ST7789) || defined(ST7789VW)
+#if defined(ST7789) || defined(ST7789VW) || defined(ST7789V2)
 // Unlike all other displays developed so far, Adafruit 1.54" 240x240 ST7789 display
 // actually needs to observe the CS line toggle during execution, it cannot just be always activated.
 // (ST7735R does not care about this)
