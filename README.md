@@ -159,7 +159,7 @@ There are a couple of options to explicitly say which Pi board you want to targe
 - `-DSINGLE_CORE_BOARD=ON`: Pass this option if you are running on a Pi that has only one hardware thread (Pi Model A, Pi Model B, Compute Module 1, Pi Zero/Zero W). If not present, autodetected.
 - `-DARMV6Z=ON`: Pass this option to specifically optimize for ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W). If not present, autodetected.
 - `-DARMV7A=ON`: Pass this option to specifically optimize for ARMv7-A instruction set (Pi 2B < rev 1.2). If not present, autodetected.
-- `-DARMV8A=ON`: Pass this option to specifically optimize for ARMv8-A instruction set (Pi 2B >= rev. 1.2, 3B, 3B+, CM3, CM3 lite or 4B). If not present, autodetected.
+- `-DARMV8A=ON`: Pass this option to specifically optimize for ARMv8-A instruction set (Pi 2B >= rev. 1.2, 3B, 3B+, CM3, CM3 lite, 4B, CM4, Pi400). If not present, autodetected.
 
 ###### Specifying other build options
 
