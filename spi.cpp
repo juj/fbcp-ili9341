@@ -527,16 +527,6 @@ int InitSPI()
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
   systemTimerRegister = (volatile TIMER_TYPE*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
-#ifdef TIMER_32BIT
-printf("clo offset: %lu\n", offsetof(systemTimer, clo));
-    printf("clo offset: %lu\n", offsetof(systemTimer, chi));
-  printf("system timer CS: %x\n", systemTimerRegister->cs);
-    printf("system timer CLO: %x\n", systemTimerRegister->clo);
-    printf("system timer CHI: %x\n", systemTimerRegister->chi);
-    for (int i=0; i<4; i++) {
-        printf("system timer c%d: %x\n", i, systemTimerRegister->c[i]);
-    }
-#endif
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 
@@ -574,10 +564,11 @@ printf("clo offset: %lu\n", offsetof(systemTimer, clo));
   // Set the SPI 0 pin explicitly to output, and enable chip select on the line by setting it to low.
   // fbcp-ili9341 assumes exclusive access to the SPI0 bus, and exclusive presence of only one device on the bus,
   // which is (permanently) activated here.
-  SET_GPIO_MODE(GPIO_SPI0_CE0, 0x01);
-  CLEAR_GPIO(GPIO_SPI0_CE0);
+  SET_GPIO_MODE(GPIO_SPI0_CE1, 0x01);
+  CLEAR_GPIO(GPIO_SPI0_CE1);
 #ifdef DISPLAY_USES_CS1
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0x01);
+  CLEAR_GPIO(GPIO_SPI0_CE1);
 #endif
 #endif
 
