@@ -267,6 +267,9 @@ extern volatile int spiThreadSleeping;
 #endif
 
 extern int mem_fd;
+#ifdef USE_VCSM_CMA
+extern int cma_fd;
+#endif
 
 #ifdef SPI_3WIRE_PROTOCOL
 

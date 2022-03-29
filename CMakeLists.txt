@@ -24,6 +24,7 @@ set(DEFAULT_TO_SINGLE_CORE_BOARD OFF)
 set(DEFAULT_TO_ARMV6Z OFF)
 set(DEFAULT_TO_ARMV7A OFF)
 set(DEFAULT_TO_ARMV8A OFF)
+set(DEFAULT_USE_VCSM_CMA OFF)
 
 # http://ozzmaker.com/check-raspberry-software-hardware-version-command-line/
 if (BOARD_REVISION MATCHES "(0002)|(0003)|(0004)|(0005)|(0006)|(0007)|(0008)|(0009)" OR BOARD_REVISION MATCHES "(000d)|(000e)|(000f)|(0010)|(0011)|(0012)" OR BOARD_REVISION MATCHES "(900092)|(900093)|(9000c1)")
@@ -46,7 +47,21 @@ if (SINGLE_CORE_BOARD)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSINGLE_CORE_BOARD=1")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+option(AARCH64 "Target a Raspberry Pi with aarch64 architecture" NO)
+if (AARCH64)
+	message(STATUS "Enable AARCH64 build")
+	set(DEFAULT_USE_VCSM_CMA ON)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mlittle-endian -funsafe-math-optimizations -DTIMER_32BIT")
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+endif()
+
+option(USE_VCSM_CMA "Map Memory from CPU instead of GPU" ${DEFAULT_USE_VCSM_CMA})
+if (USE_VCSM_CMA)
+	message(STATUS "Enabling Map Memory from CPU instead of GPU")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_VCSM_CMA=1")
+endif()
+
 
 option(ARMV6Z "Target a Raspberry Pi with ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W)" ${DEFAULT_TO_ARMV6Z})
 if (ARMV6Z)

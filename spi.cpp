@@ -43,13 +43,20 @@ static uint32_t writeCounter = 0;
   } while(0)
 
 int mem_fd = -1;
+#ifdef USE_VCSM_CMA
+int cma_fd = -1;
+#endif
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
 
 // Points to the system timer register. N.B. spec sheet says this is two low and high parts, in an 32-bit aligned (but not 64-bit aligned) address. Profiling shows
 // that Pi 3 Model B does allow reading this as a u64 load, and even when unaligned, it is around 30% faster to do so compared to loading in parts "lo | (hi << 32)".
+#ifdef TIMER_32BIT
+volatile systemTimer *systemTimerRegister = 0;
+#else
 volatile uint64_t *systemTimerRegister = 0;
+#endif
 
 void DumpSPICS(uint32_t reg)
 {
@@ -510,12 +517,26 @@ int InitSPI()
   // Memory map GPIO and SPI peripherals for direct access
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
+#ifdef USE_VCSM_CMA
+  cma_fd = open("/dev/vcsm-cma", O_RDWR|O_SYNC);
+  if (cma_fd < 0) FATAL_ERROR("can't open /dev/vcsm or /dev/vcsm-cma");
+#endif
   printf("bcm_host_get_peripheral_address: %p, bcm_host_get_peripheral_size: %u, bcm_host_get_sdram_address: %p\n", bcm_host_get_peripheral_address(), bcm_host_get_peripheral_size(), bcm_host_get_sdram_address());
   bcm2835 = mmap(NULL, bcm_host_get_peripheral_size(), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, bcm_host_get_peripheral_address());
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
-  systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
+  systemTimerRegister = (volatile TIMER_TYPE*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
+#ifdef TIMER_32BIT
+printf("clo offset: %lu\n", offsetof(systemTimer, clo));
+    printf("clo offset: %lu\n", offsetof(systemTimer, chi));
+  printf("system timer CS: %x\n", systemTimerRegister->cs);
+    printf("system timer CLO: %x\n", systemTimerRegister->clo);
+    printf("system timer CHI: %x\n", systemTimerRegister->chi);
+    for (int i=0; i<4; i++) {
+        printf("system timer c%d: %x\n", i, systemTimerRegister->c[i]);
+    }
+#endif
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 
@@ -658,6 +679,13 @@ void DeinitSPI()
     close(mem_fd);
     mem_fd = -1;
   }
+#ifdef USE_VCSM_CMA
+  if (cma_fd >= 0)
+  {
+      close(cma_fd);
+      cma_fd = -1;
+  }
+#endif
 
 #ifndef KERNEL_MODULE_CLIENT
 
