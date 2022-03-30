@@ -14,7 +14,7 @@ struct __attribute__((packed, aligned(4))) systemTimer {
 };
 #define TIMER_TYPE systemTimer
 extern volatile systemTimer* systemTimerRegister;
-#define tick() ((uint64_t)(systemTimerRegister->chi))
+#define tick() (((uint64_t)systemTimerRegister->clo) | ((uint64_t)(systemTimerRegister->chi) << 32))
 #else
 #define TIMER_TYPE uint64_t
 extern volatile uint64_t *systemTimerRegister;
