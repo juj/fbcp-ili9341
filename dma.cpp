@@ -15,8 +15,7 @@
 #include "mailbox.h"
 
 #ifdef USE_VCSM_CMA
-#include <sys/ioctl.h>
-#include "vc_sm_cma_ioctl.h"
+#include "cma.h"
 #endif
 
 #ifdef USE_DMA_TRANSFERS
@@ -144,18 +143,15 @@ void FreeUncachedGpuMemory(GpuMemory mem) {
 
 GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason) {
     GpuMemory mem;
-    struct vc_sm_cma_ioctl_alloc ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.size = ALIGN_UP(numBytes, PAGE_SIZE);
-    ctx.cached = VC_SM_CMA_CACHE_NONE;
-    strncpy((char*)ctx.name, reason, VC_SM_CMA_RESOURCE_NAME -1);
-    ctx.num = 1;
-    if (ioctl(cma_fd, VC_SM_CMA_CMD_ALLOC, &ctx) < 0 || ctx.handle < 0) FATAL_ERROR("alloc cma failed");
+    CMAInfo ctx;
+    if (AllocateCMA(reason, numBytes, &ctx) != 0) {
+      FATAL_ERROR("alloc cma failed");
+    }
     mem.sizeBytes = ctx.size;
-    mem.busAddress = ctx.dma_addr;
-    mem.allocationHandle = ctx.handle;
-    mem.vcHandle = ctx.vc_handle;
-    mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, ctx.handle, 0);
+    mem.busAddress = ctx.dmaAddr;
+    mem.allocationHandle = ctx.fd;
+    mem.vcHandle = ctx.vcHandle;
+    mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, ctx.fd, 0);
     totalGpuMemoryUsed += mem.sizeBytes;
     if (mem.virtualAddr == MAP_FAILED) {
         FreeUncachedGpuMemory(mem);

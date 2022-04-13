@@ -33,6 +33,10 @@ void ChipSelectHigh();
 #define TOGGLE_CHIP_SELECT_LINE() ((void)0)
 #endif
 
+#ifdef USE_VCSM_CMA
+#include "cma.h"
+#endif
+
 static uint32_t writeCounter = 0;
 
 #define WRITE_FIFO(word) do { \
@@ -43,9 +47,6 @@ static uint32_t writeCounter = 0;
   } while(0)
 
 int mem_fd = -1;
-#ifdef USE_VCSM_CMA
-int cma_fd = -1;
-#endif
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
 volatile SPIRegisterFile *spi = 0;
@@ -518,8 +519,7 @@ int InitSPI()
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
 #ifdef USE_VCSM_CMA
-  cma_fd = open("/dev/vcsm-cma", O_RDWR|O_SYNC);
-  if (cma_fd < 0) FATAL_ERROR("can't open /dev/vcsm or /dev/vcsm-cma");
+  OpenVCSM();
 #endif
   printf("bcm_host_get_peripheral_address: %p, bcm_host_get_peripheral_size: %u, bcm_host_get_sdram_address: %p\n", bcm_host_get_peripheral_address(), bcm_host_get_peripheral_size(), bcm_host_get_sdram_address());
   bcm2835 = mmap(NULL, bcm_host_get_peripheral_size(), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, bcm_host_get_peripheral_address());
@@ -675,11 +675,7 @@ void DeinitSPI()
     mem_fd = -1;
   }
 #ifdef USE_VCSM_CMA
-  if (cma_fd >= 0)
-  {
-      close(cma_fd);
-      cma_fd = -1;
-  }
+  CloseVCSM();
 #endif
 
 #ifndef KERNEL_MODULE_CLIENT
