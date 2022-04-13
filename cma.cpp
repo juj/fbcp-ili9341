@@ -50,7 +50,7 @@ int AllocateCMA(const char* reason, size_t req, CMAInfo* res) {
   ctx.flags = 0; // NO cache
   strncpy((char*)ctx.name, reason, NAME_LENGTH -1);
   ctx.num = 1;
-  if (ioctl(cma_fd, 0x5A, &ctx) < 0 || ctx.fd < 0) { // allocate cmd
+  if (ioctl(cma_fd, _IOR('J', 0x5A, struct Allocate), &ctx) < 0 || ctx.fd < 0) { // allocate cmd
     return -1;
   }
   res->size = ctx.size;
