@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7735SW)
 
 #include "spi.h"
 
@@ -46,7 +46,7 @@ void InitST7735R()
 #define MADCTL_ROTATE_180_DEGREES (MADCTL_COLUMN_ADDRESS_ORDER_SWAP | MADCTL_ROW_ADDRESS_ORDER_SWAP)
 
     uint8_t madctl = 0;
-#if defined(ST7735R) || defined(ST7735S)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7735SW)
     madctl |= MADCTL_BGR_PIXEL_ORDER;
 #endif
 #ifdef DISPLAY_SWAP_BGR

@@ -1,6 +1,6 @@
 #pragma once
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW)
+#if defined(ST7735R) || defined(ST7735S)  || defined(ST7735SW) || defined(ST7789) || defined(ST7789VW)
 
 // On Arduino "A000096" 160x128 ST7735R LCD Screen, the following speed configurations have been tested (on a Pi 3B):
 // core_freq=355: CDIV=6, results in 59.167MHz, works
@@ -21,8 +21,12 @@
 #elif defined(ST7735R)
 #define DISPLAY_NATIVE_WIDTH 128
 #define DISPLAY_NATIVE_HEIGHT 160
-#elif defined(ST7735S)
-// ST7735S displays are 128x128 pixels, but they have a somewhat odd offset that X,Y=(0,0) is not top-left corner pixel, but X,Y=(2,1) is.
+#elif defined(ST7735SW)
+#define DISPLAY_NATIVE_WIDTH 130
+#define DISPLAY_NATIVE_HEIGHT 161
+#define DISPLAY_NATIVE_COVERED_LEFT_SIDE 2
+#define DISPLAY_NATIVE_COVERED_TOP_SIDE 1
+#elif defined(ST7735S)x128 pixels, but they have a somewhat odd offset that X,Y=(0,0) is not top-left corner pixel, but X,Y=(2,1) is.
 // Therefore consider the display two pixels wider and one pixel higher, and add a constant offset of X=+2, Y=+1 via the DISPLAY_COVERED_* mechanism.
 
 #define DISPLAY_NATIVE_WIDTH 130
