@@ -132,7 +132,8 @@ If you connected wires directly on the Pi instead of using a Hat from the above 
 - `-DST7735R=ON`: If you have a ST7735R display, use this.
 - `-DST7789=ON`: If you have a ST7789 display, use this.
 - `-DST7789VW=ON`: If you have a ST7789VW display, use this.
-- `-DST7735S=ON`: If you have a ST7735S display, use this.
+- `-DST7735S=ON`: If you have a ST7735S 128x128 display, use this.
+- `-DST7735SW=ON`: If you have a ST7735S 128x160 display, use this.
 - `-DILI9486=ON`: If you have a ILI9486 display, pass this directive.
 - `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have. (or just try both, should not break if you misidentified)
 - `-DILI9488=ON`: If you have a ILI9488 display, pass this directive.
