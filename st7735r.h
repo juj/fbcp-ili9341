@@ -26,7 +26,8 @@
 #define DISPLAY_NATIVE_HEIGHT 161
 #define DISPLAY_NATIVE_COVERED_LEFT_SIDE 2
 #define DISPLAY_NATIVE_COVERED_TOP_SIDE 1
-#elif defined(ST7735S)x128 pixels, but they have a somewhat odd offset that X,Y=(0,0) is not top-left corner pixel, but X,Y=(2,1) is.
+#elif defined(ST7735S)
+// ST7735S displays are 128x128 pixels, but they have a somewhat odd offset that X,Y=(0,0) is not top-left corner pixel, but X,Y=(2,1) is.
 // Therefore consider the display two pixels wider and one pixel higher, and add a constant offset of X=+2, Y=+1 via the DISPLAY_COVERED_* mechanism.
 
 #define DISPLAY_NATIVE_WIDTH 130
