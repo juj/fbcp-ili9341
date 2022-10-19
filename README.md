@@ -217,6 +217,17 @@ sudo /home/pi/fbcp-ili9341/build/fbcp-ili9341 &
 
 If the user name of your Raspberry Pi installation is something else than the default `pi`, change the directory accordingly to point to the user's home directory. (Use `pwd` to find out the current directory in terminal)
 
+##### Launching the display driver with `systemd`
+
+Alternatively, instead of modifying `/etc/rc.local`, use the provided `systemd` unit file as below:
+
+```bash
+sudo install -m 0644 -t /etc fbcp-ili9341.conf 
+sudo install -m 0644 -t /etc/systemd/system fbcp-ili9341.service 
+sudo systemctl daemon-reload
+sudo systemctl enable fbcp && sudo systemctl start fbcp
+```
+
 ##### Configuring HDMI and TFT display sizes
 
 If the size of the default HDMI output `/dev/fb0` framebuffer differs from the resolution of the display, the source video size will by default be rescaled to fit to the size of the SPI display. fbcp-ili9341 will manage setting up this rescaling if needed, and it will be done by the GPU, so performance should not be impacted too much. However if the resolutions do not match, small text will probably appear illegible. The resizing will be done in aspect ratio preserving manner, so if the aspect ratios do not match, either horizontal or vertical black borders will appear on the display. If you do not use the HDMI output at all, it is probably best to configure the HDMI output to match the SPI display size so that rescaling will not be needed. This can be done by setting the following lines in `/boot/config.txt`:
