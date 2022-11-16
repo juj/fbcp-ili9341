@@ -1,0 +1,14 @@
+[Unit]
+Description=Fast Framebuffer Copy Service for the Raspberry Pi
+StartLimitIntervalSec=10
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/fbcp-ili9341.conf
+Restart=always
+RestartSec=1
+StartLimitBurst=2
+ExecStart=/usr/local/sbin/fbcp-ili9341
+
+[Install]
+WantedBy=default.target
