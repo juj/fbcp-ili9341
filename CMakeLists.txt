@@ -4,6 +4,13 @@ if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
 
+if (NOT DEFINED TARGET_ABI)
+  set(TARGET_ABI "linux-gnueabihf")
+endif ()
+# specify the cross compiler
+SET(CMAKE_C_COMPILER   arm-${TARGET_ABI}-gcc)
+SET(CMAKE_CXX_COMPILER arm-${TARGET_ABI}-g++)
+
 include_directories(/opt/vc/include)
 link_directories(/opt/vc/lib)
 
