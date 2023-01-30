@@ -41,7 +41,7 @@ static uint32_t writeCounter = 0;
   TOGGLE_CHIP_SELECT_LINE(); \
   DEBUG_PRINT_WRITTEN_BYTE(w); \
   } while(0)
-
+  
 int mem_fd = -1;
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
@@ -322,7 +322,6 @@ void RunSPITask(SPITask *task)
 
     SET_GPIO(GPIO_TFT_DATA_CONTROL);
 #endif
-
     // Send the data payload:
     while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
     while(tStart < tEnd)
@@ -337,6 +336,11 @@ void RunSPITask(SPITask *task)
   }
 }
 #else
+
+#ifdef KEDEI_TRASH
+extern void lcd_data8(uint8_t *data);
+extern void lcd_cmd(uint8_t data);
+#endif 
 
 void RunSPITask(SPITask *task)
 {
@@ -355,6 +359,15 @@ void RunSPITask(SPITask *task)
   const uint32_t payloadSize = tEnd - tStart;
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
 
+#ifdef KEDEI_TRASH
+  lcd_cmd(task->cmd);
+  while(tStart < tEnd)
+  {
+    lcd_data8(tStart);
+    tStart += 2;
+  }
+#else // not KEDEI_TRASH  
+
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
 #ifndef SPI_3WIRE_PROTOCOL
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
@@ -365,7 +378,6 @@ void RunSPITask(SPITask *task)
   WRITE_FIFO(0x00);
 #endif
   WRITE_FIFO(task->cmd);
-
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
   spi->fifo;
@@ -393,7 +405,11 @@ void RunSPITask(SPITask *task)
   else
 #endif
   {
-    while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
+    while(tStart < tPrefillEnd) 
+    {
+      WRITE_FIFO(*tStart++);
+
+    }
     while(tStart < tEnd)
     {
       uint32_t cs = spi->cs;
@@ -402,10 +418,12 @@ void RunSPITask(SPITask *task)
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
   }
+#endif // not KEDEI_TRASH  
 
 #ifdef DISPLAY_NEEDS_CHIP_SELECT_SIGNAL
   END_SPI_COMMUNICATION();
 #endif
+
 }
 #endif
 
