@@ -1,3 +1,11 @@
+# Feb 2024 Update
+
+The era of fbcp-ili9341 has come to an end. Fbcp-ili9341 was built on top of the Raspberry Pi's [VideoCore DispmanX API](https://elinux.org/Raspberry_Pi_VideoCore_APIs#vc_dispmanx_.2A).
+
+However, this API has been deprecated by the Raspberry Pi Foundation for a while now, and finally obsolete (=unavailable) on Raspberry Pi 5 and onwards.
+
+The later Raspberry Pi distros no longer have DispmanX active by default even for Pi0-Pi4, but instead Raspberry Pi has moved over to the newer KMS driver compositor stack, which has  a different abstraction for integrating SPI display drivers. Other people are developing SPI display drivers for the Pi that are compatible with the KMS stack. Head on to [this Raspberry Pi forum thread](https://forums.raspberrypi.com/viewtopic.php?p=2190025) to learn more.
+
 # Introduction
 
 This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi A, B, 2, 3, 4 and Zero.
@@ -697,14 +705,6 @@ This driver is licensed under the MIT License. See LICENSE.txt. In nonlegal term
 If you found fbcp-ili9341 useful, it makes me happy to hear back about the projects it found a home in. If you did a build or a project where fbcp-ili9341 worked out, it'd be great to see a video or some photos or read about your experiences.
 
 I hope you build something you enjoy!
-
-### Donating
-
-I have been occassionally asked how to make a donation as a thank you for the work, so here is a PayPal link:
-
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=DD8A74WY6Q4L2&currency_code=EUR)
-
-Please note that a contribution is not expected, and you are free to use, publicize and redistribute the driver even without a payment.
 
 ### Contacting
 
