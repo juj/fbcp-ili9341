@@ -6,6 +6,8 @@ However, this API has been deprecated by the Raspberry Pi Foundation for a while
 
 The later Raspberry Pi distros no longer have DispmanX active by default even for Pi0-Pi4, but instead Raspberry Pi has moved over to the newer KMS driver compositor stack, which has  a different abstraction for integrating SPI display drivers. Other people are developing SPI display drivers for the Pi that are compatible with the KMS stack. Head on to [this Raspberry Pi forum thread](https://forums.raspberrypi.com/viewtopic.php?p=2190025) to learn more.
 
+This repository is good to be considered archived/stale, although I am not marking it Archived using the GitHub feature, since that feature apparently would also make the issue tracker read-only. Feel free to continue discussing issues on the tracker.
+
 # Introduction
 
 This repository implements a driver for certain SPI-based LCD displays for Raspberry Pi A, B, 2, 3, 4 and Zero.
