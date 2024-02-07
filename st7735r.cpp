@@ -1,6 +1,6 @@
 #include "config.h"
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789V2)
 
 #include "spi.h"
 
@@ -62,6 +62,11 @@ void InitST7735R()
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
 
+#if defined(ST7789V2) && defined(DISPLAY_OUTPUT_LANDSCAPE)
+// Required for 320x240 display HAT mini to avoid a left offset and run as 320x240 (native) rather than 240x320
+madctl ^= MADCTL_ROW_COLUMN_EXCHANGE;
+#endif
+
 #ifdef DISPLAY_ROTATE_180_DEGREES
     madctl ^= MADCTL_ROTATE_180_DEGREES;
 #endif
@@ -69,7 +74,7 @@ void InitST7735R()
     SPI_TRANSFER(0x36/*MADCTL: Memory Access Control*/, madctl);
     usleep(10*1000);
 
-#ifdef ST7789
+#if defined(ST7789V2) || defined(ST7789)
     SPI_TRANSFER(0xBA/*DGMEN: Enable Gamma*/, 0x04);
     bool invertColors = true;
 #else
