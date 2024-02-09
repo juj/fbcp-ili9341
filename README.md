@@ -101,7 +101,7 @@ cd fbcp-ili9341
 mkdir build
 cd build
 cmake [options] ..
-make -j
+make -j `nproc`
 sudo ./fbcp-ili9341
 ```
 
@@ -201,7 +201,7 @@ cd fbcp-ili9341
 mkdir build
 cd build
 cmake -DSPI_BUS_CLOCK_DIVISOR=6 -DADAFRUIT_ILI9341_PITFT=ON ..
-make -j
+make -j `nproc`
 sudo ./fbcp-ili9341
 ```
 
@@ -426,7 +426,7 @@ Note that the setting `DISPLAY_ROTATE_180_DEGREES` only affects the pixel memory
 
 Edit the file `config.h` in a text editor (a command line one such as `pico`, `vim`, `nano`, or SSH map the drive to your host), and find the appropriate line in the file. Add comment lines `//` in front of that text to disable the option, or remove the `//` characters to enable it.
 
-After having edited and saved the file, reissue `make -j` in the build directory and restart fbcp-ili9341.
+After having edited and saved the file, reissue ``make -j `nproc` `` in the build directory and restart fbcp-ili9341.
 
 Some options are passed to the build from the CMake configuration script. You can run with `make VERBOSE=1` to see which configuration items the CMake build is passing. See the above *Configuring Build Options* section to customize the CMake configure items. For example, to remove the statistics overlay, pass `-DSTATISTICS=0` directive to CMake.
 
@@ -503,6 +503,9 @@ Unfortunately there are a number of things to go wrong that all result in a whit
 - shut down and physically power off the Pi and the display in between multiple tests. Driving a display with a wrong initialization routine may put it in a bad state that needs a physical power off for it to reset,
 - if there is a reset pin on the display, make sure to pass it in CMake line. Or alternatively, try driving fbcp-ili9341 without specifying the reset pin,
 - make sure the display is configured to run 4-wire SPI mode, and not in parallel mode or 3-wire SPI mode. You may need to solder or desolder some connections or set a jumper to configure the specific driving mode. Support for 3-wire SPI displays does exist, but it is more limited and a bit experimental.
+- If connecting the wires directly ensure that the values given are BCM pin numbers and not the physical pin numbers. See [RPi pinout](https://pinout.xyz/#).
+- If nothing else works, try changing the BCM pins used for the reset, backlight and data control.
+
 
 #### The display stays blank at boot without lighting up
 
