@@ -33,6 +33,10 @@ void ChipSelectHigh();
 #define TOGGLE_CHIP_SELECT_LINE() ((void)0)
 #endif
 
+#ifdef USE_VCSM_CMA
+#include "cma.h"
+#endif
+
 static uint32_t writeCounter = 0;
 
 #define WRITE_FIFO(word) do { \
@@ -49,7 +53,11 @@ volatile SPIRegisterFile *spi = 0;
 
 // Points to the system timer register. N.B. spec sheet says this is two low and high parts, in an 32-bit aligned (but not 64-bit aligned) address. Profiling shows
 // that Pi 3 Model B does allow reading this as a u64 load, and even when unaligned, it is around 30% faster to do so compared to loading in parts "lo | (hi << 32)".
+#ifdef TIMER_32BIT
+volatile systemTimer *systemTimerRegister = 0;
+#else
 volatile uint64_t *systemTimerRegister = 0;
+#endif
 
 void DumpSPICS(uint32_t reg)
 {
@@ -510,13 +518,20 @@ int InitSPI()
   // Memory map GPIO and SPI peripherals for direct access
   mem_fd = open("/dev/mem", O_RDWR|O_SYNC);
   if (mem_fd < 0) FATAL_ERROR("can't open /dev/mem (run as sudo)");
+#ifdef USE_VCSM_CMA
+  OpenVCSM();
+#endif
   printf("bcm_host_get_peripheral_address: %p, bcm_host_get_peripheral_size: %u, bcm_host_get_sdram_address: %p\n", bcm_host_get_peripheral_address(), bcm_host_get_peripheral_size(), bcm_host_get_sdram_address());
   bcm2835 = mmap(NULL, bcm_host_get_peripheral_size(), (PROT_READ | PROT_WRITE), MAP_SHARED, mem_fd, bcm_host_get_peripheral_address());
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
-  systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
-  // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
+#ifdef TIMER_32BIT
+  systemTimerRegister = (volatile TIMER_TYPE*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE);
+#else
+  systemTimerRegister = (volatile TIMER_TYPE*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
+#endif
+// TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 
   uint32_t currentBcmCoreSpeed = MailboxRet2(0x00030002/*Get Clock Rate*/, 0x4/*CORE*/);
@@ -557,6 +572,7 @@ int InitSPI()
   CLEAR_GPIO(GPIO_SPI0_CE0);
 #ifdef DISPLAY_USES_CS1
   SET_GPIO_MODE(GPIO_SPI0_CE1, 0x01);
+  CLEAR_GPIO(GPIO_SPI0_CE1);
 #endif
 #endif
 
@@ -658,6 +674,9 @@ void DeinitSPI()
     close(mem_fd);
     mem_fd = -1;
   }
+#ifdef USE_VCSM_CMA
+  CloseVCSM();
+#endif
 
 #ifndef KERNEL_MODULE_CLIENT
 

@@ -14,6 +14,10 @@
 #include "util.h"
 #include "mailbox.h"
 
+#ifdef USE_VCSM_CMA
+#include "cma.h"
+#endif
+
 #ifdef USE_DMA_TRANSFERS
 
 #define BCM2835_PERI_BASE               0x3F000000
@@ -36,6 +40,9 @@ struct GpuMemory
   void *virtualAddr;
   uintptr_t busAddress;
   uint32_t sizeBytes;
+#ifdef USE_VCSM_CMA
+  uint32_t vcHandle;
+#endif
 };
 
 #define NUM_DMA_CBS 1024
@@ -127,7 +134,33 @@ void FreeDMAChannel(int channel)
 #define VIRT_TO_BUS(block, x) ((uintptr_t)(x) - (uintptr_t)((block).virtualAddr) + (block).busAddress)
 
 uint64_t totalGpuMemoryUsed = 0;
+#ifdef USE_VCSM_CMA
 
+void FreeUncachedGpuMemory(GpuMemory mem) {
+    munmap(mem.virtualAddr, mem.sizeBytes);
+    close(mem.allocationHandle);
+}
+
+GpuMemory AllocateUncachedGpuMemory(uint32_t numBytes, const char *reason) {
+    GpuMemory mem;
+    CMAInfo ctx;
+    if (AllocateCMA(reason, numBytes, &ctx) != 0) {
+      FATAL_ERROR("alloc cma failed");
+    }
+    mem.sizeBytes = ctx.size;
+    mem.busAddress = ctx.dmaAddr;
+    mem.allocationHandle = ctx.fd;
+    mem.vcHandle = ctx.vcHandle;
+    mem.virtualAddr = mmap(0, mem.sizeBytes, PROT_READ | PROT_WRITE, MAP_SHARED, ctx.fd, 0);
+    totalGpuMemoryUsed += mem.sizeBytes;
+    if (mem.virtualAddr == MAP_FAILED) {
+        FreeUncachedGpuMemory(mem);
+        FATAL_ERROR("Failed to mmap CMA memory!");
+    }
+    printf("Allocated %u bytes of GPU memory for %s (bus address=%p). Total GPU memory used: %llu bytes\n", mem.sizeBytes, reason, (void*)mem.busAddress, totalGpuMemoryUsed);
+    return mem;
+}
+#else
 // Allocates the given number of bytes in GPU side memory, and returns the virtual address and physical bus address of the allocated memory block.
 // The virtual address holds an uncached view to the allocated memory, so writes and reads to that memory address bypass the L1 and L2 caches. Use
 // this kind of memory to pass data blocks over to the DMA controller to process.
@@ -154,6 +187,7 @@ void FreeUncachedGpuMemory(GpuMemory mem)
   Mailbox(MEM_UNLOCK_MESSAGE, mem.allocationHandle);
   Mailbox(MEM_FREE_MESSAGE, mem.allocationHandle);
 }
+#endif
 
 volatile DMAChannelRegisterFile *GetDMAChannel(int channelNumber)
 {
@@ -720,8 +754,7 @@ void SPIDMATransfer(SPITask *task)
   while((dmaTx->cs & BCM2835_DMA_CS_ACTIVE))
   {
     CheckSPIDMAChannelsNotStolen();
-    if (tick() - dmaTaskStart > 5000000)
-      FATAL_ERROR("DMA TX channel has stalled!");
+    if (tick() - dmaTaskStart > 5000000) FATAL_ERROR("DMA TX channel has stalled!");
   }
   while((dmaRx->cs & BCM2835_DMA_CS_ACTIVE))
   {
