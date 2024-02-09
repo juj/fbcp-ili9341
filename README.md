@@ -76,6 +76,7 @@ The following LCD displays have been tested:
  - [WaveShare 128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.44inch-lcd-hat.htm) with ST7735S controller
  - [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) with MPI3501 controller
  - Unbranded 2.8" 320x240 display with ILI9340 controller
+ - [WaveShare 240×240, General 1.28inch Round LCD Display Module, 65K RGB](https://www.waveshare.com/product/1.28inch-lcd-module.htm) with GC9A01 controller
 
 ### Installation
 
@@ -130,6 +131,7 @@ When using one of the displays that stack on top of the Pi that are already reco
 - `-DWAVESHARE_ST7789VW_HAT=ON`: If specified, targets a [240x240, 1.3inch IPS LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7789VW display controller.
 - `-DWAVESHARE_ST7735S_HAT=ON`: If specified, targets a [128x128, 1.44inch LCD display HAT for Raspberry Pi](https://www.waveshare.com/1.3inch-lcd-hat.htm) with ST7735S display controller.
 - `-DKEDEI_V63_MPI3501=ON`: If specified, targets a [KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 6.3 2018/4/9](https://github.com/juj/fbcp-ili9341/issues/40) display with MPI3501 display controller.
+- `-DWAVESHARE_GC9A01=ON`: If specified, targets a [WaveShare 240×240, General 1.28inch Round LCD Display Module, 65K RGB](https://www.waveshare.com/product/1.28inch-lcd-module.htm) with GC9A01 display controller
 
 ###### If you wired the display to the Pi yourself
 
@@ -147,6 +149,7 @@ If you connected wires directly on the Pi instead of using a Hat from the above 
 - `-DILI9486L=ON`: If you have a ILI9486L display, pass this directive. Note that ILI9486 and ILI9486L are quite different, mutually incompatible controller chips, so be careful here identifying which one you have. (or just try both, should not break if you misidentified)
 - `-DILI9488=ON`: If you have a ILI9488 display, pass this directive.
 - `-DMPI3501=ON`: If specified, targets a display with MPI3501 display controller.
+- `-DGC9A01=ON`: If you have a GC9A01 display, pass this directive.
 
 And additionally, pass the following to customize the GPIO pin assignments you used:
 
