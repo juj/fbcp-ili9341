@@ -7,6 +7,8 @@
 
 #if defined(ILI9341) || defined(ILI9340)
 #include "ili9341.h"
+#elif defined(KEDEI_TRASH)
+#include "kedei_trash.h"
 #elif defined(ILI9486L)
 #include "ili9486l.h"
 #elif defined(ILI9488)

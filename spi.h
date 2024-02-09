@@ -112,12 +112,12 @@ typedef struct __attribute__((packed)) SPITask
 #else
   uint8_t cmd;
 #endif
-  uint32_t dmaSpiHeader;
 #ifdef OFFLOAD_PIXEL_COPY_TO_DMA_CPP
   uint8_t *fb;
   uint8_t *prevFb;
   uint16_t width;
 #endif
+  uint32_t dmaSpiHeader;
   uint8_t data[]; // Contains both 8-bit and 9-bit tasks back to back, 8-bit first, then 9-bit.
 
 #ifdef SPI_3WIRE_PROTOCOL
@@ -130,6 +130,7 @@ typedef struct __attribute__((packed)) SPITask
   inline uint8_t *PayloadEnd() { return data + size; }
   inline uint32_t PayloadSize() const { return size; }
   inline uint32_t *DmaSpiHeaderAddress() { return &dmaSpiHeader; }
+  // inline uint32_t *DmaSpiHeaderAddress() { return 0; }
 #endif
 
 } SPITask;

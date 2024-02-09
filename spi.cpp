@@ -41,7 +41,7 @@ static uint32_t writeCounter = 0;
   TOGGLE_CHIP_SELECT_LINE(); \
   DEBUG_PRINT_WRITTEN_BYTE(w); \
   } while(0)
-
+  
 int mem_fd = -1;
 volatile void *bcm2835 = 0;
 volatile GPIORegisterFile *gpio = 0;
@@ -49,8 +49,11 @@ volatile SPIRegisterFile *spi = 0;
 
 // Points to the system timer register. N.B. spec sheet says this is two low and high parts, in an 32-bit aligned (but not 64-bit aligned) address. Profiling shows
 // that Pi 3 Model B does allow reading this as a u64 load, and even when unaligned, it is around 30% faster to do so compared to loading in parts "lo | (hi << 32)".
+#if __aarch64__
+volatile uint32_t *systemTimerRegister = 0;
+#else
 volatile uint64_t *systemTimerRegister = 0;
-
+#endif
 void DumpSPICS(uint32_t reg)
 {
   PRINT_FLAG(BCM2835_SPI0_CS_CS);
@@ -319,7 +322,6 @@ void RunSPITask(SPITask *task)
 
     SET_GPIO(GPIO_TFT_DATA_CONTROL);
 #endif
-
     // Send the data payload:
     while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
     while(tStart < tEnd)
@@ -334,6 +336,11 @@ void RunSPITask(SPITask *task)
   }
 }
 #else
+
+#ifdef KEDEI_TRASH
+extern void lcd_data8(uint8_t *data);
+extern void lcd_cmd(uint8_t data);
+#endif 
 
 void RunSPITask(SPITask *task)
 {
@@ -352,6 +359,15 @@ void RunSPITask(SPITask *task)
   const uint32_t payloadSize = tEnd - tStart;
   uint8_t *tPrefillEnd = tStart + MIN(15, payloadSize);
 
+#ifdef KEDEI_TRASH
+  lcd_cmd(task->cmd);
+  while(tStart < tEnd)
+  {
+    lcd_data8(tStart);
+    tStart += 2;
+  }
+#else // not KEDEI_TRASH  
+
   // Send the command word if display is 4-wire (3-wire displays can omit this, commands are interleaved in the data payload stream above)
 #ifndef SPI_3WIRE_PROTOCOL
   // An SPI transfer to the display always starts with one control (command) byte, followed by N data bytes.
@@ -362,7 +378,6 @@ void RunSPITask(SPITask *task)
   WRITE_FIFO(0x00);
 #endif
   WRITE_FIFO(task->cmd);
-
 #ifdef DISPLAY_SPI_BUS_IS_16BITS_WIDE
   while(!(spi->cs & (BCM2835_SPI0_CS_DONE))) /*nop*/;
   spi->fifo;
@@ -390,7 +405,11 @@ void RunSPITask(SPITask *task)
   else
 #endif
   {
-    while(tStart < tPrefillEnd) WRITE_FIFO(*tStart++);
+    while(tStart < tPrefillEnd) 
+    {
+      WRITE_FIFO(*tStart++);
+
+    }
     while(tStart < tEnd)
     {
       uint32_t cs = spi->cs;
@@ -399,10 +418,12 @@ void RunSPITask(SPITask *task)
       if ((cs & (BCM2835_SPI0_CS_RXR|BCM2835_SPI0_CS_RXF))) spi->cs = BCM2835_SPI0_CS_CLEAR_RX | BCM2835_SPI0_CS_TA | DISPLAY_SPI_DRIVE_SETTINGS;
     }
   }
+#endif // not KEDEI_TRASH  
 
 #ifdef DISPLAY_NEEDS_CHIP_SELECT_SIGNAL
   END_SPI_COMMUNICATION();
 #endif
+
 }
 #endif
 
@@ -515,7 +536,11 @@ int InitSPI()
   if (bcm2835 == MAP_FAILED) FATAL_ERROR("mapping /dev/mem failed");
   spi = (volatile SPIRegisterFile*)((uintptr_t)bcm2835 + BCM2835_SPI0_BASE);
   gpio = (volatile GPIORegisterFile*)((uintptr_t)bcm2835 + BCM2835_GPIO_BASE);
+  #if __aarch64__
+  systemTimerRegister = (volatile uint32_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
+  #else
   systemTimerRegister = (volatile uint64_t*)((uintptr_t)bcm2835 + BCM2835_TIMER_BASE + 0x04); // Generates an unaligned 64-bit pointer, but seems to be fine.
+  #endif
   // TODO: On graceful shutdown, (ctrl-c signal?) close(mem_fd)
 #endif
 

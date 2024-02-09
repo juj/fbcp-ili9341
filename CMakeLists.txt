@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 2.8)
 
+project(fbcp-ili9341)
 if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
+
+EXECUTE_PROCESS( COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
+message( STATUS "Architecture: ${ARCHITECTURE}" )
 
 include_directories(/opt/vc/include)
 link_directories(/opt/vc/lib)
@@ -46,7 +50,11 @@ if (SINGLE_CORE_BOARD)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSINGLE_CORE_BOARD=1")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+if (NOT ${ARCHITECTURE} STREQUAL "aarch64")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mlittle-endian -funsafe-math-optimizations -mstrict-align")
+endif() 
 
 option(ARMV6Z "Target a Raspberry Pi with ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W)" ${DEFAULT_TO_ARMV6Z})
 if (ARMV6Z)
@@ -220,6 +228,9 @@ elseif(KEDEI_V63_MPI3501)
 	if (USE_DMA_TRANSFERS)
 		message(FATAL_ERROR "DMA is unfortunately not possible with KeDei MPI3501. Please disable with -DUSE_DMA_TRANSFERS=OFF.")
 	endif()
+elseif(KEDEI_TRASH)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DKEDEI_TRASH")
+	message(STATUS "Targeting KeDei 3.5 inch SPI TFTLCD 480*320 16bit/18bit version 3.0 2015/4/9 display")
 elseif(ILI9341)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DILI9341")
 	message(STATUS "Targeting ILI9341")
@@ -271,4 +282,4 @@ endif()
 
 add_executable(fbcp-ili9341 ${sourceFiles})
 
-target_link_libraries(fbcp-ili9341 pthread bcm_host atomic)
+target_link_libraries(fbcp-ili9341 pthread bcm_host atomic bcm2835)
