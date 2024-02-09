@@ -16,9 +16,9 @@
 // Effective display area is then 320-18=302 pixels horizontally, and 202 pixels vertically (in landscape direction).
 
 // The meaning of top/left/right/bottom here should be interpreted as the display being oriented in its native direction (which is portrait mode for ILI9341, 240x320 direction).
-#define DISPLAY_NATIVE_COVERED_TOP_SIDE 18
-#define DISPLAY_NATIVE_COVERED_LEFT_SIDE 9
-#define DISPLAY_NATIVE_COVERED_RIGHT_SIDE 29
-#define DISPLAY_NATIVE_COVERED_BOTTOM_SIDE 0
+#define DISPLAY_NATIVE_COVERED_TOP_SIDE 18 //left on FreePlayTech devices
+#define DISPLAY_NATIVE_COVERED_LEFT_SIDE 9 //top on FreePlayTech devices
+#define DISPLAY_NATIVE_COVERED_RIGHT_SIDE 29 //bottom on FreePlayTech devices
+#define DISPLAY_NATIVE_COVERED_BOTTOM_SIDE 0 //right on FreePlayTech devices
 
 #endif

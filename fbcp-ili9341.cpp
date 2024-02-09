@@ -48,6 +48,9 @@ int CountNumChangedPixels(uint16_t *framebuffer, uint16_t *prevFramebuffer)
 uint64_t displayContentsLastChanged = 0;
 bool displayOff = false;
 
+int dmaTxChannelcustom = -1; //nns: allow set dma channels from arguments
+int dmaRxChannelcustom = -1; //nns: allow set dma channels from arguments
+
 volatile bool programRunning = true;
 
 const char *SignalToString(int signal)
@@ -89,8 +92,17 @@ void ProgramInterruptHandler(int signal)
   syscall(SYS_futex, &numNewGpuFrames, FUTEX_WAKE, 1, 0, 0, 0);
 }
 
-int main()
+#ifndef KERNEL_MODULE
+int main( int argc, char *argv[] ) 
 {
+	for(int i=1;i<argc;++i){ //nns: allow set dma channels from arguments
+		if(strcmp(argv[i],"-DMA_TX_CHANNEL")==0){dmaTxChannelcustom=atoi(argv[i+1]);
+		}else if(strcmp(argv[i],"-DMA_RX_CHANNEL")==0){dmaRxChannelcustom=atoi(argv[i+1]);}
+	}
+#else
+int main() 
+{
+#endif
   signal(SIGINT, ProgramInterruptHandler);
   signal(SIGQUIT, ProgramInterruptHandler);
   signal(SIGUSR1, ProgramInterruptHandler);
