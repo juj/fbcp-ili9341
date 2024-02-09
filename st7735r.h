@@ -1,6 +1,7 @@
+
 #pragma once
 
-#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW)
+#if defined(ST7735R) || defined(ST7735S) || defined(ST7789) || defined(ST7789VW) || defined(ADAFRUIT_ST7789_PITFT_114)
 
 // On Arduino "A000096" 160x128 ST7735R LCD Screen, the following speed configurations have been tested (on a Pi 3B):
 // core_freq=355: CDIV=6, results in 59.167MHz, works
@@ -30,6 +31,16 @@
 
 #define DISPLAY_NATIVE_COVERED_LEFT_SIDE 2
 #define DISPLAY_NATIVE_COVERED_TOP_SIDE 1
+#elif defined(ADAFRUIT_ST7789_PITFT_114)
+// The Adafruit PiTFT 1.14" uses ST7789, but it has some quirks, such as not working with the chip select signal toggle,
+// and having a unique offset in display memory.
+#include "pitft_114r_st7789.h"
+#define DISPLAY_NATIVE_WIDTH 240
+#define DISPLAY_NATIVE_HEIGHT 320
+#define DISPLAY_NATIVE_COVERED_TOP_SIDE 40
+#define DISPLAY_NATIVE_COVERED_BOTTOM_SIDE 40
+#define DISPLAY_NATIVE_COVERED_LEFT_SIDE 53
+#define DISPLAY_NATIVE_COVERED_RIGHT_SIDE 52
 
 #else
 #error Unknown display controller!
