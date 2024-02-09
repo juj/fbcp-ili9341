@@ -4,6 +4,9 @@ if(NOT CMAKE_BUILD_TYPE)
 	set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build, options are: Debug Release RelWithDebInfo MinSizeRel." FORCE)
 endif()
 
+EXECUTE_PROCESS( COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
+message( STATUS "Architecture: ${ARCHITECTURE}" )
+
 include_directories(/opt/vc/include)
 link_directories(/opt/vc/lib)
 
@@ -46,7 +49,11 @@ if (SINGLE_CORE_BOARD)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSINGLE_CORE_BOARD=1")
 endif()
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+if (NOT ${ARCHITECTURE} STREQUAL "aarch64") 
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -marm -mabi=aapcs-linux -mhard-float -mfloat-abi=hard -mlittle-endian -mtls-dialect=gnu2 -funsafe-math-optimizations")
+else()
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mlittle-endian -funsafe-math-optimizations")
+endif() 
 
 option(ARMV6Z "Target a Raspberry Pi with ARMv6Z instruction set (Pi 1A, 1A+, 1B, 1B+, Zero, Zero W)" ${DEFAULT_TO_ARMV6Z})
 if (ARMV6Z)
